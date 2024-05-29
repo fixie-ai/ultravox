@@ -1,0 +1,25 @@
+export WANDB_PROJECT:="ultravox"
+export WANDB_LOG_MODEL:="checkpoint"
+export PROJECT_DIR:="ultravox"
+
+poetry *FLAGS:
+    cd ${PROJECT_DIR} && poetry {{FLAGS}}
+
+python *FLAGS:
+    cd ${PROJECT_DIR} && poetry run python {{FLAGS}}
+
+format:
+    cd ${PROJECT_DIR} && poetry run autoflake . --remove-all-unused-imports --quiet --in-place -r --exclude third_party
+    cd ${PROJECT_DIR} && poetry run isort . --force-single-line-imports
+    cd ${PROJECT_DIR} && poetry run black .
+
+check:
+    cd ${PROJECT_DIR} && poetry check
+    cd ${PROJECT_DIR} && poetry run black . --check
+    cd ${PROJECT_DIR} && poetry run isort . --check --force-single-line-imports
+    cd ${PROJECT_DIR} && poetry run autoflake . --check --quiet --remove-all-unused-imports -r --exclude third_party
+    cd ${PROJECT_DIR} && poetry run mypy .
+    cd ${PROJECT_DIR} && poetry run deptry .
+
+test *ARGS="--dist loadgroup -n auto .":
+    cd ${PROJECT_DIR} && poetry run pytest --ignore third_party {{ARGS}}

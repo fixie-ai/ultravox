@@ -1,0 +1,30 @@
+[tool.poetry]
+name = "ultravox"
+version = "0.1.0"
+description = ""
+authors = ["Fixie.ai Team <founders@fixie.ai>"]
+packages = [{ include = "ultravox/" }]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.isort]
+profile = "black"
+single_line_exclusions = ["typing", "collections.abc", "typing_extensions"]
+skip = [
+  "ultravox/model/gazelle",
+  "venv",
+  ".venv",
+  "third_party",
+]
+
+[tool.black]
+extend-exclude = '''
+/(
+  | ultravox/model/gazelle",
+  | third_party
+  | venv
+)/
+'''

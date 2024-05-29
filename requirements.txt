@@ -1,0 +1,27 @@
+# Core
+transformers[torch]>=4.39.3
+bitsandbytes>=0.42.0
+peft
+simple_parsing
+
+# Data processing
+librosa>=0.10.0
+requests==2.22.0
+datasets
+mosaicml-streaming
+nltk
+truecase
+sentencepiece
+protobuf
+
+# evals
+dataclasses-json
+openai
+jiwer
+
+# Monitoring
+tensorboardx
+wandb
+neptune
+mlflow
+

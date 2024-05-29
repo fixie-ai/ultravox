@@ -1,0 +1,21 @@
+torch
+torchaudio
+librosa
+# transformers
+git+https://github.com/huggingface/transformers
+bitsandbytes
+datasets
+deepspeed
+peft
+wandb
+clearml
+pyrallis
+truecase
+tensorboardx
+evaluate
+jiwer
+
+# azure python client
+azure-keyvault-secrets
+azure-identity
+azureml-core

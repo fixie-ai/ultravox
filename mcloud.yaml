@@ -1,0 +1,18 @@
+# Gazelle POC training configuration
+
+name: gazelle-poc
+image: mosaicml/composer:latest
+compute:
+  gpus: 8
+  cluster: r7z22
+integrations:
+  - integration_type: git_repo
+    git_repo: fixie-ai/ultravox
+    git_branch: $UV_BRANCH
+    pip_install: -r requirements.txt
+command: >-
+  cd ultravox && torchrun --nproc_per_node=8 -m ultravox.training.train --config_path ultravox/training/configs/$UV_CONFIG
+env_variables:
+  MLFLOW_TRACKING_URI: databricks
+  UV_BRANCH: main
+  UV_CONFIG: asr_llama.yaml

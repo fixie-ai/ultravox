@@ -1,0 +1,3 @@
+exp_name: "llama3_wav2vec2_asr"
+
+text_model: "meta-llama/Meta-Llama-3-8B-Instruct"

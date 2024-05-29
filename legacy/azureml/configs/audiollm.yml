@@ -1,0 +1,29 @@
+code: ../../src/ultravox
+command: >-
+  bash runjob.sh train/config.yaml  --output_dir outputs
+# bash runjob.sh train/config.yaml  --output_dir ${{outputs.output_folder}}
+inputs:
+  lr: 0.1 # Just a placeholder, this is not used anywhere yet
+# outputs:
+#   output_folder:
+#     type: custom_model
+environment: azureml://registries/azureml/environments/acpt-pytorch-2.0-cuda11.7/versions/25 # or higher
+# compute: azureml:gpu-brrr  # removing this to disable accidental runs
+display_name: audio-llm-test
+experiment_name: audio-llm-test
+description: Train an LLM with an audio encoder to understand human speech
+services:
+  my_vs_code:
+    type: vs_code
+    nodes: all # For distributed jobs, use the `nodes` property to pick which node you want to enable interactive services on. If `nodes` are not selected, by default, interactive applications are only enabled on the head node. Values are "all", or compute node index (for ex. "0", "1" etc.)
+  my_tensor_board:
+    type: tensor_board
+    log_dir: "outputs/logs" # relative path of Tensorboard logs (same as in your training script)
+    nodes: all
+  my_jupyter_lab:
+    type: jupyter_lab
+    nodes: all
+  my_ssh:
+    type: ssh
+    ssh_public_keys: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILgKpvHUEV/TZ6c4P0pWm59q19o/pgecKl17m2D8Eaaj farzad@fixie.ai"
+    nodes: all
