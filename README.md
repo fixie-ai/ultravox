@@ -29,26 +29,26 @@ Join us on our Discord server [here](https://discord.gg/Qw6KHxv8YB).
 You can try out Ultravox using your own audio content (as a WAV file), using the following curl command:
 
 ```
-curl -X POST -H "Authorization: Bearer $ULTRAVOX_API_KEY" -d @data.json https://ultravox.api.fixie.ai/v1/chat/completions
+curl -X POST -H "Authorization: Bearer $ULTRAVOX_API_KEY" -H "Content-Type: application/json" -d @data.json https://ultravox.api.fixie.ai/v1/chat/completions
 ```
 
 where `data.json` contains:
 
-```
-{
+```json
+{ 
   "model": "fixie-ai/ultravox-v0.1",
-  "content": [
-        {
-          "type": "text",
-          "text": "What’s in <|audio|>?"
-        },
-        {
-          "type": "image_url",
-          "image_url": {
-            "url": f"data:audio/wav;base64,{base64_wav}"
-          }
-        }
-      ],
+  "messages": [{ 
+    "role": "user",
+    "content": [{
+      "type": "text",
+      "text": "What’s in <|audio|>?"
+    }, {
+      "type": "image_url",
+      "image_url": {
+        "url": "data:audio/wav;base64,{base64_wav}"
+      }
+    }]
+  }],
   "stream": true
 }
 ```
