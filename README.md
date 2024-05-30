@@ -14,7 +14,7 @@ Ultravox is a new kind of multimodal LLM that can understand text as well as hum
 
 The current version of Ultravox (v0.1), when invoked with audio content has a time-to-first-token (TTFT) of approximately 200ms, and a tokens-per-second rate of ~100, all using a Llama 3 8B backbone. While quite fast, we believe there is considerable room for improvement in these numbers.
 
-Ultravox currently takes in audio and emits speech. As we evolve the model, we'll train it to be able to emit a stream of speech tokens that can then be converted directly into raw audio by an appropriate unit vocoder. We're interested in working with interested parties to build this functionality!
+Ultravox currently takes in audio and emits streaming text. As we evolve the model, we'll train it to be able to emit a stream of speech tokens that can then be converted directly into raw audio by an appropriate unit vocoder. We're interested in working with interested parties to build this functionality!
 
 ### Demo
 
