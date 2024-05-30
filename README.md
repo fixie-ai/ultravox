@@ -22,7 +22,7 @@ Coming soon!
 
 ### Discord
 
-Join us on our Discord server [here](https://discord.gg/YhX5GjCH).
+Join us on our Discord server [here](https://discord.gg/Qw6KHxv8YB).
 
 ### Inference Server
 
