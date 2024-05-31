@@ -15,6 +15,7 @@ import torch.distributed
 import transformers
 import wandb
 from torch.distributed.elastic.multiprocessing.errors import record
+from torch.utils import data
 
 from ultravox.data import datasets
 from ultravox.inference import infer
@@ -160,6 +161,8 @@ def main() -> None:
     # TODO: check if the whole model can now be moved to dtype instead
 
     # Prepare dataset, subsetting if needed
+    train_dataset: data.IterableDataset
+    val_dataset: data.IterableDataset
     if is_master:
         data_args = datasets.VoiceDatasetArgs(
             num_prompts=args.num_prompts,
