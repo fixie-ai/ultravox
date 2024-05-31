@@ -244,7 +244,7 @@ def main() -> None:
             per_device_train_batch_size=args.batch_size * world_size,
             accelerator_config={"split_batches": True},
             gradient_accumulation_steps=args.grad_accum_steps,
-            eval_accumulation_steps=args.eval_accum_steps,
+            eval_accumulation_steps=args.val_accum_steps,
             # tf32=dtype == torch.float32 and device.type == "cuda",  # TODO: check for Ampere GPU not just CUDA
             ddp_find_unused_parameters=False,
             learning_rate=args.lr,

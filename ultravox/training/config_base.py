@@ -59,7 +59,7 @@ class TrainConfig:
     save_steps: float = 0
     logging_steps: int = 1
     grad_accum_steps: int = 1
-    eval_accum_steps: int = 1
+    val_accum_steps: int = 1
     batch_size: int = 2
     lr: float = 1e-5
     lr_scheduler: str = "cosine"
