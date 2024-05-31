@@ -5,6 +5,7 @@ import os
 import re
 import sys
 from datetime import datetime
+from typing import List, Optional
 
 import datasets as hf_datasets
 import mlflow
@@ -45,6 +46,24 @@ class GazelleMlflowWrapper(mlflow.pyfunc.PythonModel):
 
 def fix_hyphens(arg: str):
     return re.sub(r"^--([^=]+)", lambda m: "--" + m.group(1).replace("-", "_"), arg)
+
+
+def get_combined_dataset(
+    dataset_names: List[str],
+    data_args: datasets.VoiceDatasetArgs,
+    processor: ultravox_processing.UltravoxProcessor,
+    train_on_inputs: bool,
+    repeat_data: bool,
+    num_samples: Optional[int] = None,
+) -> data.IterableDataset:
+
+    data_sets = [datasets.create_dataset(ds, data_args) for ds in dataset_names]
+    interleave = datasets.InterleaveDataset(data_sets, repeat=repeat_data)
+    ds_with_proc = ultravox_processing.UltravoxDataproc(
+        interleave, processor=processor, train_on_inputs=train_on_inputs
+    )
+    limited_ds = datasets.Range(ds_with_proc, num_samples=num_samples)
+    return limited_ds
 
 
 @record
@@ -164,45 +183,39 @@ def main() -> None:
     train_dataset: data.IterableDataset
     val_dataset: data.IterableDataset
     if is_master:
-        data_args = datasets.VoiceDatasetArgs(
-            num_prompts=args.num_prompts,
-            data_dir=args.data_dir,
-            shuffle=args.shuffle_data,
-            shuffle_seed=args.shuffle_seed,
-            max_audio_duration_secs=args.max_audio_duration_secs,
-            use_mds=args.mds,
-            mds_batch_size=args.batch_size,
+        train_dataset = get_combined_dataset(
+            dataset_names=args.data_sets,
+            train_on_inputs=args.train_on_inputs,
+            repeat_data=args.repeat_data,
+            processor=processor,
+            num_samples=args.num_samples,
+            data_args=datasets.VoiceDatasetArgs(
+                num_prompts=args.num_prompts,
+                data_dir=args.data_dir,
+                shuffle=args.shuffle_data,
+                shuffle_seed=args.shuffle_seed,
+                max_audio_duration_secs=args.max_audio_duration_secs,
+                use_mds=args.mds,
+                mds_batch_size=args.batch_size,
+            ),
         )
-        val_data_args = datasets.VoiceDatasetArgs(
-            num_prompts=1,
-            data_dir=args.data_dir,
-            shuffle=False,
-            max_audio_duration_secs=16,
-            use_mds=args.mds,
-            mds_batch_size=args.batch_size,
+        val_dataset = get_combined_dataset(
+            dataset_names=args.data_sets,
+            train_on_inputs=args.train_on_inputs,
+            repeat_data=args.repeat_data,
+            processor=processor,
+            num_samples=args.val_num_samples,
+            data_args=datasets.VoiceDatasetArgs(
+                num_prompts=1,
+                data_dir=args.data_dir,
+                shuffle=False,
+                max_audio_duration_secs=16,
+                use_mds=args.mds,
+                mds_batch_size=args.batch_size,
+            ),
         )
-        train_dataset, val_dataset = [
-            datasets.Range(
-                ultravox_processing.UltravoxDataproc(
-                    datasets.InterleaveDataset(
-                        [
-                            datasets.create_dataset(ds, split_args)
-                            for ds in args.data_sets
-                        ],
-                        repeat=args.repeat_data,
-                    ),
-                    processor=processor,
-                    train_on_inputs=args.train_on_inputs,
-                ),
-                num_samples=num_samples,
-            )
-            for split_args, num_samples in [
-                (data_args, args.num_samples),
-                (val_data_args, args.val_num_samples),
-            ]
-        ]
         logging.info(
-            f"Loaded {args.data_sets} data sets, sample limit: {args.num_samples} (val samples: {args.val_num_samples})"
+            f"Loaded {args.data_sets} data sets, sample limit: {args.num_samples} (val sample limit: {args.val_num_samples})"
         )
     else:
         # When using DDP with split_batches=True, the primary process will distribute the batches to the workers
