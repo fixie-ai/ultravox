@@ -8,6 +8,8 @@ train_on_inputs: False
 shuffle_data: True
 max_audio_duration_secs: 16
 
+val_num_samples: 128
+val_steps: 500
 eval_num_samples: 256
 eval_max_new_tokens: 32
 eval_num_procs: 16

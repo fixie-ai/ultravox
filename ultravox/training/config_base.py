@@ -25,6 +25,7 @@ class TrainConfig:
     data_dir: Optional[str] = None
     mds: bool = False
     num_samples: Optional[int] = None
+    val_num_samples: int = 100
     eval_num_samples: int = 100
     eval_max_new_tokens: Optional[int] = None
     eval_num_procs: int = 8
@@ -54,7 +55,7 @@ class TrainConfig:
     optimizer: str = "adamw_torch"
     num_epochs: int = 1
     max_steps: int = 0
-    eval_steps: Optional[int] = None
+    val_steps: Optional[int] = None
     save_steps: float = 0
     logging_steps: int = 1
     grad_accum_steps: int = 1

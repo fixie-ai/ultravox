@@ -170,21 +170,42 @@ def main() -> None:
             use_mds=args.mds,
             mds_batch_size=args.batch_size,
         )
-        data_sets = [datasets.create_dataset(ds, data_args) for ds in args.data_sets]
-        interleaved = datasets.InterleaveDataset(data_sets, repeat=args.repeat_data)
-        train_dataset: torch.utils.data.IterableDataset = (
-            ultravox_processing.UltravoxDataproc(
-                interleaved, processor=processor, train_on_inputs=args.train_on_inputs
-            )
+        val_data_args = datasets.VoiceDatasetArgs(
+            num_prompts=1,
+            data_dir=args.data_dir,
+            shuffle=False,
+            max_audio_duration_secs=16,
+            use_mds=args.mds,
+            mds_batch_size=args.batch_size,
         )
-        train_dataset = datasets.Range(train_dataset, args.num_samples)
+        train_dataset, val_dataset = [
+            datasets.Range(
+                ultravox_processing.UltravoxDataproc(
+                    datasets.InterleaveDataset(
+                        [
+                            datasets.create_dataset(ds, split_args)
+                            for ds in args.data_sets
+                        ],
+                        repeat=args.repeat_data,
+                    ),
+                    processor=processor,
+                    train_on_inputs=args.train_on_inputs,
+                ),
+                num_samples=num_samples,
+            )
+            for split_args, num_samples in [
+                (data_args, args.num_samples),
+                (val_data_args, args.val_num_samples),
+            ]
+        ]
         logging.info(
-            f"Loaded {args.data_sets} data sets, sample limit: {args.num_samples}"
+            f"Loaded {args.data_sets} data sets, sample limit: {args.num_samples} (val samples: {args.val_num_samples})"
         )
     else:
         # When using DDP with split_batches=True, the primary process will distribute the batches to the workers
         # The point of this is to avoid unnecessary data processing/downloading in the workers.
         train_dataset = datasets.EmptyDataset()
+        val_dataset = datasets.EmptyDataset()
 
     # Set up the data loader
     data_collator = datasets.DataCollatorForSeq2SeqWithAudio(tokenizer=text_tokenizer)
@@ -198,6 +219,7 @@ def main() -> None:
     trainer = transformers.Seq2SeqTrainer(
         model,
         train_dataset=train_dataset,
+        eval_dataset=val_dataset,
         data_collator=data_collator,
         tokenizer=text_tokenizer,
         args=transformers.Seq2SeqTrainingArguments(
@@ -207,7 +229,8 @@ def main() -> None:
             optim=args.optimizer,
             num_train_epochs=args.num_epochs,
             max_steps=args.max_steps,
-            eval_steps=args.eval_steps,
+            evaluation_strategy="steps",
+            eval_steps=args.val_steps,
             save_strategy="steps",
             save_steps=args.save_steps,
             logging_first_step=True,
