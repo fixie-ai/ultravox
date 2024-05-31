@@ -48,7 +48,7 @@ def fix_hyphens(arg: str):
     return re.sub(r"^--([^=]+)", lambda m: "--" + m.group(1).replace("-", "_"), arg)
 
 
-def get_combined_dataset(
+def prepare_dataset(
     dataset_names: List[str],
     data_args: datasets.VoiceDatasetArgs,
     processor: ultravox_processing.UltravoxProcessor,
@@ -183,7 +183,7 @@ def main() -> None:
     train_dataset: data.IterableDataset
     val_dataset: data.IterableDataset
     if is_master:
-        train_dataset = get_combined_dataset(
+        train_dataset = prepare_dataset(
             dataset_names=args.data_sets,
             train_on_inputs=args.train_on_inputs,
             repeat_data=args.repeat_data,
@@ -199,7 +199,7 @@ def main() -> None:
                 mds_batch_size=args.batch_size,
             ),
         )
-        val_dataset = get_combined_dataset(
+        val_dataset = prepare_dataset(
             dataset_names=args.data_sets,
             train_on_inputs=args.train_on_inputs,
             repeat_data=args.repeat_data,
