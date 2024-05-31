@@ -255,25 +255,25 @@ def main() -> None:
     logging.info(f"end time: {t_end}")
     logging.info(f"elapsed: {t_end - t_start}")
 
+    # Merge LoRA weights for better inference performance.
+    # Note: this is irreversible and changes model saving format
+    model.merge_and_unload()
+    inference = infer.LocalInference(
+        model=model,
+        processor=processor,
+        tokenizer=text_tokenizer,
+        device=args.device,
+        dtype=dtype,
+    )
+    metrics = evaluation.evaluate(
+        inference,
+        data_dir=args.data_dir,
+        num_procs=args.eval_num_procs,
+        num_samples=args.eval_num_samples,
+        max_new_tokens=args.eval_max_new_tokens,
+        verbose=True,
+    )
     if is_master:
-        # Merge LoRA weights for better performance.
-        # Note: this is irreversible and changes model saving format
-        model.merge_and_unload()
-        inference = infer.LocalInference(
-            model=model,
-            processor=processor,
-            tokenizer=text_tokenizer,
-            device=args.device,
-            dtype=dtype,
-        )
-        metrics = evaluation.evaluate(
-            inference,
-            data_dir=args.data_dir,
-            num_procs=args.eval_num_procs,
-            num_samples=args.eval_num_samples,
-            max_new_tokens=args.eval_max_new_tokens,
-            verbose=True,
-        )
         trainer.log(metrics)
 
 
