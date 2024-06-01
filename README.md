@@ -12,13 +12,13 @@ An open, fast, and extensible multimodal LLM
 
 Ultravox is a new kind of multimodal LLM that can understand text as well as human speech, without the need for a separate Audio Speech Recognition (ASR) stage. Building on research like [AudioLM](https://arxiv.org/abs/2209.03143), [SeamlessM4T](https://ai.meta.com/blog/seamless-m4t/), [Gazelle](https://tincans.ai/slm), [SpeechGPT](https://github.com/0nutation/SpeechGPT/tree/main/speechgpt), and others, we've extended Meta's [Llama 3 model](https://llama.meta.com/llama3/) with a multimodal projector that converts audio directly into the high-dimensional space used by Llama 3. This direct coupling allows Ultravox to respond much more quickly than systems that combine separate ASR and LLM components. In the future this will also allow Ultravox to natively understand the paralinguistic cues of timing and emotion that are omnipresent in human speech.
 
-The current version of Ultravox (v0.1), when invoked with audio content has a time-to-first-token (TTFT) of approximately 200ms, and a tokens-per-second rate of ~100, all using a Llama 3 8B backbone. While quite fast, we believe there is considerable room for improvement in these numbers.
+The current version of Ultravox (v0.1), when invoked with audio content, has a time-to-first-token (TTFT) of approximately 200ms, and a tokens-per-second rate of ~100, all using a Llama 3 8B backbone. While quite fast, we believe there is considerable room for improvement in these numbers.
 
 Ultravox currently takes in audio and emits streaming text. As we evolve the model, we'll train it to be able to emit a stream of speech tokens that can then be converted directly into raw audio by an appropriate unit vocoder. We're interested in working with interested parties to build this functionality!
 
 ### Demo
 
-Coming soon!
+See Ultravox in action via a [voice call](https://www.ai.town/characters/a90fcca3-53c0-4111-b30a-4984883a23ef) with an AI in ai.town.
 
 ### Discord
 
@@ -179,5 +179,3 @@ just format    # run formatting (black, isort, autoflake)
 just python    # activate venv and run python
 just pip       # install a package in the venv using the right pip
 ```
-
-The `legacy` directory contains some initial experiments. We'll pull in the useful parts as we go.
