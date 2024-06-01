@@ -353,16 +353,18 @@ class AnyInstructDataset(VoiceDataset):
         # The last 7 samples are missing audio files, so we exclude them.
         NUM_SAMPLES = 108193 - 7
         super().__init__(args)
-        dataset = (
-            datasets.load_dataset(
-                "json",
-                "anyinstruct",
-                data_files="https://huggingface.co/datasets/fnlp/AnyInstruct/resolve/main/speech_conv/metadata.jsonl",
-                split="train",
-            ).select(range(NUM_SAMPLES))
-            # TODO: make num_shards configurable if need be
-            .to_iterable_dataset(num_shards=16)
+        dataset = datasets.load_dataset(
+            "json",
+            "anyinstruct",
+            data_files="https://huggingface.co/datasets/fnlp/AnyInstruct/resolve/main/speech_conv/metadata.jsonl",
+            split="train",
+        ).select(range(NUM_SAMPLES))
+        dataset = dataset.train_test_split(
+            test_size=0.01, seed=args.shuffle_seed, shuffle=True
         )
+        dataset = dataset["train" if args.split == DatasetSplit.TRAIN else "test"]
+        # TODO: make num_shards configurable if need be
+        dataset = dataset.to_iterable_dataset(num_shards=16)
         if args.shuffle:
             dataset = dataset.shuffle(seed=args.shuffle_seed)
         self._init_dataset(dataset)
