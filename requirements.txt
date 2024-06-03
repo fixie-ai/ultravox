@@ -1,5 +1,5 @@
 # Core
-transformers[torch]>=4.39.3
+transformers[torch]>=4.40.2
 bitsandbytes>=0.42.0
 peft
 simple_parsing

@@ -174,9 +174,7 @@ def main() -> None:
     logging.info(
         f"Using dtype and device (world_size): {dtype}, {device} ({world_size})"
     )
-    model.to(device)
-    model.language_model.to(dtype)
-    model.multi_modal_projector.to(dtype)
+    model.to(device=device, dtype=dtype)
     # TODO: check if the whole model can now be moved to dtype instead
 
     # Prepare dataset, subsetting if needed
