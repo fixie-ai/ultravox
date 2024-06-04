@@ -15,6 +15,7 @@ import requests
 import soundfile as sf
 import streaming as mds
 import torch
+import torch.nn.functional as F
 import transformers
 from torch.utils import data
 
@@ -71,8 +72,10 @@ class DataCollatorForSeq2SeqWithAudio(transformers.DataCollatorForSeq2Seq):
     def __call__(self, features, *args, **kwargs):
         audio_features = [f.pop("audio_values") for f in features]
         batch = super().__call__(features, *args, **kwargs)
-        batch["audio_values"] = torch.nn.utils.rnn.pad_sequence(
-            audio_features, batch_first=True
+        # Pad the last dimension of all audio_values to the same length, with 0s on the right.
+        max_len = max([x.shape[-1] for x in audio_features])
+        batch["audio_values"] = torch.stack(
+            [F.pad(x, (0, max_len - x.shape[-1])) for x in audio_features]
         )
         return batch
 
@@ -434,11 +437,7 @@ class BoolQDataset(VoiceDataset):
 
 class BoolQInputDataset(BoolQDataset):
     def _get_sample(self, idx: int, row: transformers.BatchFeature) -> VoiceSample:
-        audio_transcript = str(row["question"])
-        return VoiceSample(
-            self._get_transcribe_messages(idx, audio_transcript),
-            self._get_audio(row),
-        )
+        return self._get_transcribe_sample(idx, row, tcol="question")
 
 
 class LibriSpeechDataset(VoiceDataset):
