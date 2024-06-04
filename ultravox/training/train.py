@@ -5,6 +5,7 @@ import os
 import re
 import sys
 from datetime import datetime
+from typing import List, Optional
 
 import datasets as hf_datasets
 import mlflow
@@ -15,6 +16,7 @@ import torch.distributed
 import transformers
 import wandb
 from torch.distributed.elastic.multiprocessing.errors import record
+from torch.utils import data
 
 from ultravox.data import datasets
 from ultravox.inference import infer
@@ -44,6 +46,24 @@ class GazelleMlflowWrapper(mlflow.pyfunc.PythonModel):
 
 def fix_hyphens(arg: str):
     return re.sub(r"^--([^=]+)", lambda m: "--" + m.group(1).replace("-", "_"), arg)
+
+
+def prepare_dataset(
+    dataset_names: List[str],
+    data_args: datasets.VoiceDatasetArgs,
+    processor: ultravox_processing.UltravoxProcessor,
+    train_on_inputs: bool,
+    repeat_data: bool,
+    num_samples: Optional[int] = None,
+) -> data.IterableDataset:
+
+    data_sets = [datasets.create_dataset(ds, data_args) for ds in dataset_names]
+    interleave = datasets.InterleaveDataset(data_sets, repeat=repeat_data)
+    ds_with_proc = ultravox_processing.UltravoxDataproc(
+        interleave, processor=processor, train_on_inputs=train_on_inputs
+    )
+    limited_ds = datasets.Range(ds_with_proc, num_samples=num_samples)
+    return limited_ds
 
 
 @record
@@ -154,37 +174,52 @@ def main() -> None:
     logging.info(
         f"Using dtype and device (world_size): {dtype}, {device} ({world_size})"
     )
-    model.to(device)
-    model.language_model.to(dtype)
-    model.multi_modal_projector.to(dtype)
+    model.to(device=device, dtype=dtype)
     # TODO: check if the whole model can now be moved to dtype instead
 
     # Prepare dataset, subsetting if needed
+    train_dataset: data.IterableDataset
+    val_dataset: data.IterableDataset
     if is_master:
-        data_args = datasets.VoiceDatasetArgs(
-            num_prompts=args.num_prompts,
-            data_dir=args.data_dir,
-            shuffle=args.shuffle_data,
-            shuffle_seed=args.shuffle_seed,
-            max_audio_duration_secs=args.max_audio_duration_secs,
-            use_mds=args.mds,
-            mds_batch_size=args.batch_size,
+        train_dataset = prepare_dataset(
+            dataset_names=args.data_sets,
+            train_on_inputs=args.train_on_inputs,
+            repeat_data=args.repeat_data,
+            processor=processor,
+            num_samples=args.num_samples,
+            data_args=datasets.VoiceDatasetArgs(
+                num_prompts=args.num_prompts,
+                data_dir=args.data_dir,
+                shuffle=args.shuffle_data,
+                shuffle_seed=args.shuffle_seed,
+                max_audio_duration_secs=args.max_audio_duration_secs,
+                use_mds=args.mds,
+                mds_batch_size=args.batch_size,
+            ),
         )
-        data_sets = [datasets.create_dataset(ds, data_args) for ds in args.data_sets]
-        interleaved = datasets.InterleaveDataset(data_sets, repeat=args.repeat_data)
-        train_dataset: torch.utils.data.IterableDataset = (
-            ultravox_processing.UltravoxDataproc(
-                interleaved, processor=processor, train_on_inputs=args.train_on_inputs
-            )
+        val_dataset = prepare_dataset(
+            dataset_names=args.data_sets,
+            train_on_inputs=args.train_on_inputs,
+            repeat_data=args.repeat_data,
+            processor=processor,
+            num_samples=args.val_num_samples,
+            data_args=datasets.VoiceDatasetArgs(
+                num_prompts=1,
+                data_dir=args.data_dir,
+                shuffle=False,
+                max_audio_duration_secs=16,
+                use_mds=args.mds,
+                mds_batch_size=args.batch_size,
+            ),
         )
-        train_dataset = datasets.Range(train_dataset, args.num_samples)
         logging.info(
-            f"Loaded {args.data_sets} data sets, sample limit: {args.num_samples}"
+            f"Loaded {args.data_sets} data sets, sample limit: {args.num_samples} (val sample limit: {args.val_num_samples})"
         )
     else:
         # When using DDP with split_batches=True, the primary process will distribute the batches to the workers
         # The point of this is to avoid unnecessary data processing/downloading in the workers.
         train_dataset = datasets.EmptyDataset()
+        val_dataset = datasets.EmptyDataset()
 
     # Set up the data loader
     data_collator = datasets.DataCollatorForSeq2SeqWithAudio(tokenizer=text_tokenizer)
@@ -198,6 +233,7 @@ def main() -> None:
     trainer = transformers.Seq2SeqTrainer(
         model,
         train_dataset=train_dataset,
+        eval_dataset=val_dataset,
         data_collator=data_collator,
         tokenizer=text_tokenizer,
         args=transformers.Seq2SeqTrainingArguments(
@@ -207,7 +243,8 @@ def main() -> None:
             optim=args.optimizer,
             num_train_epochs=args.num_epochs,
             max_steps=args.max_steps,
-            eval_steps=args.eval_steps,
+            evaluation_strategy="steps",
+            eval_steps=args.val_steps,
             save_strategy="steps",
             save_steps=args.save_steps,
             logging_first_step=True,
@@ -218,7 +255,7 @@ def main() -> None:
             per_device_train_batch_size=args.batch_size * world_size,
             accelerator_config={"split_batches": True},
             gradient_accumulation_steps=args.grad_accum_steps,
-            eval_accumulation_steps=args.eval_accum_steps,
+            eval_accumulation_steps=args.val_accum_steps,
             # tf32=dtype == torch.float32 and device.type == "cuda",  # TODO: check for Ampere GPU not just CUDA
             ddp_find_unused_parameters=False,
             learning_rate=args.lr,
@@ -255,25 +292,25 @@ def main() -> None:
     logging.info(f"end time: {t_end}")
     logging.info(f"elapsed: {t_end - t_start}")
 
+    # Merge LoRA weights for better inference performance.
+    # Note: this is irreversible and changes model saving format
+    model.merge_and_unload()
+    inference = infer.LocalInference(
+        model=model,
+        processor=processor,
+        tokenizer=text_tokenizer,
+        device=args.device,
+        dtype=dtype,
+    )
+    metrics = evaluation.evaluate(
+        inference,
+        data_dir=args.data_dir,
+        num_procs=args.eval_num_procs,
+        num_samples=args.eval_num_samples,
+        max_new_tokens=args.eval_max_new_tokens,
+        verbose=True,
+    )
     if is_master:
-        # Merge LoRA weights for better performance.
-        # Note: this is irreversible and changes model saving format
-        model.merge_and_unload()
-        inference = infer.LocalInference(
-            model=model,
-            processor=processor,
-            tokenizer=text_tokenizer,
-            device=args.device,
-            dtype=dtype,
-        )
-        metrics = evaluation.evaluate(
-            inference,
-            data_dir=args.data_dir,
-            num_procs=args.eval_num_procs,
-            num_samples=args.eval_num_samples,
-            max_new_tokens=args.eval_max_new_tokens,
-            verbose=True,
-        )
         trainer.log(metrics)
 
 
