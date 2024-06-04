@@ -436,12 +436,7 @@ class BoolQDataset(VoiceDataset):
 
 class BoolQInputDataset(BoolQDataset):
     def _get_sample(self, idx: int, row: transformers.BatchFeature) -> VoiceSample:
-        audio_transcript = str(row["question"])
-        return VoiceSample(
-            self._get_transcribe_messages(idx, audio_transcript),
-            self._get_audio(row),
-            audio_transcript=audio_transcript,
-        )
+        return self._get_transcribe_sample(idx, row, tcol="question")
 
 
 class LibriSpeechDataset(VoiceDataset):
