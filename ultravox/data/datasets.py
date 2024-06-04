@@ -440,6 +440,7 @@ class BoolQInputDataset(BoolQDataset):
         return VoiceSample(
             self._get_transcribe_messages(idx, audio_transcript),
             self._get_audio(row),
+            audio_transcript=audio_transcript,
         )
 
 
