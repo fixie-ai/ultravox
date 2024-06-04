@@ -72,6 +72,7 @@ class DataCollatorForSeq2SeqWithAudio(transformers.DataCollatorForSeq2Seq):
     def __call__(self, features, *args, **kwargs):
         audio_features = [f.pop("audio_values") for f in features]
         batch = super().__call__(features, *args, **kwargs)
+        # Pad the last dimension of all audio_values to the same length, with 0s on the right.
         max_len = max([x.shape[-1] for x in audio_features])
         batch["audio_values"] = torch.stack(
             [F.pad(x, (0, max_len - x.shape[-1])) for x in audio_features]
