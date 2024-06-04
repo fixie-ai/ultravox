@@ -48,7 +48,9 @@ class InferArgs:
     # Data sets to use for inference
     data_sets: Optional[List[str]] = simple_parsing.field(default=None, alias="-d")
     # Which dataset split to use
-    data_split: datasets.DatasetSplit = datasets.DatasetSplit.VALIDATION
+    data_split: datasets.DatasetSplit = simple_parsing.field(
+        default=datasets.DatasetSplit.VALIDATION, alias="-s"
+    )
     # Directory for existing data
     data_dir: Optional[str] = None
     # Use dataset context
@@ -173,6 +175,7 @@ def dataset_infer(inference: base.VoiceInference, args: InferArgs):
     ds_args = datasets.VoiceDatasetArgs(
         data_dir=args.data_dir,
         prompt=args.prompt,
+        include_audio=not args.text_only,
         include_context=args.context,
         shuffle=args.shuffle,
         use_mds=args.mds,
@@ -188,13 +191,6 @@ def dataset_infer(inference: base.VoiceInference, args: InferArgs):
         expected_answer = sample.messages[1]["content"]
         # Drop any assistant response from the sample.
         sample.messages = sample.messages[:1]
-        # If we're using text-only mode though, there's no audio to inference, so we
-        # just paste the text transcript in as the text prompt.
-        if args.text_only:
-            lines = sample.messages[0]["content"].split("\n")
-            lines[-1] = sample.audio_transcript
-            sample.messages[0]["content"] = "\n".join(lines)
-            sample.audio = sample.audio_transcript = None
         if not args.json:
             run_tui(i, inference, sample, args, expected_answer, scores)
         else:
