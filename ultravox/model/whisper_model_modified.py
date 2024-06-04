@@ -1,5 +1,6 @@
-# coding=utf-8
 # modified from https://github.com/huggingface/transformers/blob/main/src/transformers/models/whisper/modeling_whisper.py
+# see this issue for the commentary: https://github.com/huggingface/transformers/issues/25744
+#
 # Copyright 2022 The OpenAI Authors and The HuggingFace Inc. team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,7 +23,9 @@ from transformers.models.whisper import modeling_whisper as whisper
 
 class WhisperEncoder(whisper.WhisperEncoder):
     """
-    This is a slightly modified version of HF Transformers' Whisper Encoder, with only a few fixes:
+    Encoder portion of OpenAI's Whisper model.
+
+    This implementation is a slightly modified version of HF Transformers' Whisper Encoder, with only a few fixes:
     1. base_model_prefix updated to allow for doing `.from_pretrained` directly on the encoder
     2. allow less than 30 second of audio padding to be passed in:
         - relaxed ValueError check for `input_features` length to be less than or equal to `expected_seq_length` instead of strictly equal
