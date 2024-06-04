@@ -15,6 +15,7 @@ import requests
 import soundfile as sf
 import streaming as mds
 import torch
+import torch.nn.functional as F
 import transformers
 from torch.utils import data
 
@@ -71,8 +72,9 @@ class DataCollatorForSeq2SeqWithAudio(transformers.DataCollatorForSeq2Seq):
     def __call__(self, features, *args, **kwargs):
         audio_features = [f.pop("audio_values") for f in features]
         batch = super().__call__(features, *args, **kwargs)
-        batch["audio_values"] = torch.nn.utils.rnn.pad_sequence(
-            audio_features, batch_first=True
+        max_len = max([x.shape[-1] for x in audio_features])
+        batch["audio_values"] = torch.stack(
+            [F.pad(x, (0, max_len - x.shape[-1])) for x in audio_features]
         )
         return batch
 
