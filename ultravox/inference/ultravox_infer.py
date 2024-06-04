@@ -37,6 +37,7 @@ class UltravoxInference(infer.LocalInference):
         model = ultravox_model.UltravoxModel.from_pretrained(
             model_path, torch_dtype=dtype
         )
+        model.to(dtype=dtype, device=device)
         model.merge_and_unload()
 
         tokenizer_id = tokenizer_id or model_path
