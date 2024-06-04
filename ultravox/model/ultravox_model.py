@@ -10,8 +10,8 @@ import transformers.activations
 import transformers.modeling_outputs
 import transformers.models
 
-from ultravox.model import ultravox_config
 from ultravox.model import modified_whisper
+from ultravox.model import ultravox_config
 
 
 class UltravoxModel(

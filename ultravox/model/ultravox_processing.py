@@ -112,6 +112,7 @@ class UltravoxProcessor(transformers.ProcessorMixin):
         if audio is not None and len(audio) > 0:
             if self.audio_padding == "max_length":
                 # 30 seconds is the expected length for Whisper
+                assert sampling_rate is not None, "Sampling rate must be provided."
                 audio_len = 30 * sampling_rate
             else:
                 audio_len = audio.shape[-1]
