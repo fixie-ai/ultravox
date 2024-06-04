@@ -37,9 +37,6 @@ class TrainConfig:
     # Maximum audio duration in seconds. Samples with longer audio will be skipped.
     # This is usually due to GPU memory constraints and also dependends on the dataset.
     max_audio_duration_secs: Optional[float] = None
-    # Padding strategy for audio samples. Can be "longest" or "max_length"
-    # This mostly concerns Whisper.
-    audio_padding: Optional[str] = "longest"
 
     verbose: bool = False
 
