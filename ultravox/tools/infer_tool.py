@@ -48,9 +48,13 @@ class InferArgs:
     # Data sets to use for inference
     data_sets: Optional[List[str]] = simple_parsing.field(default=None, alias="-d")
     # Which dataset split to use
-    data_split: datasets.DatasetSplit = datasets.DatasetSplit.VALIDATION
+    data_split: datasets.DatasetSplit = simple_parsing.field(
+        default=datasets.DatasetSplit.VALIDATION, alias="-s"
+    )
     # Directory for existing data
     data_dir: Optional[str] = None
+    # Use dataset context
+    context: bool = False
     # Load datasets using MDS
     mds: bool = False
     # Number of dataset samples to process
@@ -128,10 +132,9 @@ def run_tui(
         eval_str = ""
         if scores is not None:
             assert args.data_sets
-            assert sample.audio_transcript is not None, "Query must have transcript"
             ds_name = args.data_sets[0]
             eval_sample = eval_types.Sample(
-                sample.audio_transcript,
+                sample.audio_transcript or sample.messages[0]["content"],
                 expected_answer=expected_response,
                 generated_answer=text,
             )
@@ -156,7 +159,8 @@ def run_tui(
         print(f"X: {expected_response}{eval_str}")
 
 
-def oneshot_infer(inference: base.VoiceInference, prompt: str, args: InferArgs):
+def oneshot_infer(inference: base.VoiceInference, args: InferArgs):
+    prompt = args.prompt or (DEFAULT_ASR_PROMPT if args.asr else DEFAULT_PROMPT)
     if args.audio_file is not None:
         sample = datasets.VoiceSample.from_prompt_and_buf(
             prompt, args.audio_file.read()
@@ -166,10 +170,13 @@ def oneshot_infer(inference: base.VoiceInference, prompt: str, args: InferArgs):
     run_tui(-1, inference, sample, args)
 
 
-def dataset_infer(inference: base.VoiceInference, prompt: str, args: InferArgs):
+def dataset_infer(inference: base.VoiceInference, args: InferArgs):
     assert args.data_sets, "At least one data set must be provided"
     ds_args = datasets.VoiceDatasetArgs(
         data_dir=args.data_dir,
+        prompt=args.prompt,
+        include_audio=not args.text_only,
+        include_context=args.context,
         shuffle=args.shuffle,
         use_mds=args.mds,
         split=args.data_split,
@@ -184,15 +191,6 @@ def dataset_infer(inference: base.VoiceInference, prompt: str, args: InferArgs):
         expected_answer = sample.messages[1]["content"]
         # Drop any assistant response from the sample.
         sample.messages = sample.messages[:1]
-        # Normally, we overwrite the dataset prompt with our prompt, allowing us to customize
-        # the inference prompt in this tool.
-        # If we're using text-only mode though, there's no audio to inference, so we
-        # just paste the text transcript in as the text prompt.
-        if not args.text_only:
-            sample.messages[0]["content"] = prompt
-        else:
-            sample.messages[0]["content"] = sample.audio_transcript
-            sample.audio = sample.audio_transcript = None
         if not args.json:
             run_tui(i, inference, sample, args, expected_answer, scores)
         else:
@@ -222,11 +220,10 @@ def main(args: InferArgs):
             device=args.device,
             data_type=args.data_type,
         )
-    prompt = args.prompt or (DEFAULT_ASR_PROMPT if args.asr else DEFAULT_PROMPT)
     if args.data_sets is None:
-        oneshot_infer(inference, prompt, args)
+        oneshot_infer(inference, args)
     else:
-        dataset_infer(inference, prompt, args)
+        dataset_infer(inference, args)
 
 
 if __name__ == "__main__":

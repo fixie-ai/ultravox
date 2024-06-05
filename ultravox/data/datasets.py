@@ -182,13 +182,26 @@ class DatasetSplit(str, enum.Enum):
 @dataclasses.dataclass
 class VoiceDatasetArgs:
     data_dir: Optional[str] = None
+    prompt: Optional[str] = None
+    """A specific prompt to use for the dataset."""
     num_prompts: int = 1
+    """If `prompt` is not set, the number of canned prompts to use."""
+    include_audio: bool = True
+    """Whether to include audio in the samples."""
+    include_context: bool = False
+    """Whether to include additional textual context from the dataset to the prompt."""
     shuffle: bool = False
+    """Whether to shuffle the dataset."""
     shuffle_seed: int = 42
+    """Seed for shuffling the dataset."""
     max_audio_duration_secs: Optional[float] = None
+    """Whether to skip samples with audio longer than this duration."""
     use_mds: bool = False
+    """Whether to load the dataset from GCP (using MDS) or Hugging Face."""
     mds_batch_size: int = 32
+    """Batch size for MDS."""
     split: DatasetSplit = DatasetSplit.TRAIN
+    """Which split of the dataset to use."""
 
     def __post_init__(self):
         if isinstance(self.split, str):
@@ -261,17 +274,25 @@ class VoiceDataset(abc.ABC, data.IterableDataset):
         pass
 
     def _get_answer_prompt(self, idx: int) -> str:
+        if self._args.prompt:
+            return self._args.prompt
         prompt_idx = idx % min(self._args.num_prompts, len(ANSWER_PROMPTS))
         return ANSWER_PROMPTS[prompt_idx]
 
     def _get_transcribe_prompt(self, idx: int) -> str:
+        if self._args.prompt:
+            return self._args.prompt
         prompt_idx = idx % min(self._args.num_prompts, len(TRANSCRIBE_PROMPTS))
         return TRANSCRIBE_PROMPTS[prompt_idx]
 
-    def _get_answer_messages(self, idx: int, text: str) -> List[Dict[str, str]]:
+    def _get_answer_messages(
+        self, idx: int, question: str, answer: str, context: Optional[str] = None
+    ) -> List[Dict[str, str]]:
+        prompt = self._get_answer_prompt(idx) if self._args.include_audio else question
+        user_content = f"{context}\n\n{prompt}" if context else prompt
         return [
-            {"role": "user", "content": self._get_answer_prompt(idx)},
-            {"role": "assistant", "content": text},
+            {"role": "user", "content": user_content},
+            {"role": "assistant", "content": answer},
         ]
 
     def _get_transcribe_messages(self, idx: int, text: str) -> List[Dict[str, str]]:
@@ -294,20 +315,6 @@ class VoiceDataset(abc.ABC, data.IterableDataset):
         assert sampling_rate == SAMPLE_RATE
         return audio
 
-    def _get_transcribe_sample(
-        self,
-        idx: int,
-        row: transformers.BatchFeature,
-        tcol: str = "text",
-        tproc: Optional[Callable[[str], str]] = None,
-    ) -> VoiceSample:
-        text = tproc(row[tcol]) if tproc else row[tcol]
-        return VoiceSample(
-            self._get_transcribe_messages(idx, text),
-            self._get_audio(row),
-            audio_transcript=text,
-        )
-
     def _load_audio(self, base_url: str, folder: str, filename: str) -> np.ndarray:
         if self._args.data_dir:
             audio_path = f"{self._args.data_dir}/{folder}/{filename}"
@@ -320,6 +327,30 @@ class VoiceDataset(abc.ABC, data.IterableDataset):
             response.raise_for_status()
             audio = audio_from_buf(response.content)
         return audio
+
+    def _get_transcribe_sample(
+        self,
+        idx: int,
+        row: transformers.BatchFeature,
+        tcol: str = "text",
+        tproc: Optional[Callable[[str], str]] = None,
+    ) -> VoiceSample:
+        text = tproc(row[tcol]) if tproc else row[tcol]
+        return self._make_sample(
+            self._get_transcribe_messages(idx, text),
+            self._get_audio(row),
+            audio_transcript=text,
+        )
+
+    def _make_sample(
+        self,
+        messages: List[Dict[str, str]],
+        audio: np.ndarray,
+        audio_transcript: Optional[str] = None,
+    ) -> VoiceSample:
+        if not self._args.include_audio:
+            return VoiceSample(messages)
+        return VoiceSample(messages, audio, audio_transcript=audio_transcript)
 
 
 class LibriSpeechDummyDataset(VoiceDataset):
@@ -385,10 +416,11 @@ class AnyInstructAnswerDataset(AnyInstructDataset):
         super().__init__(args)
 
     def _get_sample(self, idx: int, row: transformers.BatchFeature) -> VoiceSample:
-        return VoiceSample(
-            self._get_answer_messages(idx, row["chat"][1]["message"]),
-            self._load_anyinstruct_audio(row["chat"][0]["speech"]),
-            audio_transcript=row["chat"][0]["message"],
+        chat = row["chat"]
+        return self._make_sample(
+            self._get_answer_messages(idx, chat[0]["message"], chat[1]["message"]),
+            self._load_anyinstruct_audio(chat[0]["speech"]),
+            audio_transcript=chat[0]["message"],
         )
 
 
@@ -428,8 +460,11 @@ class BoolQDataset(VoiceDataset):
         self._init_dataset(dataset)
 
     def _get_sample(self, idx: int, row: transformers.BatchFeature) -> VoiceSample:
-        return VoiceSample(
-            self._get_answer_messages(idx, "True" if row["answer"] else "False"),
+        question = row["question"]
+        answer = "True" if row["answer"] else "False"
+        context = row["passage"] if self._args.include_context else None
+        return self._make_sample(
+            self._get_answer_messages(idx, question, answer, context),
             self._get_audio(row),
             audio_transcript=row["question"],
         )
