@@ -10,9 +10,10 @@ from ultravox.tools import tts
 parser = argparse.ArgumentParser()
 parser.add_argument("--dataset-name", "-d", type=str, required=True)
 parser.add_argument("--dataset-split", "-s", type=str)
-parser.add_argument("--column-name", "-c", type=str, required=True)
+parser.add_argument("--column-name", "-c", type=str, default="question")
 parser.add_argument("--audio-column-name", "-a", type=str)
 parser.add_argument("--num-samples", "-n", type=int)
+parser.add_argument("--voice", "-V", type=str)
 parser.add_argument("--sample-rate", "-r", type=int, default=16000)
 parser.add_argument("--upload-name", "-u", type=str)
 parser.add_argument("--token", "-t", type=str)
@@ -39,9 +40,10 @@ def main(args: argparse.Namespace):
     ds_name = args.dataset_name
     col_name = args.column_name
     audio_col_name = args.audio_column_name or f"{col_name}_audio"
+
     print(f'Loading dataset "{ds_name}", mapping "{col_name}" to "{audio_col_name}"...')
     ds = datasets.load_dataset(ds_name)
-    tts_client = tts.AzureTts(sample_rate=args.sample_rate)
+    tts_client = tts.AzureTts(voice=args.voice, sample_rate=args.sample_rate)
     for split, ds_split in ds.items():
         if args.dataset_split and split != args.dataset_split:
             continue
