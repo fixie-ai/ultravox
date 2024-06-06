@@ -9,6 +9,7 @@ from ultravox.tools import tts
 # Ex: python tts_tool.py -d google/boolq -c question -a audio -u "fixie-ai/boolq-audio
 parser = argparse.ArgumentParser()
 parser.add_argument("--dataset-name", "-d", type=str, required=True)
+parser.add_argument("--dataset-subset", "-S", type=str)
 parser.add_argument("--dataset-split", "-s", type=str)
 parser.add_argument("--column-name", "-c", type=str, default="question")
 parser.add_argument("--audio-column-name", "-a", type=str)
@@ -40,14 +41,15 @@ def main(args: argparse.Namespace):
     ds_name = args.dataset_name
     col_name = args.column_name
     audio_col_name = args.audio_column_name or f"{col_name}_audio"
+    tts_client = tts.AzureTts(voice=args.voice, sample_rate=args.sample_rate)
 
     print(f'Loading dataset "{ds_name}", mapping "{col_name}" to "{audio_col_name}"...')
-    ds = datasets.load_dataset(ds_name)
-    tts_client = tts.AzureTts(voice=args.voice, sample_rate=args.sample_rate)
-    for split, ds_split in ds.items():
-        if args.dataset_split and split != args.dataset_split:
-            continue
-
+    data_dict = datasets.load_dataset(
+        ds_name, args.dataset_subset, split=args.dataset_split
+    )
+    if args.dataset_split:
+        data_dict = {args.dataset_split: data_dict}
+    for split, ds_split in data_dict.items():
         print(f'Processing split "{split}"...')
         if args.num_samples:
             ds_split = ds_split.select(range(args.num_samples))
@@ -58,7 +60,12 @@ def main(args: argparse.Namespace):
             new_split.to_parquet(output_name)
         else:
             token = args.token or os.environ.get("HF_TOKEN")
-            new_split.push_to_hub(args.upload_name, split=split, token=token)
+            new_split.push_to_hub(
+                args.upload_name,
+                config_name=args.dataset_subset,
+                split=split,
+                token=token,
+            )
 
 
 if __name__ == "__main__":

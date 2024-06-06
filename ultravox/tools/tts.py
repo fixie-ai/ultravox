@@ -1,5 +1,6 @@
 import io
 import os
+from typing import Optional
 from xml.sax import saxutils
 
 import numpy as np
@@ -19,9 +20,9 @@ def _make_ssml(voice: str, text: str):
 class AzureTts:
     DEFAULT_VOICE = "en-US-JennyNeural"
 
-    def __init__(self, voice: str = DEFAULT_VOICE, sample_rate: int = 16000):
-        self._voice = voice
+    def __init__(self, voice: Optional[str] = None, sample_rate: int = 16000):
         self._session = requests.Session()
+        self._voice = voice or self.DEFAULT_VOICE
         self._sample_rate = sample_rate
 
     def tts(self, text: str):
