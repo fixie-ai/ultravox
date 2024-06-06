@@ -1,12 +1,17 @@
+import io
 import os
+from xml.sax import saxutils
+
+import numpy as np
 import requests
+import soundfile as sf
 
 
 def _make_ssml(voice: str, text: str):
     return f"""
     <speak version="1.0" xml:lang="en-US">
         <voice xml:lang="en-US" name="{voice}">
-            <prosody rate="100%">{text}</prosody>
+            {saxutils.escape(text)}
         </voice>
     </speak>"""
 
@@ -14,14 +19,17 @@ def _make_ssml(voice: str, text: str):
 class AzureTts:
     DEFAULT_VOICE = "en-US-JennyNeural"
 
-    def __init__(self):
-        self._voice = self.DEFAULT_VOICE
-        self._session = requests.ClientSession()
+    def __init__(self, voice: str = DEFAULT_VOICE, sample_rate: int = 16000):
+        self._voice = voice
+        self._session = requests.Session()
+        self._sample_rate = sample_rate
 
-    def _tts(self, text: str):
+    def tts(self, text: str):
         region = "westus"
-        api_key = os.environ["AZURE_TTS_API_KEY"]
-        output_format = "raw-48khz-16bit-mono-pcm"
+        api_key = os.environ.get("AZURE_TTS_API_KEY") or os.environ.get(
+            "AZURE_WESTUS_TTS_API_KEY"
+        )
+        output_format = f"raw-{self._sample_rate // 1000}khz-16bit-mono-pcm"
         url = f"https://{region}.tts.speech.microsoft.com/cognitiveservices/v1"
         headers = {
             "Ocp-Apim-Subscription-Key": api_key,
@@ -32,4 +40,8 @@ class AzureTts:
         body = _make_ssml(self._voice, text)
         response = self._session.post(url, headers=headers, data=body)
         response.raise_for_status()
-        return response.content
+
+        pcm_array = np.frombuffer(response.content, dtype=np.int16)
+        wav_bytes = io.BytesIO()
+        sf.write(wav_bytes, pcm_array, self._sample_rate, format="wav")
+        return wav_bytes.getvalue()
