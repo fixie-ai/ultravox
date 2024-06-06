@@ -1,23 +1,27 @@
-import argparse
+import dataclasses
 import os
+from typing import Dict, Optional, Union
 
 import datasets
+import simple_parsing
 
 from ultravox.tools import tts
 
+
 # This script is used to generate audio samples from text using a TTS model.
-# Ex: python tts_tool.py -d google/boolq -c question -a audio -u "fixie-ai/boolq-audio
-parser = argparse.ArgumentParser()
-parser.add_argument("--dataset-name", "-d", type=str, required=True)
-parser.add_argument("--dataset-subset", "-S", type=str)
-parser.add_argument("--dataset-split", "-s", type=str)
-parser.add_argument("--column-name", "-c", type=str, default="question")
-parser.add_argument("--audio-column-name", "-a", type=str)
-parser.add_argument("--num-samples", "-n", type=int)
-parser.add_argument("--voice", "-V", type=str)
-parser.add_argument("--sample-rate", "-r", type=int, default=16000)
-parser.add_argument("--upload-name", "-u", type=str)
-parser.add_argument("--token", "-t", type=str)
+# Ex: just tts -d google/boolq -c question -a audio -u fixie-ai/boolq-audio
+@dataclasses.dataclass
+class TtsArgs:
+    dataset_name: str = simple_parsing.field(alias="-d")
+    dataset_subset: Optional[str] = simple_parsing.field(default=None, alias="-S")
+    dataset_split: Optional[str] = simple_parsing.field(default=None, alias="-s")
+    column_name: str = simple_parsing.field(default="question", alias="-c")
+    audio_column_name: Optional[str] = simple_parsing.field(default=None, alias="-a")
+    num_samples: Optional[int] = simple_parsing.field(default=None, alias="-n")
+    voice: Optional[str] = simple_parsing.field(default=None, alias="-V")
+    sample_rate: int = simple_parsing.field(default=16000, alias="-r")
+    upload_name: Optional[str] = simple_parsing.field(default=None, alias="-u")
+    token: Optional[str] = simple_parsing.field(default=None, alias="-t")
 
 
 def _tts_split(
@@ -26,18 +30,21 @@ def _tts_split(
     col_name: str,
     audio_col_name: str,
 ):
-    def _tts_batch(batch):
+    def get_text(val: Union[str, Dict[str, str]]) -> str:
+        return val["text"] if isinstance(val, dict) else val
+
+    def tts_batch(batch):
         batch[audio_col_name] = [
-            {"bytes": tts_client.tts(text)} for text in batch[col_name]
+            {"bytes": tts_client.tts(get_text(val))} for val in batch[col_name]
         ]
         return batch
 
-    return ds_split.map(_tts_batch, batched=True).cast_column(
+    return ds_split.map(tts_batch, batched=True).cast_column(
         audio_col_name, datasets.Audio(sampling_rate=tts_client._sample_rate)
     )
 
 
-def main(args: argparse.Namespace):
+def main(args: TtsArgs):
     ds_name = args.dataset_name
     col_name = args.column_name
     audio_col_name = args.audio_column_name or f"{col_name}_audio"
@@ -69,5 +76,4 @@ def main(args: argparse.Namespace):
 
 
 if __name__ == "__main__":
-    args = parser.parse_args()
-    main(args)
+    main(simple_parsing.parse(TtsArgs))
