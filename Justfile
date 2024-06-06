@@ -54,6 +54,9 @@ infer *FLAGS:
 eval *FLAGS:
     just python -m ultravox.tools.eval_tool {{FLAGS}}
 
+tts *FLAGS:
+    just python -m ultravox.tools.tts_tool {{FLAGS}}
+
 mds *FLAGS:
     just python -m ultravox.tools.mds_tool {{FLAGS}}
 
