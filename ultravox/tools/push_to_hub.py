@@ -9,7 +9,7 @@ from ultravox.inference import ultravox_infer
 
 
 # This script is used to upload a model to the HuggingFace Hub. It is mainly useful for turning a W&B artifact into a HF model for vLLM use.
-# Ex: python -m ultravox.tools.push_to_hub -m wandb://fixie/ultravox/<model_path> -u fixie-ai/ultravox
+# Ex: python -m ultravox.tools.push_to_hub -m wandb://fixie/ultravox/<model_path> -u fixie-ai/ultravox-vXYZ
 @dataclasses.dataclass
 class UploadToHubArgs:
     # Model ID to use for the model
