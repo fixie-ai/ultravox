@@ -25,6 +25,7 @@ class UploadToHubArgs:
 
 
 def main(args: UploadToHubArgs):
+    # Load the model and tokenizer, then merge LoRA weights if they exist
     inference = ultravox_infer.UltravoxInference(
         args.model,
         tokenizer_id=args.tokenizer,
@@ -34,6 +35,7 @@ def main(args: UploadToHubArgs):
     )
     print("Uploading model to HuggingFace Hub...")
     inference.model.push_to_hub(args.hf_upload_url)
+    # It's not necessary to upload the tokenizer, but it can be useful for consistency
     print("Uploading tokenizer to HuggingFace Hub...")
     inference.tokenizer.push_to_hub(args.hf_upload_url)
 
