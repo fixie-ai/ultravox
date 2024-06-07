@@ -28,7 +28,7 @@ DEFAULT_ASR_PROMPT = "Transcribe <|audio|>"
 @dataclasses.dataclass
 class InferArgs:
     # Model ID to use for the model
-    model: str = simple_parsing.field(default="fixie-ai/ultravox", alias="-m")
+    model: str = simple_parsing.field(default="fixie-ai/ultravox-v0.2", alias="-m")
     # Path to the audio file
     audio_file: Optional[IO] = simple_parsing.field(
         default=None, type=argparse.FileType("rb"), alias="-f"
