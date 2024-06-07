@@ -82,7 +82,7 @@ brew install just
 Create a Python virtual environment and install the necessary packages:
 
 ```bash
-just create-env
+just create-venv
 ```
 
 For now we're using venv for Python virtual environments.
