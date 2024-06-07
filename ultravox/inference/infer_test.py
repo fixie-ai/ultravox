@@ -14,13 +14,15 @@ from ultravox.model import ultravox_processing
 @pytest.fixture(scope="module")
 def tokenizer():
     return transformers.AutoTokenizer.from_pretrained(
-        "meta-llama/Meta-Llama-3-8B-Instruct"
+        "../tests/assets/hf/Meta-Llama-3-8B-Instruct"
     )
 
 
 @pytest.fixture(scope="module")
 def audio_processor():
-    return transformers.AutoProcessor.from_pretrained("facebook/wav2vec2-base-960h")
+    return transformers.AutoProcessor.from_pretrained(
+        "../tests/assets/hf/wav2vec2-base-960h"
+    )
 
 
 class FakeInference(infer.LocalInference):
