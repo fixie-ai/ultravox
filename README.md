@@ -24,6 +24,10 @@ See Ultravox in action via a [voice call](https://www.ai.town/characters/a90fcca
 
 Join us on our Discord server [here](https://discord.gg/Qw6KHxv8YB).
 
+### Jobs
+
+If you're interested in working on Ultravox fulltime, we're hiring! Check out our jobs page [here](https://www.notion.so/fixieai/Careers-at-Fixie-fc1a7ace4c1e42a8886065bc397aba2d).
+
 ### Inference Server
 
 You can try out Ultravox using your own audio content (as a WAV file), using the following curl command:
