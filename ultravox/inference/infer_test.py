@@ -11,18 +11,17 @@ from ultravox.inference import infer
 from ultravox.model import ultravox_processing
 
 
+# We cache these files in our repo to make CI faster and more reliable.
 @pytest.fixture(scope="module")
 def tokenizer():
     return transformers.AutoTokenizer.from_pretrained(
-        "../tests/assets/hf/Meta-Llama-3-8B-Instruct"
+        "assets/hf/Meta-Llama-3-8B-Instruct"
     )
 
 
 @pytest.fixture(scope="module")
 def audio_processor():
-    return transformers.AutoProcessor.from_pretrained(
-        "../tests/assets/hf/wav2vec2-base-960h"
-    )
+    return transformers.AutoProcessor.from_pretrained("assets/hf/wav2vec2-base-960h")
 
 
 class FakeInference(infer.LocalInference):
