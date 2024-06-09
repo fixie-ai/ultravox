@@ -33,9 +33,6 @@ check:
 test *ARGS=".":
     . ./activate ${VENV_NAME} && cd ${PROJECT_DIR} && pytest --ignore third_party {{ARGS}}
 
-test-verbose *ARGS=".":
-    . ./activate ${VENV_NAME} && cd ${PROJECT_DIR} && pytest --ignore third_party {{ARGS}} -vv --log-cli-level=INFO {{ARGS}}
-
 @python *FLAGS:
     . ./activate ${VENV_NAME} && python {{FLAGS}}
 
