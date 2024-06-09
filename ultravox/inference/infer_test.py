@@ -14,6 +14,9 @@ from ultravox.model import ultravox_processing
 # We cache these files in our repo to make CI faster and more reliable.
 @pytest.fixture(scope="module")
 def tokenizer():
+    import os
+
+    print("tok-pwd", os.getcwd())
     return transformers.AutoTokenizer.from_pretrained(
         "./assets/hf/Meta-Llama-3-8B-Instruct", local_files_only=True
     )
@@ -21,6 +24,9 @@ def tokenizer():
 
 @pytest.fixture(scope="module")
 def audio_processor():
+    import os
+
+    print("aud-pwd", os.getcwd())
     return transformers.AutoProcessor.from_pretrained(
         "./assets/hf/wav2vec2-base-960h", local_files_only=True
     )
