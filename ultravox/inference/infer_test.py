@@ -1,3 +1,4 @@
+import logging
 from unittest import mock
 
 import numpy as np
@@ -9,7 +10,6 @@ from ultravox.data import datasets
 from ultravox.inference import base as infer_base
 from ultravox.inference import infer
 from ultravox.model import ultravox_processing
-import logging
 
 
 # We cache these files in our repo to make CI faster and more reliable.
