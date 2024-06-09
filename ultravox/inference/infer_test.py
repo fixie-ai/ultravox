@@ -9,21 +9,26 @@ from ultravox.data import datasets
 from ultravox.inference import base as infer_base
 from ultravox.inference import infer
 from ultravox.model import ultravox_processing
+import logging
 
 
 # We cache these files in our repo to make CI faster and more reliable.
 @pytest.fixture(scope="module")
 def tokenizer():
-    return transformers.AutoTokenizer.from_pretrained(
+    logging.info("Loading tokenizer")
+    yield transformers.AutoTokenizer.from_pretrained(
         "./assets/hf/Meta-Llama-3-8B-Instruct", local_files_only=True
     )
+    logging.info("Tearing down tokenizer")
 
 
 @pytest.fixture(scope="module")
 def audio_processor():
-    return transformers.AutoProcessor.from_pretrained(
+    logging.info("Loading audio processor")
+    yield transformers.AutoProcessor.from_pretrained(
         "./assets/hf/wav2vec2-base-960h", local_files_only=True
     )
+    logging.info("Tearing down audio processor")
 
 
 class FakeInference(infer.LocalInference):
@@ -44,6 +49,9 @@ class FakeInference(infer.LocalInference):
         )
         self.model.device = "cpu"
         self.model.generate = mock.MagicMock(return_value=[range(25)])
+
+    def __del__(self):
+        logging.info("Tearing down inference")
 
 
 EXPECTED_TOKEN_IDS_START = [128000, 128006, 882, 128007]
