@@ -1,4 +1,5 @@
 import logging
+import os
 from unittest import mock
 
 import numpy as np
@@ -10,6 +11,8 @@ from ultravox.data import datasets
 from ultravox.inference import base as infer_base
 from ultravox.inference import infer
 from ultravox.model import ultravox_processing
+
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 
 @pytest.fixture(scope="module")
