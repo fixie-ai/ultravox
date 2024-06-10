@@ -6,8 +6,12 @@ name: Run tests
 on:
   push:
     branches: [main, prod]
+    paths-ignore:
+      - "docs/**"
   pull_request:
     branches: [main, prod]
+    paths-ignore:
+      - "docs/**"
 
 jobs:
   test:
