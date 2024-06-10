@@ -19,7 +19,7 @@ Ultravox currently takes in audio and emits streaming text. As we evolve the mod
 ### Demo
 
 See Ultravox in action via a [voice call](https://www.ai.town/characters/a90fcca3-53c0-4111-b30a-4984883a23ef) with an AI in our app, [ai.town](https://ai.town).
-(*Note: there's been a lot of traffic to our inference server and we've hit a few bugs. If the demo seems to be erroring out please check try again in a bit.*)
+(*Note: there's been a lot of traffic to our inference server and we've hit a few bugs. If the demo seems to be erroring out please try again in a bit.*)
 
 ### Discord
 
