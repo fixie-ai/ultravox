@@ -1,4 +1,3 @@
-import logging
 from unittest import mock
 
 import numpy as np
@@ -46,9 +45,6 @@ class FakeInference(infer.LocalInference):
         )
         self.model.device = "cpu"
         self.model.generate = mock.MagicMock(return_value=[range(25)])
-
-    def __del__(self):
-        logging.info("Tearing down inference")
 
 
 EXPECTED_TOKEN_IDS_START = [128000, 128006, 882, 128007]
