@@ -12,23 +12,20 @@ from ultravox.inference import infer
 from ultravox.model import ultravox_processing
 
 
-# We cache these files in our repo to make CI faster and more reliable.
+# We cache these files in our repo to make CI faster and also
+# work properly for external contributions (since Llama 3 is gated).
 @pytest.fixture(scope="module")
 def tokenizer():
-    logging.info("Loading tokenizer")
-    yield transformers.AutoTokenizer.from_pretrained(
+    return transformers.AutoTokenizer.from_pretrained(
         "./assets/hf/Meta-Llama-3-8B-Instruct", local_files_only=True
     )
-    logging.info("Tearing down tokenizer")
 
 
 @pytest.fixture(scope="module")
 def audio_processor():
-    logging.info("Loading audio processor")
-    yield transformers.AutoProcessor.from_pretrained(
+    return transformers.AutoProcessor.from_pretrained(
         "./assets/hf/wav2vec2-base-960h", local_files_only=True
     )
-    logging.info("Tearing down audio processor")
 
 
 class FakeInference(infer.LocalInference):

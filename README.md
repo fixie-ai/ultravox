@@ -18,11 +18,16 @@ Ultravox currently takes in audio and emits streaming text. As we evolve the mod
 
 ### Demo
 
-See Ultravox in action via a [voice call](https://www.ai.town/characters/a90fcca3-53c0-4111-b30a-4984883a23ef) with an AI in ai.town.
+See Ultravox in action via a [voice call](https://www.ai.town/characters/a90fcca3-53c0-4111-b30a-4984883a23ef) with an AI in our app, [ai.town](https://ai.town).
+(*Note: there's been a lot of traffic to our inference server and we've hit a few bugs. If the demo seems to be erroring out please check try again in a bit.*)
 
 ### Discord
 
 Join us on our Discord server [here](https://discord.gg/Qw6KHxv8YB).
+
+### Jobs
+
+If you're interested in working on Ultravox fulltime, we're hiring! Check out our jobs page [here](https://www.notion.so/fixieai/Careers-at-Fixie-fc1a7ace4c1e42a8886065bc397aba2d).
 
 ### Inference Server
 
@@ -56,7 +61,7 @@ where `data.json` contains:
 
 ### Model
 
-You can download the latest weights from the [Ultravox Hugging Face page](https://huggingface.co/fixie-ai/ultravox).
+You can download the latest weights from the [Ultravox Hugging Face page](https://huggingface.co/fixie-ai/ultravox-v0.2).
 
 ### Architecture
 
@@ -82,7 +87,7 @@ brew install just
 Create a Python virtual environment and install the necessary packages:
 
 ```bash
-just create-env
+just create-venv
 ```
 
 For now we're using venv for Python virtual environments.
