@@ -8,7 +8,7 @@ import simple_parsing
 from ultravox.inference import ultravox_infer
 
 
-# This script is used to upload a model to the HuggingFace Hub. It is mainly useful for turning a W&B artifact into a HF model for vLLM use.
+# This script is used to upload a model to the HuggingFace Hub, for either internal or external consumption.
 # Ex: python -m ultravox.tools.push_to_hub -m wandb://fixie/ultravox/<model_path> -u fixie-ai/ultravox-vXYZ
 @dataclasses.dataclass
 class UploadToHubArgs:
@@ -22,6 +22,8 @@ class UploadToHubArgs:
     device: Optional[str] = simple_parsing.field(default=None, alias="-D")
     # Data type to use for the model
     data_type: Optional[str] = None
+    # Public or private (default)
+    private: bool = True
 
 
 def main(args: UploadToHubArgs):
@@ -33,10 +35,10 @@ def main(args: UploadToHubArgs):
         data_type=args.data_type,
     )
     print("Uploading model to HuggingFace Hub...")
-    inference.model.push_to_hub(args.hf_upload_model)
+    inference.model.push_to_hub(args.hf_upload_model, private=args.private)
     # It's not necessary to upload the tokenizer, but it can be useful for consistency
     print("Uploading tokenizer to HuggingFace Hub...")
-    inference.tokenizer.push_to_hub(args.hf_upload_model)
+    inference.tokenizer.push_to_hub(args.hf_upload_model, private=args.private)
 
 
 if __name__ == "__main__":
