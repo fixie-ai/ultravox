@@ -8,7 +8,10 @@ autoflake
 pytest
 
 # dependencies for tools
+einops
+fairseq
 fsspec
+joblib
 sounddevice
 
 mosaicml-cli
