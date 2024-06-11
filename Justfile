@@ -1,7 +1,7 @@
 export WANDB_PROJECT:="ultravox"
 export WANDB_LOG_MODEL:="checkpoint"
 export PROJECT_DIR:="ultravox"
-export MCLOUD_CLUSTER:="r7z22"
+export MCLOUD_CLUSTER:="r7z22p1"
 export MCLOUD_INSTANCE:="oci.bm.gpu.b4.8"
 
 default: format check test
