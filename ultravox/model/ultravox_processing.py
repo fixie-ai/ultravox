@@ -212,7 +212,7 @@ class UltravoxDataproc(datasets.Dataproc):
             sample.messages, tokenize=False
         )
 
-        # Process audio and text using GazelleProcessor.
+        # Process audio and text using UltravoxProcessor.
         # Audio is expanded to be a [C x M] array, although C=1 for mono audio.
         audio = (
             np.expand_dims(sample.audio, axis=0) if sample.audio is not None else None

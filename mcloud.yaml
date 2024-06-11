@@ -1,6 +1,6 @@
-# Gazelle POC training configuration
+# Ultravox POC training configuration
 
-name: gazelle-poc
+name: ultravox
 image: mosaicml/composer:latest
 compute:
   gpus: 8
