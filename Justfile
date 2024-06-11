@@ -55,10 +55,10 @@ eval *FLAGS:
     just python -m ultravox.tools.eval_tool {{FLAGS}}
 
 tts *FLAGS:
-    just python -m ultravox.tools.tts_tool {{FLAGS}}
+    just python -m ultravox.tools.ds_tool -T tts {{FLAGS}}
 
-enrich_ds *FLAGS:
-    just python -m ultravox.tools.enrich_ds_tool {{FLAGS}}
+ds_tool *FLAGS:
+    just python -m ultravox.tools.ds_tool {{FLAGS}}
 
 mds *FLAGS:
     just python -m ultravox.tools.mds_tool {{FLAGS}}

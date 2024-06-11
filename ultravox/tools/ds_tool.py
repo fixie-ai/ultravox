@@ -1,15 +1,12 @@
 import dataclasses
 import os
-from concurrent import futures
-from typing import Dict, Optional, Union
+from typing import Any, Dict, Optional, Union
 
 import datasets
-import simple_parsing
 import openai
-
+import simple_parsing
 
 from ultravox.tools import tts
-
 
 CHAT_CLIENT = openai.Client()
 TTS_CLIENT = tts.AzureTts()
@@ -38,9 +35,11 @@ class TextGenerationTask:
     template: str = DEFAULT_TEXTGEN_TEMPLATE
 
 
-# This script is used to generate audio samples from text using a TTS model.
+# This script is used to either generate audio samples from text using a TTS model, or to generate text samples using a text generation model.
 # Ex: just ds_tool -T tts -d google/boolq -u fixie-ai/boolq-audio -c question -a audio
 # Ex: just ds_tool -T textgen -d fixie-ai/boolq-audio -u fixie-ai/boolq-audio -c explanation
+# Ex: just ds_tool -T textgen -d ylacombe/expresso -u fixie-ai/expresso -c continuation \
+#         --template "\"Continue the following sentence in a way that reflects a ‘{style}’ tone in a coherent style:\n{text}\""
 @dataclasses.dataclass
 class DatasetToolArgs:
     dataset_name: str = simple_parsing.field(alias="-d")
@@ -57,16 +56,18 @@ class DatasetToolArgs:
     token: Optional[str] = simple_parsing.field(default=None, alias="-t")
 
     task: Union[TtsTask, TextGenerationTask] = simple_parsing.subgroups(
-        {"tts": TtsTask, "textgen": TextGenerationTask},
+        {"tts": TtsTask, "textgen": TextGenerationTask},  # type: ignore
         default_factory=TtsTask,
         alias="-T",
     )
 
 
-def _tts_sample(sample, col_name: str, audio_col_name: str):
+def _tts_sample(
+    sample, col_name: str, audio_col_name: str, voice: str, sample_rate: int
+):
     text = sample[col_name]
     text = text["text"] if isinstance(text, dict) else text
-    sample[audio_col_name] = TTS_CLIENT.tts(text)
+    sample[audio_col_name] = TTS_CLIENT.tts(text, voice=voice, sample_rate=sample_rate)
     return sample
 
 
@@ -120,13 +121,13 @@ def _text_gen_split(
 
 def main(args: DatasetToolArgs):
     ds_name = args.dataset_name
-    print(f'Loading dataset "{ds_name}" for task "{args.task}"...')
-    data_dict = datasets.load_dataset(
+    print(f'Loading dataset "{ds_name}" for task {args.task}')
+    data_dict: datasets.DatasetDict = datasets.load_dataset(
         ds_name, args.dataset_subset, split=args.dataset_split
     )
 
     if args.dataset_split:
-        data_dict = {args.dataset_split: data_dict}
+        data_dict = datasets.DatasetDict(**{args.dataset_split: data_dict})
 
     for split, ds_split in data_dict.items():
         print(f'Processing split "{split}"...')
@@ -144,12 +145,12 @@ def main(args: DatasetToolArgs):
             )
 
     token = args.token or os.environ.get("HF_TOKEN")
-    hub_args = {
+    hub_args: Dict[str, Any] = {
         "config_name": args.dataset_subset,
         "token": token,
         "revision": args.upload_branch,
     }
-    if args.num_shards:
+    if args.num_shards is not None:
         hub_args["num_shards"] = {split: args.num_shards for split in data_dict.keys()}
 
     try:
@@ -168,4 +169,4 @@ def main(args: DatasetToolArgs):
 
 
 if __name__ == "__main__":
-    print(simple_parsing.parse(DatasetToolArgs))
+    main(simple_parsing.parse(DatasetToolArgs))
