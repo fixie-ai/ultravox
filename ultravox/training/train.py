@@ -8,7 +8,6 @@ from datetime import datetime
 from typing import List, Optional
 
 import datasets as hf_datasets
-import mlflow
 import safetensors.torch
 import simple_parsing
 import torch
@@ -20,7 +19,6 @@ from torch.utils import data
 
 from ultravox.data import datasets
 from ultravox.inference import infer
-from ultravox.inference import ultravox_infer
 from ultravox.model import ultravox_config
 from ultravox.model import ultravox_model
 from ultravox.model import ultravox_processing
@@ -31,17 +29,6 @@ from ultravox.training import evaluation
 
 INPUT_EXAMPLE = {"text": "Transcribe <|audio|>", "audio": b"\x00\x00" * 16000}
 OUTPUT_EXAMPLE = {"text": "Hello, world!"}
-
-
-class GazelleMlflowWrapper(mlflow.pyfunc.PythonModel):
-    def predict(self, context, model_input):
-        sample = datasets.VoiceSample.from_prompt_and_buf(
-            model_input["text"], model_input["audio"]
-        )
-        return self.inference.infer(sample)
-
-    def load_context(self, context):
-        self.inference = ultravox_infer.UltravoxInference(context.artifacts["model_id"])
 
 
 def fix_hyphens(arg: str):
@@ -142,12 +129,6 @@ def main() -> None:
             name=args.exp_name,
             dir="runs",
         )
-
-    # Starting MLflow; we need to set the experiment name before training starts.
-    if "mlflow" in args.report_logs_to and is_master:
-        mlflow.set_tracking_uri("runs/mlruns")
-        db_exp_name = f"/Shared/{args.exp_name}"
-        mlflow.set_experiment(db_exp_name)
 
     if args.model_load_dir:
         logging.info(f"Loading model state dict from {args.model_load_dir}")
@@ -274,20 +255,6 @@ def main() -> None:
     )
     trainer.train()
     trainer.save_model(args.output_dir)
-    if "mlflow" in args.report_logs_to and is_master:
-        signature = mlflow.models.signature.infer_signature(
-            INPUT_EXAMPLE, OUTPUT_EXAMPLE
-        )
-        model_info = mlflow.pyfunc.log_model(
-            python_model=GazelleMlflowWrapper(),
-            artifact_path="model",
-            pip_requirements="requirements.txt",
-            registered_model_name="ultravox",
-            input_example=INPUT_EXAMPLE,
-            signature=signature,
-        )
-        logging.info(f"Model logged to MLflow: {model_info.model_uri}")
-
     t_end = datetime.now()
     logging.info(f"end time: {t_end}")
     logging.info(f"elapsed: {t_end - t_start}")

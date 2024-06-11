@@ -20,14 +20,14 @@ install:
     just python -m pip install types-requests
 
 format:
-    . ./activate ${VENV_NAME} && autoflake ${PROJECT_DIR} --remove-all-unused-imports --quiet --in-place -r --exclude third_party --exclude ultravox/model/gazelle
+    . ./activate ${VENV_NAME} && autoflake ${PROJECT_DIR} --remove-all-unused-imports --quiet --in-place -r --exclude third_party
     . ./activate ${VENV_NAME} && isort ${PROJECT_DIR} --force-single-line-imports
     . ./activate ${VENV_NAME} && black ${PROJECT_DIR}
 
 check:
     . ./activate ${VENV_NAME} && black ${PROJECT_DIR} --check
     . ./activate ${VENV_NAME} && isort ${PROJECT_DIR} --check --force-single-line-imports
-    . ./activate ${VENV_NAME} && autoflake  ${PROJECT_DIR} --check --quiet --remove-all-unused-imports -r --exclude third_party --exclude ultravox/model/gazelle
+    . ./activate ${VENV_NAME} && autoflake  ${PROJECT_DIR} --check --quiet --remove-all-unused-imports -r --exclude third_party
     . ./activate ${VENV_NAME} && mypy ${PROJECT_DIR}    
 
 test *ARGS=".":
