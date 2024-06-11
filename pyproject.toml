@@ -4,6 +4,36 @@ version = "0.1.0"
 description = ""
 authors = ["Fixie.ai Team <founders@fixie.ai>"]
 packages = [{ include = "ultravox/" }]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+transformers = {version = "4.41.2", extras = ["torch"]}
+bitsandbytes = "0.42.0"
+peft = "0.11.1"
+simple-parsing = "0.1.5"
+librosa = "0.10.2.post1"
+requests = "2.22.0"
+datasets = "2.19.1"
+mosaicml-streaming = "0.7.6"
+nltk = "3.8.1"
+truecase = "0.0.14"
+sentencepiece = "0.2.0"
+protobuf = "4.25.3"
+dataclasses-json = "0.6.7"
+openai = "1.33.0"
+jiwer = "3.0.4"
+tensorboardx = "2.6.2.2"
+wandb = "0.17.1"
+
+
+[tool.poetry.group.dev.dependencies]
+gpustat = "^1.1.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
 
 [tool.mypy]
 python_version = "3.11"
@@ -14,7 +44,6 @@ warn_unused_configs = true
 profile = "black"
 single_line_exclusions = ["typing", "collections.abc", "typing_extensions"]
 skip = [
-  "ultravox/model/gazelle",
   "venv",
   ".venv",
   "third_party",
@@ -23,7 +52,6 @@ skip = [
 [tool.black]
 extend-exclude = '''
 /(
-  | ultravox/model/gazelle",
   | third_party
   | venv
 )/
