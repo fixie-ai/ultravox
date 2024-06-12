@@ -1,0 +1,8 @@
+transformers
+safetensors
+simple_parsing
+datasets
+wandb
+librosa
+streaming
+cython
