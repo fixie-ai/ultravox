@@ -35,7 +35,7 @@ class TtsTask:
 @dataclasses.dataclass
 class TextGenerationTask:
     new_column_name: str = simple_parsing.field(default="explanation", alias="-c")
-    template: str = DEFAULT_TEXTGEN_TEMPLATE
+    template: str = simple_parsing.field(default=DEFAULT_TEXTGEN_TEMPLATE, alias="-T")
 
     language_model: str = simple_parsing.field(default="gpt-4o", alias="-m")
     max_tokens: int = 128
@@ -43,10 +43,10 @@ class TextGenerationTask:
 
 
 # This script is used to either generate audio samples from text using a TTS model, or to generate text samples using a text generation model.
-# Ex: just ds_tool -t tts -d google/boolq -u fixie-ai/boolq-audio -c question -a audio -T $HF_WRITE_TOKEN
-# Ex: just ds_tool -t textgen -d fixie-ai/boolq-audio -u fixie-ai/boolq-audio -c explanation -T $HF_WRITE_TOKEN
-# Ex: just ds_tool -t textgen -d ylacombe/expresso -u fixie-ai/expresso -c continuation -T $HF_WRITE_TOKEN \
-#         --template "\"Continue the following sentence in a way that reflects a ‘{style}’ tone in a coherent style:\n{text}\""
+# Ex: just ds_tool -t tts -d google/boolq -u fixie-ai/boolq-audio -c question -a audio --token $HF_WRITE_TOKEN
+# Ex: just ds_tool -t textgen -d fixie-ai/boolq-audio -u fixie-ai/boolq-audio -c explanation
+# Ex: just ds_tool -t textgen -d ylacombe/expresso -u fixie-ai/expresso -c continuation \
+#         -T "\"Continue the following sentence in a way that reflects a ‘{style}’ tone in a coherent style:\n{text}\""
 @dataclasses.dataclass
 class DatasetToolArgs:
     dataset_name: str = simple_parsing.field(alias="-d")
@@ -60,7 +60,7 @@ class DatasetToolArgs:
     upload_branch: Optional[str] = simple_parsing.field(default="main", alias="-b")
     num_shards: Optional[int] = simple_parsing.field(default=None, alias="-N")
 
-    token: Optional[str] = simple_parsing.field(default=None, alias="-T")
+    token: Optional[str] = None
 
     task: Union[TtsTask, TextGenerationTask] = simple_parsing.subgroups(
         {"tts": TtsTask, "textgen": TextGenerationTask},  # type: ignore
