@@ -7,11 +7,8 @@ export MCLOUD_INSTANCE:="oci.bm.gpu.b4.8"
 default: format check test
 
 install:
-    # Install torch 2.2.1 if needed, not present in requirements.txt
-    #just python -c \"import torch\" 2>/dev/null || just pip install torch==2.2.1
-    pcip install poetry==1.7.1
+    pip install poetry==1.7.1
     poetry install
-    #just python -m pip install types-requests
 
 format:
     poetry run autoflake ${PROJECT_DIR} --remove-all-unused-imports --quiet --in-place -r --exclude third_party
