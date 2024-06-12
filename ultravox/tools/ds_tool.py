@@ -17,7 +17,7 @@ Question: {question}
 
 Answer: {answer}
 
-Provide a short explanation to the question given the passage that entails the answer."""
+Provide a short explanation to the question given the passage that provides a rationale for the answer."""
 
 
 @dataclasses.dataclass
