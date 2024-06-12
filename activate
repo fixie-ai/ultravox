@@ -1,6 +1,0 @@
-#!/bin/sh
-# If we are in CI, we want to use the existing venv due to disk space issues
-set +u
-if [ -z "${CI}" ]; then
-    . $1/bin/activate
-fi
