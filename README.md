@@ -87,11 +87,10 @@ brew install just
 Create a Python virtual environment and install the necessary packages:
 
 ```bash
-just create-venv
+just install
 ```
 
-For now we're using venv for Python virtual environments.
-We may switch to `Poetry` in the future.
+We're using Poetry to manage the Python virtual environment.
 
 ### Mosaic Environment Setup
 
@@ -182,5 +181,4 @@ Useful commands:
 just update    # update dependencies
 just format    # run formatting (black, isort, autoflake)
 just python    # activate venv and run python
-just pip       # install a package in the venv using the right pip
 ```
