@@ -7,6 +7,7 @@ export MCLOUD_INSTANCE:="oci.bm.gpu.b4.8"
 default: format check test
 
 install:
+    pip install "pip>=24.0"
     pip install poetry==1.7.1
     poetry install
 
