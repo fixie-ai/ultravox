@@ -159,6 +159,10 @@ class VoiceSample:
         if self.audio is not None:
             if self.audio.dtype == np.float64:
                 self.audio = self.audio.astype(np.float32)
+            elif self.audio.dtype == np.int16:
+                self.audio = self.audio.astype(np.float32) / np.float32(32768.0)
+            elif self.audio.dtype == np.int32:
+                self.audio = self.audio.astype(np.float32) / np.float32(2147483648.0)
             assert (
                 self.audio.dtype == np.float32
             ), f"Unexpected audio dtype: {self.audio.dtype}"
@@ -166,7 +170,7 @@ class VoiceSample:
 
     messages: List[Dict[str, str]]
     """List of messages, each with a "role" and "content" field."""
-    audio: Optional[np.ndarray] = None
+    audio: Optional[np.typing.NDArray[np.float32]] = None
     """Audio data as float32 PCM @ `sample_rate`."""
     sample_rate: int = SAMPLE_RATE
     """Audio sample rate in Hz."""
