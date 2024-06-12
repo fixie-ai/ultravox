@@ -69,43 +69,38 @@ class DatasetToolArgs:
     )
 
 
-def _tts_sample(sample, task: TtsTask):
-    text = sample[task.column_name]
-    text = text["text"] if isinstance(text, dict) else text
-    sample[task.audio_column_name] = tts_client.tts(text)
-    return sample
-
-
 def _tts_split(ds_split: datasets.Dataset, task: TtsTask, num_proc: int):
+    def _tts_sample(sample):
+        text = sample[task.column_name]
+        text = text["text"] if isinstance(text, dict) else text
+        sample[task.audio_column_name] = tts_client.tts(text)
+        return sample
 
     print(f'TTS mapping "{task.column_name}" to "{task.audio_column_name}"...')
 
-    return ds_split.map(
-        _tts_sample, num_proc=num_proc, fn_kwargs={"task": task}
-    ).cast_column(
+    return ds_split.map(_tts_sample, num_proc=num_proc).cast_column(
         task.audio_column_name, datasets.Audio(sampling_rate=task.sample_rate)
     )
-
-
-def _text_gen_sample(sample, task: TextGenerationTask):
-    input_text = task.template.format(**sample)
-    response = chat_client.chat.completions.create(
-        model=task.language_model,
-        messages=[{"role": "user", "content": input_text}],
-        max_tokens=task.max_tokens,
-        temperature=task.temperature,
-    )
-    sample[task.new_column_name] = response.choices[0].message.content
-    return sample
 
 
 def _text_gen_split(
     ds_split: datasets.Dataset, task: TextGenerationTask, num_proc: int
 ):
+    def _text_gen_sample(sample):
+        input_text = task.template.format(**sample)
+        response = chat_client.chat.completions.create(
+            model=task.language_model,
+            messages=[{"role": "user", "content": input_text}],
+            max_tokens=task.max_tokens,
+            temperature=task.temperature,
+        )
+        sample[task.new_column_name] = response.choices[0].message.content
+        return sample
+
     print(
         f'Text gen for column: "{task.new_column_name}" with template:\n{task.template}'
     )
-    return ds_split.map(_text_gen_sample, num_proc=num_proc, fn_kwargs={"task": task})
+    return ds_split.map(_text_gen_sample, num_proc=num_proc)
 
 
 def main(args: DatasetToolArgs):
