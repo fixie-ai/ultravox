@@ -8,8 +8,8 @@ import simple_parsing
 
 from ultravox.tools import tts
 
-CHAT_CLIENT = openai.Client()
-TTS_CLIENT = tts.AzureTts()
+chat_client = openai.Client()
+tts_client = tts.AzureTts()
 
 DEFAULT_TEXTGEN_TEMPLATE = """Passage: {passage}
 
@@ -20,25 +20,32 @@ Answer: {answer}
 Provide a short explanation to the question given the passage that entails the answer."""
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass
 class TtsTask:
     column_name: str = simple_parsing.field(default="question", alias="-c")
     audio_column_name: Optional[str] = simple_parsing.field(default=None, alias="-a")
     voice: Optional[str] = simple_parsing.field(default=None, alias="-V")
     sample_rate: int = simple_parsing.field(default=16000, alias="-r")
 
+    def __post_init__(self):
+        if self.audio_column_name is None:
+            self.audio_column_name = f"{self.column_name}_audio"
 
-@dataclasses.dataclass(frozen=True)
+
+@dataclasses.dataclass
 class TextGenerationTask:
-    language_model: str = simple_parsing.field(default="gpt-4o", alias="-m")
     new_column_name: str = simple_parsing.field(default="explanation", alias="-c")
     template: str = DEFAULT_TEXTGEN_TEMPLATE
 
+    language_model: str = simple_parsing.field(default="gpt-4o", alias="-m")
+    max_tokens: int = 128
+    temperature: float = 0
+
 
 # This script is used to either generate audio samples from text using a TTS model, or to generate text samples using a text generation model.
-# Ex: just ds_tool -T tts -d google/boolq -u fixie-ai/boolq-audio -c question -a audio
-# Ex: just ds_tool -T textgen -d fixie-ai/boolq-audio -u fixie-ai/boolq-audio -c explanation
-# Ex: just ds_tool -T textgen -d ylacombe/expresso -u fixie-ai/expresso -c continuation \
+# Ex: just ds_tool -t tts -d google/boolq -u fixie-ai/boolq-audio -c question -a audio -T $HF_WRITE_TOKEN
+# Ex: just ds_tool -t textgen -d fixie-ai/boolq-audio -u fixie-ai/boolq-audio -c explanation -T $HF_WRITE_TOKEN
+# Ex: just ds_tool -t textgen -d ylacombe/expresso -u fixie-ai/expresso -c continuation -T $HF_WRITE_TOKEN \
 #         --template "\"Continue the following sentence in a way that reflects a ‘{style}’ tone in a coherent style:\n{text}\""
 @dataclasses.dataclass
 class DatasetToolArgs:
@@ -53,70 +60,52 @@ class DatasetToolArgs:
     upload_branch: Optional[str] = simple_parsing.field(default="main", alias="-b")
     num_shards: Optional[int] = simple_parsing.field(default=None, alias="-N")
 
-    token: Optional[str] = simple_parsing.field(default=None, alias="-t")
+    token: Optional[str] = simple_parsing.field(default=None, alias="-T")
 
     task: Union[TtsTask, TextGenerationTask] = simple_parsing.subgroups(
         {"tts": TtsTask, "textgen": TextGenerationTask},  # type: ignore
         default_factory=TtsTask,
-        alias="-T",
+        alias="-t",
     )
 
 
-def _tts_sample(
-    sample, col_name: str, audio_col_name: str, voice: str, sample_rate: int
-):
-    text = sample[col_name]
+def _tts_sample(sample, task: TtsTask):
+    text = sample[task.column_name]
     text = text["text"] if isinstance(text, dict) else text
-    sample[audio_col_name] = TTS_CLIENT.tts(text, voice=voice, sample_rate=sample_rate)
+    sample[task.audio_column_name] = tts_client.tts(text)
     return sample
 
 
-def _tts_split(
-    ds_split: datasets.Dataset, task: TtsTask, num_proc: Optional[int] = None
-):
-    col_name = task.column_name
-    audio_col_name = task.audio_column_name or f"{col_name}_audio"
-    print(f'TTS mapping "{col_name}" to "{audio_col_name}"...')
+def _tts_split(ds_split: datasets.Dataset, task: TtsTask, num_proc: int):
+
+    print(f'TTS mapping "{task.column_name}" to "{task.audio_column_name}"...')
 
     return ds_split.map(
-        _tts_sample,
-        num_proc=num_proc,
-        fn_kwargs={
-            "col_name": col_name,
-            "audio_col_name": audio_col_name,
-            "voice": task.voice,
-            "sample_rate": task.sample_rate,
-        },
-    ).cast_column(audio_col_name, datasets.Audio(sampling_rate=task.sample_rate))
-
-
-def _text_gen_sample(sample, template: str, col_name: str, language_model: str):
-    input_text = template.format(**sample)
-    response = CHAT_CLIENT.chat.completions.create(
-        model=language_model,
-        messages=[{"role": "user", "content": input_text}],
-        max_tokens=128,
-        temperature=0,
+        _tts_sample, num_proc=num_proc, fn_kwargs={"task": task}
+    ).cast_column(
+        task.audio_column_name, datasets.Audio(sampling_rate=task.sample_rate)
     )
-    sample[col_name] = response.choices[0].message.content
+
+
+def _text_gen_sample(sample, task: TextGenerationTask):
+    input_text = task.template.format(**sample)
+    response = chat_client.chat.completions.create(
+        model=task.language_model,
+        messages=[{"role": "user", "content": input_text}],
+        max_tokens=task.max_tokens,
+        temperature=task.temperature,
+    )
+    sample[task.new_column_name] = response.choices[0].message.content
     return sample
 
 
 def _text_gen_split(
-    ds_split: datasets.Dataset, task: TextGenerationTask, num_proc: Optional[int] = None
+    ds_split: datasets.Dataset, task: TextGenerationTask, num_proc: int
 ):
-    col_name = task.new_column_name
-    template = task.template
-    print(f'Text gen for column: "{col_name}" with template:\n{template}')
-    return ds_split.map(
-        _text_gen_sample,
-        num_proc=num_proc,
-        fn_kwargs={
-            "language_model": task.language_model,
-            "col_name": col_name,
-            "template": template,
-        },
+    print(
+        f'Text gen for column: "{task.new_column_name}" with template:\n{task.template}'
     )
+    return ds_split.map(_text_gen_sample, num_proc=num_proc, fn_kwargs={"task": task})
 
 
 def main(args: DatasetToolArgs):
