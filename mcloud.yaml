@@ -1,5 +1,4 @@
-# Ultravox POC training configuration
-
+# Ultravox training configuration
 name: ultravox
 image: mosaicml/composer:latest
 compute:
@@ -11,7 +10,7 @@ integrations:
     git_branch: $UV_BRANCH
     pip_install: poetry
 command: >-
-  poetry install && cd ultravox && torchrun --nproc_per_node=8 -m ultravox.training.train --config_path ultravox/training/configs/$UV_CONFIG
+  cd ultravox && poetry install --no-dev && poetry run torchrun --nproc_per_node=8 -m ultravox.training.train --config_path ultravox/training/configs/$UV_CONFIG
 env_variables:
   MLFLOW_TRACKING_URI: databricks
   UV_BRANCH: main
