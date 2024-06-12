@@ -46,7 +46,10 @@ eval *FLAGS:
     poetry run python -m ultravox.tools.eval_tool {{FLAGS}}
 
 tts *FLAGS:
-    poetry run python -m ultravox.tools.tts_tool {{FLAGS}}
+    poetry run python -m ultravox.tools.ds_tool -T tts {{FLAGS}}
+
+ds_tool *FLAGS:
+    poetry run python -m ultravox.tools.ds_tool {{FLAGS}}
 
 mds *FLAGS:
     poetry run python -m ultravox.tools.mds_tool {{FLAGS}}
