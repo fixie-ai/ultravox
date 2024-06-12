@@ -6,8 +6,12 @@ name: Run tests
 on:
   push:
     branches: [main, prod]
+    paths-ignore:
+      - "docs/**"
   pull_request:
     branches: [main, prod]
+    paths-ignore:
+      - "docs/**"
 
 jobs:
   test:
@@ -37,4 +41,4 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          just test
+          just test-verbose
