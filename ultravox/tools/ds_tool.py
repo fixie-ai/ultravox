@@ -32,17 +32,16 @@ class TtsTask:
             self.audio_column_name = f"{self.column_name}_audio"
 
     def map_split(self, ds_split: datasets.Dataset, num_proc: int) -> datasets.Dataset:
-        def map_sample(sample):
-            text = sample[self.column_name]
-            text = text["text"] if isinstance(text, dict) else text
-            sample[self.audio_column_name] = tts_client.tts(text)
-            return sample
-
         print(f'TTS mapping "{self.column_name}" to "{self.audio_column_name}"...')
-
-        return ds_split.map(map_sample, num_proc=num_proc).cast_column(
+        return ds_split.map(self._map_sample, num_proc=num_proc).cast_column(
             self.audio_column_name, datasets.Audio(sampling_rate=self.sample_rate)
         )
+
+    def _map_sample(self, sample):
+        text = sample[self.column_name]
+        text = text["text"] if isinstance(text, dict) else text
+        sample[self.audio_column_name] = tts_client.tts(text)
+        return sample
 
 
 @dataclasses.dataclass
@@ -56,24 +55,23 @@ class TextGenerationTask:
 
     def __post_init__(self):
         if self.template.startswith("@"):
-            self.template = open(self.template[1:], "r").read()
+            with open(self.template[1:], "r") as template_file:
+                self.template = template_file.read()
 
     def map_split(self, ds_split: datasets.Dataset, num_proc: int) -> datasets.Dataset:
-        def map_sample(sample):
-            input_text = self.template.format(**sample)
-            response = chat_client.chat.completions.create(
-                model=self.language_model,
-                messages=[{"role": "user", "content": input_text}],
-                max_tokens=self.max_tokens,
-                temperature=self.temperature,
-            )
-            sample[self.new_column_name] = response.choices[0].message.content
-            return sample
+        print(f'Generating "{self.new_column_name}" with template:\n{self.template}')
+        return ds_split.map(self._map_sample, num_proc=num_proc)
 
-        print(
-            f'Text gen for column: "{self.new_column_name}" with template:\n{self.template}'
+    def _map_sample(self, sample):
+        input_text = self.template.format(**sample)
+        response = chat_client.chat.completions.create(
+            model=self.language_model,
+            messages=[{"role": "user", "content": input_text}],
+            max_tokens=self.max_tokens,
+            temperature=self.temperature,
         )
-        return ds_split.map(map_sample, num_proc=num_proc)
+        sample[self.new_column_name] = response.choices[0].message.content
+        return sample
 
 
 # This script is used to either generate audio samples from text using a TTS model, or to generate text samples using a text generation model.
@@ -92,6 +90,7 @@ class DatasetToolArgs:
     upload_name: Optional[str] = simple_parsing.field(default=None, alias="-u")
     upload_branch: Optional[str] = simple_parsing.field(default="main", alias="-b")
     num_shards: Optional[int] = simple_parsing.field(default=None, alias="-N")
+    private: bool = simple_parsing.field(default=False)
 
     token: Optional[str] = None
 
@@ -119,9 +118,10 @@ def main(args: DatasetToolArgs):
 
     token = args.token or os.environ.get("HF_TOKEN")
     hub_args: Dict[str, Any] = {
-        "config_name": args.dataset_subset,
+        "config_name": args.dataset_subset or "default",
         "token": token,
         "revision": args.upload_branch,
+        "private": args.private,
     }
     if args.num_shards is not None:
         hub_args["num_shards"] = {split: args.num_shards for split in data_dict.keys()}
