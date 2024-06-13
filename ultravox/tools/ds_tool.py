@@ -31,6 +31,18 @@ class TtsTask:
         if self.audio_column_name is None:
             self.audio_column_name = f"{self.column_name}_audio"
 
+    def map_split(self, ds_split: datasets.Dataset, num_proc: int) -> datasets.Dataset:
+        print(f'TTS mapping "{self.column_name}" to "{self.audio_column_name}"...')
+        return ds_split.map(self._map_sample, num_proc=num_proc).cast_column(
+            self.audio_column_name, datasets.Audio(sampling_rate=self.sample_rate)
+        )
+
+    def _map_sample(self, sample):
+        text = sample[self.column_name]
+        text = text["text"] if isinstance(text, dict) else text
+        sample[self.audio_column_name] = tts_client.tts(text)
+        return sample
+
 
 @dataclasses.dataclass
 class TextGenerationTask:
@@ -41,16 +53,35 @@ class TextGenerationTask:
     max_tokens: int = 128
     temperature: float = 0
 
+    def __post_init__(self):
+        if self.template.startswith("@"):
+            with open(self.template[1:], "r") as template_file:
+                self.template = template_file.read()
+
+    def map_split(self, ds_split: datasets.Dataset, num_proc: int) -> datasets.Dataset:
+        print(f'Generating "{self.new_column_name}" with template:\n{self.template}')
+        return ds_split.map(self._map_sample, num_proc=num_proc)
+
+    def _map_sample(self, sample):
+        input_text = self.template.format(**sample)
+        response = chat_client.chat.completions.create(
+            model=self.language_model,
+            messages=[{"role": "user", "content": input_text}],
+            max_tokens=self.max_tokens,
+            temperature=self.temperature,
+        )
+        sample[self.new_column_name] = response.choices[0].message.content
+        return sample
+
 
 # This script is used to either generate audio samples from text using a TTS model, or to generate text samples using a text generation model.
-# Ex: just ds_tool -t tts -d google/boolq -u fixie-ai/boolq-audio -c question -a audio --token $HF_WRITE_TOKEN
-# Ex: just ds_tool -t textgen -d fixie-ai/boolq-audio -u fixie-ai/boolq-audio -c explanation
-# Ex: just ds_tool -t textgen -d ylacombe/expresso -u fixie-ai/expresso -c continuation \
-#         -T "\"Continue the following sentence in a way that reflects a ‘{style}’ tone in a coherent style:\n{text}\""
+# Ex: just ds_tool tts -d google/boolq -u fixie-ai/boolq-audio -c question -a audio --token $HF_WRITE_TOKEN
+# Ex: just ds_tool textgen -d fixie-ai/boolq-audio -u fixie-ai/boolq-audio -c explanation
+# Ex: just ds_tool textgen -d ylacombe/expresso -u fixie-ai/expresso -c continuation -T @expresso_template.txt
 @dataclasses.dataclass
 class DatasetToolArgs:
     dataset_name: str = simple_parsing.field(alias="-d")
-    dataset_subset: str = simple_parsing.field(default="default", alias="-S")
+    dataset_subset: Optional[str] = simple_parsing.field(default=None, alias="-S")
     dataset_split: Optional[str] = simple_parsing.field(default=None, alias="-s")
 
     num_samples: Optional[int] = simple_parsing.field(default=None, alias="-n")
@@ -59,48 +90,15 @@ class DatasetToolArgs:
     upload_name: Optional[str] = simple_parsing.field(default=None, alias="-u")
     upload_branch: Optional[str] = simple_parsing.field(default="main", alias="-b")
     num_shards: Optional[int] = simple_parsing.field(default=None, alias="-N")
+    private: bool = simple_parsing.field(default=False)
 
     token: Optional[str] = None
 
     task: Union[TtsTask, TextGenerationTask] = simple_parsing.subgroups(
         {"tts": TtsTask, "textgen": TextGenerationTask},  # type: ignore
         default_factory=TtsTask,
-        alias="-t",
+        positional=True,
     )
-
-
-def _tts_split(ds_split: datasets.Dataset, task: TtsTask, num_proc: int):
-    def _tts_sample(sample):
-        text = sample[task.column_name]
-        text = text["text"] if isinstance(text, dict) else text
-        sample[task.audio_column_name] = tts_client.tts(text)
-        return sample
-
-    print(f'TTS mapping "{task.column_name}" to "{task.audio_column_name}"...')
-
-    return ds_split.map(_tts_sample, num_proc=num_proc).cast_column(
-        task.audio_column_name, datasets.Audio(sampling_rate=task.sample_rate)
-    )
-
-
-def _text_gen_split(
-    ds_split: datasets.Dataset, task: TextGenerationTask, num_proc: int
-):
-    def _text_gen_sample(sample):
-        input_text = task.template.format(**sample)
-        response = chat_client.chat.completions.create(
-            model=task.language_model,
-            messages=[{"role": "user", "content": input_text}],
-            max_tokens=task.max_tokens,
-            temperature=task.temperature,
-        )
-        sample[task.new_column_name] = response.choices[0].message.content
-        return sample
-
-    print(
-        f'Text gen for column: "{task.new_column_name}" with template:\n{task.template}'
-    )
-    return ds_split.map(_text_gen_sample, num_proc=num_proc)
 
 
 def main(args: DatasetToolArgs):
@@ -109,7 +107,6 @@ def main(args: DatasetToolArgs):
     data_dict: datasets.DatasetDict = datasets.load_dataset(
         ds_name, args.dataset_subset, split=args.dataset_split
     )
-
     if args.dataset_split:
         data_dict = datasets.DatasetDict(**{args.dataset_split: data_dict})
 
@@ -117,22 +114,14 @@ def main(args: DatasetToolArgs):
         print(f'Processing split "{split}"...')
         if args.num_samples:
             ds_split = ds_split.select(range(args.num_samples))
-
-        if isinstance(args.task, TtsTask):
-            data_dict[split] = _tts_split(
-                ds_split, args.task, num_proc=args.num_workers
-            )
-
-        elif isinstance(args.task, TextGenerationTask):
-            data_dict[split] = _text_gen_split(
-                ds_split, args.task, num_proc=args.num_workers
-            )
+        data_dict[split] = args.task.map_split(ds_split, args.num_workers)
 
     token = args.token or os.environ.get("HF_TOKEN")
     hub_args: Dict[str, Any] = {
-        "config_name": args.dataset_subset,
+        "config_name": args.dataset_subset or "default",
         "token": token,
         "revision": args.upload_branch,
+        "private": args.private,
     }
     if args.num_shards is not None:
         hub_args["num_shards"] = {split: args.num_shards for split in data_dict.keys()}
