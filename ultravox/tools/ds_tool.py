@@ -8,8 +8,8 @@ import simple_parsing
 
 from ultravox.tools import tts
 
-chat_client = openai.Client()
-tts_client = tts.AzureTts()
+tts_client: tts.Client
+chat_client: openai.Client
 
 DEFAULT_TEXTGEN_TEMPLATE = """Passage: {passage}
 
@@ -22,14 +22,17 @@ Provide a short explanation to the question given the passage that provides a ra
 
 @dataclasses.dataclass
 class TtsTask:
+    implementation: str = simple_parsing.field(default="azure", alias="-i")
     column_name: str = simple_parsing.field(default="question", alias="-c")
     audio_column_name: Optional[str] = simple_parsing.field(default=None, alias="-a")
     voice: Optional[str] = simple_parsing.field(default=None, alias="-V")
     sample_rate: int = simple_parsing.field(default=16000, alias="-r")
 
     def __post_init__(self):
+        global tts_client
         if self.audio_column_name is None:
             self.audio_column_name = f"{self.column_name}_audio"
+        tts_client = tts.create_client(self.implementation, self.sample_rate)
 
     def map_split(self, ds_split: datasets.Dataset, num_proc: int) -> datasets.Dataset:
         print(f'TTS mapping "{self.column_name}" to "{self.audio_column_name}"...')
@@ -40,7 +43,7 @@ class TtsTask:
     def _map_sample(self, sample):
         text = sample[self.column_name]
         text = text["text"] if isinstance(text, dict) else text
-        sample[self.audio_column_name] = tts_client.tts(text)
+        sample[self.audio_column_name] = tts_client.tts(text, self.voice)
         return sample
 
 
@@ -50,10 +53,16 @@ class TextGenerationTask:
     template: str = simple_parsing.field(default=DEFAULT_TEXTGEN_TEMPLATE, alias="-T")
 
     language_model: str = simple_parsing.field(default="gpt-4o", alias="-m")
+    base_url: str = simple_parsing.field(
+        default="https://api.openai.com/v1", alias="-b"
+    )
+    api_key: str = simple_parsing.field(default=None, alias="-k")
     max_tokens: int = 128
     temperature: float = 0
 
     def __post_init__(self):
+        global chat_client
+        chat_client = openai.Client(base_url=self.base_url, api_key=self.api_key)
         if self.template.startswith("@"):
             with open(self.template[1:], "r") as template_file:
                 self.template = template_file.read()
