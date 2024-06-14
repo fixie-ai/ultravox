@@ -192,7 +192,7 @@ class VoiceDatasetArgs:
     """If `prompt` is not set, the number of canned prompts to use."""
     include_audio: bool = True
     """Whether to include audio in the samples."""
-    include_context: bool = False
+    include_context: bool = True
     """Whether to include additional textual context from the dataset to the prompt."""
     shuffle: bool = False
     """Whether to shuffle the dataset."""
