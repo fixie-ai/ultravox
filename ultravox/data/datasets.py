@@ -434,7 +434,7 @@ class AnyInstructInputDataset(AnyInstructDataset):
 
     def _get_sample(self, idx: int, row: transformers.BatchFeature) -> VoiceSample:
         audio_transcript = row["chat"][0]["message"]
-        return VoiceSample(
+        return self._make_sample(
             self._get_transcribe_messages(idx, audio_transcript),
             self._load_anyinstruct_audio(row["chat"][0]["speech"]),
             audio_transcript=audio_transcript,
@@ -447,7 +447,7 @@ class AnyInstructOutputDataset(AnyInstructDataset):
 
     def _get_sample(self, idx: int, row: transformers.BatchFeature) -> VoiceSample:
         audio_transcript = row["chat"][1]["message"]
-        return VoiceSample(
+        return self._make_sample(
             self._get_transcribe_messages(idx, audio_transcript),
             self._load_anyinstruct_audio(row["chat"][1]["speech"]),
             audio_transcript=audio_transcript,
@@ -456,11 +456,10 @@ class AnyInstructOutputDataset(AnyInstructDataset):
 
 class BoolQDataset(VoiceDataset):
     def __init__(self, args: VoiceDatasetArgs) -> None:
-        assert (
-            args.split == DatasetSplit.VALIDATION
-        ), f"BoolQ is only for validation, but got split={args.split}"
         super().__init__(args)
-        dataset = self._load_audio_dataset("fixie-ai/boolq-audio", split="train")
+        dataset = self._load_audio_dataset(
+            "fixie-ai/boolq-audio", split=args.split.value
+        )
         self._init_dataset(dataset)
 
     def _get_sample(self, idx: int, row: transformers.BatchFeature) -> VoiceSample:
@@ -477,6 +476,96 @@ class BoolQDataset(VoiceDataset):
 class BoolQInputDataset(BoolQDataset):
     def _get_sample(self, idx: int, row: transformers.BatchFeature) -> VoiceSample:
         return self._get_transcribe_sample(idx, row, tcol="question")
+
+
+class BoolQWithExtendedAnswerDataset(BoolQDataset):
+    SEPARATORS = ["\n\n", "\n", "\n----\n"]
+    BOOLQ_PASSAGE_PROMPTS = [
+        "Provide a short explanation, then respond with True/False on the last line",
+        "Explain briefly, concluding with True/False on a new line."
+        "Write a quick explanation, and finish with True/False on the last line"
+        "Summarize in a few words, and end with True/False on a new line."
+        "Give a brief explanation first, then answer with True/False on the final line",
+        "Start with a concise explanation, and end with a True/False response on the last line.",
+        "Explain briefly and follow up with True/False at the end",
+        "Write a short explanation, then state True/False on a new line.",
+        "First, offer a brief explanation, and then reply with True/False at the end.",
+        "Present a concise explanation, ending with a True/False answer on the final line",
+        "Start with a brief explanation, and then answer with True/False at the end.",
+    ]
+    QUERY_PROMPTS = ["Question: ", "Question:\n", "Q: ", "Q:\n", "Query: ", "Query:\n"]
+    CONTEXT_PROMPTS = [
+        "Passage: ",
+        "Passage:\n",
+        "Context: ",
+        "Context:\n",
+        "Background: ",
+        "Background:\n",
+    ]
+    ANSWER_PROMPTS = [
+        "Answer: ",
+        "A: ",
+        "",
+        "The answer is: ",
+        "Result: ",
+        "Conclusion: ",
+    ]
+
+    def _get_query_prompt(self, idx: int) -> str:
+        """
+        Creates a random prompt for a BoolQ sample with a passage and question.
+        Example prompt:
+            Passage: {context}
+
+            Question: {question}
+
+            Provide a short explanation, then respond with True/False on the last line.
+        """
+        if self._args.prompt:
+            return self._args.prompt
+        prompt_idx = idx % min(self._args.num_prompts, len(self.BOOLQ_PASSAGE_PROMPTS))
+        prompt = self.BOOLQ_PASSAGE_PROMPTS[prompt_idx]
+
+        # Separate either with 1 or 2 newlines, depending on idx
+        # 13, 17, 19 are prime numbers (to avoid a pattern)
+        separator = self.SEPARATORS[
+            idx % 13 % min(self._args.num_prompts, len(self.SEPARATORS))
+        ]
+
+        query_prompt = self.QUERY_PROMPTS[
+            idx % 17 % min(self._args.num_prompts, len(self.QUERY_PROMPTS))
+        ]
+        prompt = f"{query_prompt}{{question}}{separator}{prompt}"
+
+        if self._args.include_context:
+            context_prompt = self.CONTEXT_PROMPTS[
+                idx % 19 % min(self._args.num_prompts, len(self.CONTEXT_PROMPTS))
+            ]
+            prompt = f"{context_prompt}{{context}}{separator}{prompt}"
+
+        return prompt
+
+    def _get_sample(self, idx: int, row: transformers.BatchFeature) -> VoiceSample:
+        answer = "True" if row["answer"] else "False"
+        answer_prompt = self.ANSWER_PROMPTS[
+            idx % 23 % min(self._args.num_prompts, len(self.ANSWER_PROMPTS))
+        ]
+        query_prompt = self._get_query_prompt(idx)
+        user_content = query_prompt.format(
+            question="<|audio|>" if self._args.include_audio else row["question"],
+            context=row["passage"],
+        )
+        messages = [
+            {"role": "user", "content": user_content},
+            {
+                "role": "assistant",
+                "content": f"{row['explanation']}\n{answer_prompt}{answer}",
+            },
+        ]
+
+        return self._make_sample(
+            messages, self._get_audio(row), audio_transcript=row["question"]
+        )
 
 
 class LibriSpeechDataset(VoiceDataset):
@@ -599,6 +688,7 @@ def create_dataset(name: str, args: VoiceDatasetArgs) -> data.IterableDataset:
         "anyinstruct_out": AnyInstructOutputDataset,
         "boolq": BoolQDataset,
         "boolq_in": BoolQInputDataset,
+        "boolq_extended": BoolQWithExtendedAnswerDataset,
         "gigaspeech": GigaSpeechDataset,
         "librispeech": LibriSpeechDataset,
         "voxpopuli": VoxPopuliDataset,
