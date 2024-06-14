@@ -1,4 +1,5 @@
 import concurrent.futures
+import dataclasses
 import functools
 import os
 from typing import List, Optional
@@ -44,14 +45,36 @@ def dataset_infer(
     return ddp_utils.all_gather_list(eval_samples)
 
 
-def get_metric_name(ds_name: str, metric: str) -> str:
-    if ds_name == "boolq_in" and metric == "asr":
-        return "boolq__wer"
-    if ds_name == "boolq" and metric == "boolq":
-        return "boolq__correctness"
-    if metric == "instruct":
-        return f"{ds_name}__instruct_follow"
-    return f"{ds_name}__{metric}"
+@dataclasses.dataclass
+class EvalScenario:
+    name: str
+    dataset: str
+    metric: str
+    include_audio: bool = True
+    include_context: bool = True
+    new_tokens: Optional[int] = None
+
+
+EVAL_SCENARIOS = [
+    EvalScenario("boolq__wer", "boolq_in", "asr"),
+    EvalScenario("anyinstruct__instruct_follow", "anyinstruct", "instruct"),
+    EvalScenario(
+        "boolq_binary", "boolq_passage", "exact_match_last_word", new_tokens=128
+    ),
+    EvalScenario(
+        "anyinstruct__instruct_follow_text_only",
+        "anyinstruct",
+        "instruct",
+        include_audio=False,
+    ),
+    EvalScenario(
+        "boolq_binary_text_only",
+        "boolq_passage",
+        "exact_match_last_word",
+        new_tokens=128,
+        include_audio=False,
+    ),
+]
 
 
 def evaluate(
@@ -68,21 +91,20 @@ def evaluate(
     world_size = int(os.environ.get("WORLD_SIZE", 1))
     local_rank = int(os.environ.get("LOCAL_RANK", 0))
 
-    ds_args = datasets.VoiceDatasetArgs(
-        data_dir=data_dir, split=datasets.DatasetSplit.VALIDATION
-    )
+    for task in EVAL_SCENARIOS:
+        ds_args = datasets.VoiceDatasetArgs(
+            data_dir=data_dir,
+            split=datasets.DatasetSplit.VALIDATION,
+            include_audio=task.include_audio,
+            include_context=task.include_context,
+        )
 
-    for ds_name, metric in [
-        ("boolq_in", "asr"),
-        ("boolq", "boolq"),
-        ("anyinstruct", "instruct"),
-    ]:
-        ds = datasets.Range(datasets.create_dataset(ds_name, ds_args), num_samples)
+        ds = datasets.Range(datasets.create_dataset(task.dataset, ds_args), num_samples)
 
         output_samples = dataset_infer(
             inference,
             ds=ds,
-            max_new_tokens=max_new_tokens,
+            max_new_tokens=task.new_tokens or max_new_tokens,
             temperature=temperature,
             world_size=world_size,
             local_rank=local_rank,
@@ -92,7 +114,7 @@ def evaluate(
             # Only the master process should evaluate the samples.
             continue
 
-        eval_per_sample = functools.partial(eval.evaluate_answer, metric=metric)
+        eval_per_sample = functools.partial(eval.evaluate_answer, metric=task.metric)
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=num_procs) as executor:
             possibly_non_scores = [
@@ -100,13 +122,13 @@ def evaluate(
             ]
 
         if None in possibly_non_scores:
-            print(f"Failed to evaluate {metric} for {ds_name}")
+            print(f"Failed to evaluate {task.metric} for {task.dataset}")
             continue
 
         scores = [x for x in possibly_non_scores if x is not None]
 
         if verbose:
-            print(f"Eval for {ds_name}:")
+            print(f"Eval for {task.dataset}:")
             for sample, score in zip(output_samples, scores):
                 print("-" * 20)
                 print(f"Q: {sample.question}")
@@ -115,10 +137,11 @@ def evaluate(
 
         average = np.mean(scores)
         std = np.std(scores) / np.sqrt(len(scores))
-        metric_name = get_metric_name(ds_name, metric)
-        metrics[f"eval_{metric_name}"] = average
-        metrics[f"eval_{metric_name}_std"] = std
+        metrics[f"eval_{task.name}"] = average
+        metrics[f"eval_{task.name}_std"] = std
 
-        print(f"Aggregate {metric} score for {ds_name}: {average:.2f} ± {std:.2f}")
+        print(
+            f"Aggregate {task.metric} score for {task.dataset}: {average:.2f} ± {std:.2f}"
+        )
 
     return metrics
