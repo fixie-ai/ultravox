@@ -4,7 +4,7 @@ text_model_lora_config:
   r: 64  # no/little change in the range [16, 64]
   target_modules: ['mlp.gate_proj', 'mlp.up_proj', 'mlp.down_proj', 'v_proj', 'o_proj', 'k_proj', 'q_proj']
 
-data_sets: ["gigaspeech", "anyinstruct", "boolq_passage"]
+data_sets: ["gigaspeech", "anyinstruct", "boolq_extended"]
 
 # disable_layer_drop: True
 # audio_model_lora_config:
