@@ -1,7 +1,8 @@
 import dataclasses
 import os
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Union, List
 
+import jmespath
 import datasets
 import openai
 import simple_parsing
@@ -22,6 +23,7 @@ Provide a short explanation to the question given the passage that provides a ra
 
 @dataclasses.dataclass
 class TtsTask:
+    # Column name containing the text to convert to audio. It can be a JMESPath expression.
     column_name: str = simple_parsing.field(default="question", alias="-c")
     audio_column_name: Optional[str] = simple_parsing.field(default=None, alias="-a")
     voice: Optional[str] = simple_parsing.field(default=None, alias="-V")
@@ -38,7 +40,7 @@ class TtsTask:
         )
 
     def _map_sample(self, sample):
-        text = sample[self.column_name]
+        text = jmespath.search(sample, self.column_name)
         text = text["text"] if isinstance(text, dict) else text
         sample[self.audio_column_name] = tts_client.tts(text)
         return sample
@@ -48,6 +50,8 @@ class TtsTask:
 class TextGenerationTask:
     new_column_name: str = simple_parsing.field(default="explanation", alias="-c")
     template: str = simple_parsing.field(default=DEFAULT_TEXTGEN_TEMPLATE, alias="-T")
+    # Interpret the template as a JMESPath expression.
+    use_jmespath: bool = simple_parsing.field(default=False, alias="-j")
 
     language_model: str = simple_parsing.field(default="gpt-4o", alias="-m")
     max_tokens: int = 128
@@ -62,11 +66,25 @@ class TextGenerationTask:
         print(f'Generating "{self.new_column_name}" with template:\n{self.template}')
         return ds_split.map(self._map_sample, num_proc=num_proc)
 
+    @staticmethod
+    def get_messages_ending_with_user(turn_contents: List[str]):
+        roles = ["user", "assistant"]
+        if len(turn_contents) % 2 == 0:
+            roles = roles[::-1]
+        return [
+            {"role": roles[i % 2], "content": content}
+            for i, content in enumerate(turn_contents)
+        ]
+
     def _map_sample(self, sample):
-        input_text = self.template.format(**sample)
+        if self.use_jmespath:
+            turns = jmespath.search(sample, self.template)
+        else:
+            turns = [self.template.format(**sample)]
+
         response = chat_client.chat.completions.create(
             model=self.language_model,
-            messages=[{"role": "user", "content": input_text}],
+            messages=self.get_messages_ending_with_user(turns),
             max_tokens=self.max_tokens,
             temperature=self.temperature,
         )
@@ -78,12 +96,18 @@ class TextGenerationTask:
 # Ex: just ds_tool tts -d google/boolq -u fixie-ai/boolq-audio -c question -a audio --token $HF_WRITE_TOKEN
 # Ex: just ds_tool textgen -d fixie-ai/boolq-audio -u fixie-ai/boolq-audio -c explanation
 # Ex: just ds_tool textgen -d ylacombe/expresso -u fixie-ai/expresso -c continuation -T @expresso_template.txt
+# Ex: just ds_tool textgen -d allenai/soda --shuffle True --split train -n 10000 -u fixie-ai/soda -c alt_last_turn -j -m llama3-8b -T "dialogue[:-1]"
+# Ex: just ds_tool textgen -d allenai/soda --shuffle True --split validation -n 1000 -u fixie-ai/soda -c alt_last_turn -j -m llama3-8b -T "dialogue[:-1]"
+# Ex: just ds_tool textgen -d allenai/soda --shuffle True --split test -n 1000 -u fixie-ai/soda -c alt_last_turn -j -m llama3-8b -T "dialogue[:-1]"
+# Ex: just ds_tool textgen -d fixie-ai/soda -u fixie-ai/soda -c "dialogue[-2]" -a audio_one_but_last
 @dataclasses.dataclass
 class DatasetToolArgs:
     dataset_name: str = simple_parsing.field(alias="-d")
     dataset_subset: Optional[str] = simple_parsing.field(default=None, alias="-S")
     dataset_split: Optional[str] = simple_parsing.field(default=None, alias="-s")
 
+    shuffle: bool = simple_parsing.field(default=False)
+    shuffle_seed: int = simple_parsing.field(default=42)
     num_samples: Optional[int] = simple_parsing.field(default=None, alias="-n")
     num_workers: int = simple_parsing.field(default=16, alias="-w")
 
@@ -112,6 +136,8 @@ def main(args: DatasetToolArgs):
 
     for split, ds_split in data_dict.items():
         print(f'Processing split "{split}"...')
+        if args.shuffle:
+            ds_split = ds_split.shuffle(seed=args.shuffle_seed)
         if args.num_samples:
             ds_split = ds_split.select(range(args.num_samples))
         data_dict[split] = args.task.map_split(ds_split, args.num_workers)
