@@ -1,5 +1,7 @@
 from typing import Optional
 
+import bitsandbytes
+import torch
 import transformers
 
 from ultravox.inference import infer
@@ -17,6 +19,7 @@ class UltravoxInference(infer.LocalInference):
         tokenizer_id: Optional[str] = None,
         device: Optional[str] = None,
         data_type: Optional[str] = None,
+        quant_bits: Optional[int] = None,
     ):
         """
         Args:
@@ -32,10 +35,20 @@ class UltravoxInference(infer.LocalInference):
         """
         device = device or utils.default_device()
         dtype = utils.get_dtype(data_type) if data_type else utils.default_dtype()
+        quant_config = None
+        if quant_bits is not None:
+            if quant_bits == 8:
+                quant_config = bitsandbytes.BitsAndBytesConfig(load_in_8bit=True)
+            elif quant_bits == 4:
+                quant_config = bitsandbytes.BitsAndBytesConfig(
+                    load_in_4bit=True, bnb_4bit_compute_dtype=torch.bfloat16
+                )
+            else:
+                raise ValueError(f"Unsupported quant_bits: {quant_bits}")
         if wandb_utils.is_wandb_url(model_path):
             model_path = wandb_utils.download_model_from_wandb(model_path)
         model = ultravox_model.UltravoxModel.from_pretrained(
-            model_path, torch_dtype=dtype
+            model_path, torch_dtype=dtype, quantization_config=quant_config
         )
         model.to(dtype=dtype, device=device)
         model.merge_and_unload()

@@ -67,6 +67,8 @@ class InferArgs:
     device: Optional[str] = simple_parsing.field(default=None, alias="-D")
     # Data type to use for the model
     data_type: Optional[str] = None
+    # Quantization level
+    quant_bits: Optional[int] = simple_parsing.field(default=None, alias="-q")
     # Temperature for sampling
     temperature: Optional[float] = simple_parsing.field(default=None, alias="-t")
     # Maximum tokens to generate
@@ -77,6 +79,11 @@ class InferArgs:
     verbose: bool = simple_parsing.field(default=False, alias="-v")
     # JSON output
     json: bool = simple_parsing.field(default=False)
+
+    def __post_init__(self):
+        if self.prompt.startswith("@"):
+            with open(self.prompt[1:], "r") as f:
+                self.prompt = f.read()
 
 
 def run_tui(
@@ -92,7 +99,7 @@ def run_tui(
     messages = sample.messages
     transcript = f' ["{sample.audio_transcript}"]' if sample.audio_transcript else ""
     print(f"Q: {messages[0]['content']}{transcript}")
-    print(f"A: ", end="")
+    print("A: ", end="")
     start_time = time.time()
     first_token_time = None
     text = ""
@@ -219,6 +226,7 @@ def main(args: InferArgs):
             audio_processor_id=args.audio_processor,
             device=args.device,
             data_type=args.data_type,
+            quant_bits=args.quant_bits,
         )
     if args.data_sets is None:
         oneshot_infer(inference, args)
