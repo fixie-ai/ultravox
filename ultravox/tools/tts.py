@@ -75,10 +75,12 @@ class AzureTts(Client):
         voice = voice or self.DEFAULT_VOICE
         if voice == RANDOM_VOICE_KEY:
             voice = np.random.choice(self.ALL_VOICES)
+        assert voice
         region = "westus"
         api_key = os.environ.get("AZURE_TTS_API_KEY") or os.environ.get(
             "AZURE_WESTUS_TTS_API_KEY"
         )
+        assert api_key, "Please set the AZURE_TTS_API_KEY environment variable."
         output_format = f"raw-{self._sample_rate // 1000}khz-16bit-mono-pcm"
         url = f"https://{region}.tts.speech.microsoft.com/cognitiveservices/v1"
         headers = {

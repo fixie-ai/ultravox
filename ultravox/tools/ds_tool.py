@@ -29,6 +29,7 @@ class TtsTask:
     sample_rate: int = simple_parsing.field(default=16000, alias="-r")
 
     def __post_init__(self):
+        # The TTS client is separate from the task to avoid pickling issues when multiprocessing.
         global tts_client
         if self.audio_column_name is None:
             self.audio_column_name = f"{self.column_name}_audio"
@@ -53,14 +54,13 @@ class TextGenerationTask:
     template: str = simple_parsing.field(default=DEFAULT_TEXTGEN_TEMPLATE, alias="-T")
 
     language_model: str = simple_parsing.field(default="gpt-4o", alias="-m")
-    base_url: str = simple_parsing.field(
-        default="https://api.openai.com/v1", alias="-b"
-    )
-    api_key: str = simple_parsing.field(default=None, alias="-k")
+    base_url: Optional[str] = simple_parsing.field(default=None, alias="-b")
+    api_key: Optional[str] = simple_parsing.field(default=None, alias="-k")
     max_tokens: int = 128
     temperature: float = 0
 
     def __post_init__(self):
+        # The OAI client is separate from the task to avoid pickling issues when multiprocessing.
         global chat_client
         chat_client = openai.Client(base_url=self.base_url, api_key=self.api_key)
         if self.template.startswith("@"):
@@ -97,7 +97,7 @@ class DatasetToolArgs:
     num_workers: int = simple_parsing.field(default=16, alias="-w")
 
     upload_name: Optional[str] = simple_parsing.field(default=None, alias="-u")
-    upload_branch: Optional[str] = simple_parsing.field(default="main", alias="-b")
+    upload_branch: Optional[str] = simple_parsing.field(default="main", alias="-B")
     num_shards: Optional[int] = simple_parsing.field(default=None, alias="-N")
     private: bool = simple_parsing.field(default=False)
 
