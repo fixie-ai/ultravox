@@ -253,7 +253,7 @@ def main() -> None:
         # Training loop
         logging.info("Starting training...")
         t_start = datetime.now()
-        logging.info(f"start time: {t_start}")
+        logging.info(f"train start time: {t_start}")
         if args.val_steps:
             trainer.evaluate()
         trainer.train()
@@ -265,7 +265,7 @@ def main() -> None:
     if args.do_eval:
         logging.info("Starting evaluation...")
         t_start = datetime.now()
-        logging.info(f"start time: {t_start}")
+        logging.info(f"eval start time: {t_start}")
 
         # Merge LoRA weights for better inference performance.
         # Note: this is irreversible and changes model saving format
