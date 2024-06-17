@@ -19,6 +19,9 @@ class TrainConfig:
     # audio encoder model to use
     audio_model: str
 
+    do_train: bool = True
+    do_eval: bool = True
+
     # In InterleaveDataset, if one dataset runs out, should we repeat it to keep
     # the ratio of samples from each dataset fixed?
     repeat_data: bool = False

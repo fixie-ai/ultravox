@@ -9,8 +9,8 @@ import simple_parsing
 
 from ultravox.tools import tts
 
-chat_client = openai.Client()
-tts_client = tts.AzureTts()
+tts_client: tts.Client
+chat_client: openai.Client
 
 DEFAULT_TEXTGEN_TEMPLATE = """Passage: {passage}
 
@@ -23,6 +23,7 @@ Provide a short explanation to the question given the passage that provides a ra
 
 @dataclasses.dataclass
 class TtsTask:
+    implementation: str = simple_parsing.field(default="azure", alias="-i")
     # Column name containing the text to convert to audio. It can be a JMESPath expression.
     column_name: str = simple_parsing.field(default="question", alias="-c")
     audio_column_name: Optional[str] = simple_parsing.field(default=None, alias="-a")
@@ -30,8 +31,11 @@ class TtsTask:
     sample_rate: int = simple_parsing.field(default=16000, alias="-r")
 
     def __post_init__(self):
+        # The TTS client is separate from the task to avoid pickling issues when multiprocessing.
+        global tts_client
         if self.audio_column_name is None:
             self.audio_column_name = f"{self.column_name}_audio"
+        tts_client = tts.create_client(self.implementation, self.sample_rate)
 
     def map_split(self, ds_split: datasets.Dataset, num_proc: int) -> datasets.Dataset:
         print(f'TTS mapping "{self.column_name}" to "{self.audio_column_name}"...')
@@ -42,7 +46,7 @@ class TtsTask:
     def _map_sample(self, sample):
         text = jmespath.search(sample, self.column_name)
         text = text["text"] if isinstance(text, dict) else text
-        sample[self.audio_column_name] = tts_client.tts(text)
+        sample[self.audio_column_name] = tts_client.tts(text, self.voice)
         return sample
 
 
@@ -54,10 +58,15 @@ class TextGenerationTask:
     use_jmespath: bool = simple_parsing.field(default=False, alias="-j")
 
     language_model: str = simple_parsing.field(default="gpt-4o", alias="-m")
+    base_url: Optional[str] = simple_parsing.field(default=None, alias="-b")
+    api_key: Optional[str] = simple_parsing.field(default=None, alias="-k")
     max_tokens: int = 128
     temperature: float = 0
 
     def __post_init__(self):
+        # The OAI client is separate from the task to avoid pickling issues when multiprocessing.
+        global chat_client
+        chat_client = openai.Client(base_url=self.base_url, api_key=self.api_key)
         if self.template.startswith("@"):
             with open(self.template[1:], "r") as template_file:
                 self.template = template_file.read()
@@ -93,13 +102,13 @@ class TextGenerationTask:
 
 
 # This script is used to either generate audio samples from text using a TTS model, or to generate text samples using a text generation model.
-# Ex: just ds_tool tts -d google/boolq -u fixie-ai/boolq-audio -c question -a audio --token $HF_WRITE_TOKEN
-# Ex: just ds_tool textgen -d fixie-ai/boolq-audio -u fixie-ai/boolq-audio -c explanation
-# Ex: just ds_tool textgen -d ylacombe/expresso -u fixie-ai/expresso -c continuation -T @expresso_template.txt
-# Ex: just ds_tool textgen -d allenai/soda --shuffle True --split train -n 10000 -u fixie-ai/soda -c alt_last_turn -j -m llama3-8b -T "dialogue[:-1]"
-# Ex: just ds_tool textgen -d allenai/soda --shuffle True --split validation -n 1000 -u fixie-ai/soda -c alt_last_turn -j -m llama3-8b -T "dialogue[:-1]"
-# Ex: just ds_tool textgen -d allenai/soda --shuffle True --split test -n 1000 -u fixie-ai/soda -c alt_last_turn -j -m llama3-8b -T "dialogue[:-1]"
-# Ex: just ds_tool textgen -d fixie-ai/soda -u fixie-ai/soda -c "dialogue[-2]" -a audio_one_but_last
+#   just ds_tool tts -d google/boolq -u fixie-ai/boolq-audio -c question -a audio --token $HF_WRITE_TOKEN
+#   just ds_tool textgen -d fixie-ai/boolq-audio -u fixie-ai/bar -c explanation -b https://api.fireworks.ai/inference/v1 -k $FIREWORKS_API_KEY -m accounts/fireworks/models/llama-v3-8b-instruct
+#   just ds_tool textgen -d ylacombe/expresso -u fixie-ai/expresso -c continuation -T @expresso_template.txt
+#   just ds_tool textgen -d allenai/soda --shuffle True --split train -n 10000 -u fixie-ai/soda -c alt_last_turn -j -m llama3-8b -T "dialogue[:-1]"
+#   just ds_tool textgen -d allenai/soda --shuffle True --split validation -n 1000 -u fixie-ai/soda -c alt_last_turn -j -m llama3-8b -T "dialogue[:-1]"
+#   just ds_tool textgen -d allenai/soda --shuffle True --split test -n 1000 -u fixie-ai/soda -c alt_last_turn -j -m llama3-8b -T "dialogue[:-1]"
+#   just ds_tool textgen -d fixie-ai/soda -u fixie-ai/soda -c "dialogue[-2]" -a audio_one_but_last
 @dataclasses.dataclass
 class DatasetToolArgs:
     dataset_name: str = simple_parsing.field(alias="-d")
@@ -112,7 +121,7 @@ class DatasetToolArgs:
     num_workers: int = simple_parsing.field(default=16, alias="-w")
 
     upload_name: Optional[str] = simple_parsing.field(default=None, alias="-u")
-    upload_branch: Optional[str] = simple_parsing.field(default="main", alias="-b")
+    upload_branch: Optional[str] = simple_parsing.field(default="main", alias="-B")
     num_shards: Optional[int] = simple_parsing.field(default=None, alias="-N")
     private: bool = simple_parsing.field(default=False)
 
