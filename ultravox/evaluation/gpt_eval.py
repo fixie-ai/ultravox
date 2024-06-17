@@ -1,4 +1,5 @@
 import dataclasses
+from typing import Optional
 
 import openai
 
@@ -41,14 +42,15 @@ Correct answer: {expected_answer}
 """
 
 RATING_MODEL = "gpt-4o"
+client: Optional[openai.Client] = None
 
 
 def _evaluate_answer_gpt(
-    client: openai.OpenAI,
-    sys_prompt: str,
-    user_prompt: str,
-    sample: eval_types.Sample,
-):
+    sys_prompt: str, user_prompt: str, sample: eval_types.Sample
+) -> eval_types.InstructResult:
+    global client
+    if client is None:
+        client = openai.Client()
     response = client.chat.completions.create(
         model=RATING_MODEL,
         messages=[
@@ -74,14 +76,9 @@ def _evaluate_answer_gpt(
     return eval_types.InstructResult(score=score, reason=rating_text[2:])
 
 
-CLIENT = openai.OpenAI()
+def evaluate_answer_boolq(sample: eval_types.Sample) -> eval_types.InstructResult:
+    return _evaluate_answer_gpt(BOOLQ_SYSTEM_PROMPT, BOOLQ_USER_PROMPT, sample)
 
 
-def evaluate_answer_boolq(sample: eval_types.Sample):
-    return _evaluate_answer_gpt(CLIENT, BOOLQ_SYSTEM_PROMPT, BOOLQ_USER_PROMPT, sample)
-
-
-def evaluate_answer_instruct(sample: eval_types.Sample):
-    return _evaluate_answer_gpt(
-        CLIENT, INSTRUCT_SYSTEM_PROMPT, INSTRUCT_USER_PROMPT, sample
-    )
+def evaluate_answer_instruct(sample: eval_types.Sample) -> eval_types.InstructResult:
+    return _evaluate_answer_gpt(INSTRUCT_SYSTEM_PROMPT, INSTRUCT_USER_PROMPT, sample)
