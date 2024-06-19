@@ -1,5 +1,7 @@
 import abc
+import hashlib
 import io
+import logging
 import os
 from typing import Any, Dict, Optional
 from xml.sax import saxutils
@@ -132,7 +134,7 @@ class ElevenTts(Client):
             i = np.random.randint(len(self.ALL_VOICES)) + os.getpid()
             voice = self.ALL_VOICES[i % len(self.ALL_VOICES)]
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice}/stream?output_format=pcm_16000"
-        print("url", url)
+        logging.debug(f"url {url}")
         headers = {"xi-api-key": os.environ["ELEVEN_API_KEY"]}
         body = {
             "text": text,
@@ -145,9 +147,38 @@ class ElevenTts(Client):
         return self._handle_pcm_response(self._post(url, headers, body))
 
 
+class CachedClientWrapper:
+    def __init__(self, client: Client, provider: str):
+        super().__init__()
+        self._client = client
+        self._base_path = os.path.join(".cache/ds_tool", provider)
+
+    def tts(self, text: str, voice: Optional[str] = None):
+        path = os.path.join(self._base_path, voice or "default")
+        text_hash = hashlib.sha256(text.encode()).hexdigest()
+        os.makedirs(path, exist_ok=True)
+
+        cache_path = os.path.join(path, f"{text_hash}.wav")
+
+        if os.path.exists(cache_path):
+            with open(cache_path, "rb") as f:
+                return f.read()
+
+        pcm = self._client.tts(text, voice)
+
+        with open(cache_path, "wb") as f:
+            f.write(pcm)
+
+        return pcm
+
+
 def create_client(implementation: str, sample_rate: int):
+    client: Client
     if implementation == "azure":
-        return AzureTts(sample_rate=sample_rate)
+        client = AzureTts(sample_rate=sample_rate)
     elif implementation == "eleven":
-        return ElevenTts(sample_rate=sample_rate)
-    raise ValueError(f"Unknown TTS implementation: {implementation}")
+        client = ElevenTts(sample_rate=sample_rate)
+    else:
+        raise ValueError(f"Unknown TTS implementation: {implementation}")
+
+    return CachedClientWrapper(client, provider=implementation)
