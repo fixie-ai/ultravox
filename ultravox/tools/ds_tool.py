@@ -17,7 +17,7 @@ chat_client: openai.Client
 @dataclasses.dataclass
 class TtsTask:
     implementation: str = simple_parsing.field(default="azure", alias="-i")
-    # Column name containing the text to convert to audio. It can be a JMESPath expression.
+    # Column name containing the text to convert to audio. It can be a Jinja variable expression.
     column_name: str = simple_parsing.field(default="question", alias="-c")
     audio_column_name: Optional[str] = simple_parsing.field(default=None, alias="-a")
     voice: Optional[str] = simple_parsing.field(default=None, alias="-V")
