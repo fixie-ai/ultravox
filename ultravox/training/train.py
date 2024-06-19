@@ -42,7 +42,6 @@ def prepare_dataset(
     train_on_inputs: bool,
     repeat_data: bool,
     num_samples: Optional[int] = None,
-    max_tokens: Optional[int] = None,
 ) -> data.IterableDataset:
 
     data_sets = [datasets.create_dataset(ds, data_args) for ds in dataset_names]
@@ -50,8 +49,7 @@ def prepare_dataset(
     ds_with_proc = ultravox_processing.UltravoxDataproc(
         interleave, processor=processor, train_on_inputs=train_on_inputs
     )
-    ds_with_max_tokens = datasets.MaxTokenFilter(ds_with_proc, max_tokens=max_tokens)
-    limited_ds = datasets.Range(ds_with_max_tokens, num_samples=num_samples)
+    limited_ds = datasets.Range(ds_with_proc, num_samples=num_samples)
     return limited_ds
 
 
@@ -158,6 +156,7 @@ def main() -> None:
         f"Using dtype and device (world_size): {dtype}, {device} ({world_size})"
     )
     model.to(device=device, dtype=dtype)
+    # TODO: check if the whole model can now be moved to dtype instead
 
     # Prepare dataset, subsetting if needed
     train_dataset: data.IterableDataset
@@ -169,7 +168,6 @@ def main() -> None:
             repeat_data=args.repeat_data,
             processor=processor,
             num_samples=args.num_samples,
-            max_tokens=args.max_tokens,
             data_args=datasets.VoiceDatasetArgs(
                 num_prompts=args.num_prompts,
                 data_dir=args.data_dir,
@@ -186,7 +184,6 @@ def main() -> None:
             repeat_data=args.repeat_data,
             processor=processor,
             num_samples=args.val_num_samples,
-            max_tokens=args.max_tokens,
             data_args=datasets.VoiceDatasetArgs(
                 num_prompts=1,
                 data_dir=args.data_dir,
