@@ -19,5 +19,5 @@ lr_warmup_steps: 250
 max_steps: 5_000
 save_steps: 0
 
-batch_size: 2
-grad_accum_steps: 2
+batch_size: 4
+max_tokens: 640

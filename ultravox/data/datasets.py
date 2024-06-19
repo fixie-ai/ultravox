@@ -767,3 +767,25 @@ class Range(data.IterableDataset):
             if self._num_samples is not None and i >= self._num_samples:
                 break
             yield sample
+
+
+class MaxTokenFilter(data.IterableDataset):
+    """Limits the number of tokens in the output from another dataset."""
+
+    def __init__(
+        self,
+        dataset: data.IterableDataset,
+        max_tokens: Optional[int] = None,
+        token_ids_key: str = "input_ids",
+    ) -> None:
+        self._dataset = dataset
+        self._max_tokens = max_tokens
+        self._token_ids_key = token_ids_key
+
+    def __iter__(self):
+        return (
+            sample
+            for sample in self._dataset
+            if self._max_tokens is None
+            or len(sample[self._token_ids_key]) <= self._max_tokens
+        )

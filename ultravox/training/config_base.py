@@ -37,6 +37,9 @@ class TrainConfig:
     # Maximum audio duration in seconds. Samples with longer audio will be skipped.
     # This is usually due to GPU memory constraints and also dependends on the dataset.
     max_audio_duration_secs: Optional[float] = None
+    # Maximum number of tokens in the text.
+    # Samples with longer text will be skipped in train and val datasets.
+    max_tokens: Optional[int] = None
 
     verbose: bool = False
 
