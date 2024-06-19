@@ -25,10 +25,10 @@ def dataset_infer(
 
     for sample in ddp_utils.sharded_iterator(ds, world_size, local_rank):
         # Store the original question and answer for JSON output.
-        question_text = sample.audio_transcript or sample.messages[0]["content"]
-        expected_answer = sample.messages[1]["content"]
+        question_text = sample.audio_transcript or sample.messages[-2]["content"]
+        expected_answer = sample.messages[-1]["content"]
         # Drop any assistant response from the sample.
-        sample.messages = sample.messages[:1]
+        sample.messages = sample.messages[:-1]
 
         output = inference.infer(
             sample, max_tokens=max_new_tokens, temperature=temperature

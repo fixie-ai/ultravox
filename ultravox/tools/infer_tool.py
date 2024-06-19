@@ -91,7 +91,7 @@ def run_tui(
         print(f"--- Sample {index} ---")
     messages = sample.messages
     transcript = f' ["{sample.audio_transcript}"]' if sample.audio_transcript else ""
-    print(f"Q: {messages[0]['content']}{transcript}")
+    print(f"Q: {messages[-2]['content']}{transcript}")  # TODO: change?
     print(f"A: ", end="")
     start_time = time.time()
     first_token_time = None
@@ -134,7 +134,7 @@ def run_tui(
             assert args.data_sets
             ds_name = args.data_sets[0]
             eval_sample = eval_types.Sample(
-                sample.audio_transcript or sample.messages[0]["content"],
+                sample.audio_transcript or sample.messages[-2]["content"],
                 expected_answer=expected_response,
                 generated_answer=text,
             )
@@ -188,9 +188,9 @@ def dataset_infer(inference: base.VoiceInference, args: InferArgs):
     for i, sample in enumerate(datasets.Range(ds, args.num_samples)):
         # Store the original question and answer for JSON output.
         question_text = sample.audio_transcript
-        expected_answer = sample.messages[1]["content"]
+        expected_answer = sample.messages[-1]["content"]
         # Drop any assistant response from the sample.
-        sample.messages = sample.messages[:1]
+        sample.messages = sample.messages[:-1]
         if not args.json:
             run_tui(i, inference, sample, args, expected_answer, scores)
         else:

@@ -69,6 +69,7 @@ class OpenAIInference(base.VoiceInference):
                     )
 
     def _build_message(self, sample: datasets.VoiceSample):
+        # TODO: fix for multiple messages?
         if sample.audio is None:
             return {"role": "user", "content": sample.messages[0]["content"]}
 
@@ -124,7 +125,9 @@ class GradioInference(base.VoiceInference):
         # audio as a file, not as a base64-encoded string. There's probably
         # a better way to do this, but I spent too much time on this already.
         # api = self._client.view_api(print_info=False, return_format="dict")
-        text = sample.messages[0]["content"]
+        text = sample.messages[0][
+            "content"
+        ]  # TODO: change regarding multiple messages?
         if self._url.startswith("https://demo.tincans.ai"):
             args: List[Any] = [text]
             if sample.audio is not None:

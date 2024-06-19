@@ -305,15 +305,17 @@ class VoiceDataset(abc.ABC, data.IterableDataset):
             {"role": "assistant", "content": text},
         ]
 
-    def _get_audio(self, row: transformers.BatchFeature) -> np.ndarray:
+    def _get_audio(
+        self, row: transformers.BatchFeature, column_name: str = "audio"
+    ) -> np.ndarray:
         # Hugging Face datasets have an Audio object, with array and sampling_rate fields.
         # For MDS, this object is flattened into audio_array and audio_sampling_rate fields.
-        if "audio" in row:
-            audio = row["audio"]["array"]
-            sampling_rate = row["audio"]["sampling_rate"]
-        elif "audio_array" in row:
-            audio = row["audio_array"]
-            sampling_rate = row["audio_sampling_rate"]
+        if column_name in row:
+            audio = row[column_name]["array"]
+            sampling_rate = row[column_name]["sampling_rate"]
+        elif f"{column_name}_array" in row:
+            audio = row[f"{column_name}_array"]
+            sampling_rate = row[f"{column_name}_sampling_rate"]
         else:
             raise ValueError("No audio field found in row.")
         assert sampling_rate == SAMPLE_RATE
@@ -592,6 +594,49 @@ class PeopleSpeechDataset(VoiceDataset):
         return self._get_transcribe_sample(idx, row, tcol="text")
 
 
+class SodaDataset(VoiceDataset):
+    SYS_PROMPTS = [
+        "Follow the flow of the conversation and respond just like a human would in the same situation."
+        "Engage in the conversation naturally, responding as a human would.",
+        "Follow the dialogue and reply like a person in that situation.",
+        "Participate in the chat and answer as if you were a human.",
+        "Interact smoothly and respond just like a person would.",
+        "Stay in the moment and reply as a human would in the conversation.",
+        "Flow with the discussion and respond naturally, as a person would.",
+        "Keep the dialogue going and answer like a human would.",
+        "Follow along and reply in a way a person would in the chat.",
+        "Stay engaged in the conversation and respond like a human.",
+        "Maintain the flow of the chat and answer just as a person would.",
+    ]
+
+    def __init__(self, args: VoiceDatasetArgs) -> None:
+        super().__init__(args)
+        dataset = self._load_audio_dataset(
+            "fixie-ai/soda-audio", split=args.split.value
+        )
+        self._init_dataset(dataset)
+
+    def _get_sample(self, idx, row) -> VoiceSample:
+        turns = row["dialogue"]
+        # Make sure the last turn is the assistant's
+        roles = ["user", "assistant"] if len(turns) % 2 == 0 else ["assistant", "user"]
+
+        num_prompts = min(self._args.num_prompts, len(self.SYS_PROMPTS))
+        sys_prompt = self.SYS_PROMPTS[idx % num_prompts]
+
+        messages = [{"role": "system", "content": sys_prompt}]
+        messages += [
+            {"role": roles[i % 2], "content": turn} for i, turn in enumerate(turns)
+        ]
+        messages[-2]["content"] = "<|audio|>"
+
+        return self._make_sample(
+            messages,
+            audio=self._get_audio(row, "audio_one_but_last"),
+            audio_transcript=turns[-2],
+        )
+
+
 def create_dataset(name: str, args: VoiceDatasetArgs) -> data.IterableDataset:
     DATASET_MAP: Dict[str, Any] = {
         "anyinstruct": AnyInstructAnswerDataset,
@@ -604,6 +649,7 @@ def create_dataset(name: str, args: VoiceDatasetArgs) -> data.IterableDataset:
         "voxpopuli": VoxPopuliDataset,
         "commonvoice": CommonVoiceDataset,
         "peoplespeech": PeopleSpeechDataset,
+        "soda": SodaDataset,
         "dummy": LibriSpeechDummyDataset,
     }
     return DATASET_MAP[name](args)
