@@ -1,9 +1,10 @@
 import dataclasses
+import json
 import os
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, Optional, Union
 
 import datasets
-import jmespath
+import jinja2
 import openai
 import simple_parsing
 
@@ -11,14 +12,6 @@ from ultravox.tools import tts
 
 tts_client: tts.Client
 chat_client: openai.Client
-
-DEFAULT_TEXTGEN_TEMPLATE = """Passage: {passage}
-
-Question: {question}
-
-Answer: {answer}
-
-Provide a short explanation to the question given the passage that provides a rationale for the answer."""
 
 
 @dataclasses.dataclass
@@ -44,7 +37,9 @@ class TtsTask:
         )
 
     def _map_sample(self, sample):
-        text = jmespath.search(sample, self.column_name)
+        # using a Jinja template for some added flexibility
+        # The {{ var }} syntax is how Jinja denotes variables
+        text = jinja2.Template("{{" + self.column_name + "}}").render(**sample)
         text = text["text"] if isinstance(text, dict) else text
         sample[self.audio_column_name] = tts_client.tts(text, self.voice)
         return sample
@@ -52,10 +47,8 @@ class TtsTask:
 
 @dataclasses.dataclass
 class TextGenerationTask:
-    new_column_name: str = simple_parsing.field(default="explanation", alias="-c")
-    template: str = simple_parsing.field(default=DEFAULT_TEXTGEN_TEMPLATE, alias="-T")
-    # Interpret the template as a JMESPath expression.
-    use_jmespath: bool = simple_parsing.field(default=False, alias="-j")
+    new_column_name: str = simple_parsing.field(alias="-c")
+    template: str = simple_parsing.field(alias="-T")
 
     language_model: str = simple_parsing.field(default="gpt-4o", alias="-m")
     base_url: Optional[str] = simple_parsing.field(default=None, alias="-b")
@@ -75,25 +68,21 @@ class TextGenerationTask:
         print(f'Generating "{self.new_column_name}" with template:\n{self.template}')
         return ds_split.map(self._map_sample, num_proc=num_proc)
 
-    @staticmethod
-    def get_messages_ending_with_user(turn_contents: List[str]):
-        roles = ["user", "assistant"]
-        if len(turn_contents) % 2 == 0:
-            roles = roles[::-1]
-        return [
-            {"role": roles[i % 2], "content": content}
-            for i, content in enumerate(turn_contents)
-        ]
-
     def _map_sample(self, sample):
-        if self.use_jmespath:
-            turns = jmespath.search(sample, self.template)
-        else:
-            turns = [self.template.format(**sample)]
+        rendered = jinja2.Template(self.template).render(**sample)
+
+        try:
+            turns = json.loads(rendered)
+            assert isinstance(turns, list)
+            assert all(isinstance(turn, dict) for turn in turns)
+            assert len(turns) > 0
+            assert turns[-1].get("role", None) == "user"
+        except json.JSONDecodeError:
+            turns = [{"role": "user", "content": rendered}]
 
         response = chat_client.chat.completions.create(
             model=self.language_model,
-            messages=self.get_messages_ending_with_user(turns),
+            messages=turns,
             max_tokens=self.max_tokens,
             temperature=self.temperature,
         )
@@ -105,10 +94,6 @@ class TextGenerationTask:
 #   just ds_tool tts -d google/boolq -u fixie-ai/boolq-audio -c question -a audio --token $HF_WRITE_TOKEN
 #   just ds_tool textgen -d fixie-ai/boolq-audio -u fixie-ai/bar -c explanation -b https://api.fireworks.ai/inference/v1 -k $FIREWORKS_API_KEY -m accounts/fireworks/models/llama-v3-8b-instruct
 #   just ds_tool textgen -d ylacombe/expresso -u fixie-ai/expresso -c continuation -T @expresso_template.txt
-#   just ds_tool textgen -d allenai/soda --shuffle True --split train -n 10000 -u fixie-ai/soda -c alt_last_turn -j -m llama3-8b -T "dialogue[:-1]"
-#   just ds_tool textgen -d allenai/soda --shuffle True --split validation -n 1000 -u fixie-ai/soda -c alt_last_turn -j -m llama3-8b -T "dialogue[:-1]"
-#   just ds_tool textgen -d allenai/soda --shuffle True --split test -n 1000 -u fixie-ai/soda -c alt_last_turn -j -m llama3-8b -T "dialogue[:-1]"
-#   just ds_tool textgen -d fixie-ai/soda -u fixie-ai/soda -c "dialogue[-2]" -a audio_one_but_last
 @dataclasses.dataclass
 class DatasetToolArgs:
     dataset_name: str = simple_parsing.field(alias="-d")
@@ -163,9 +148,13 @@ def main(args: DatasetToolArgs):
 
     try:
         if args.dataset_split:
-            data_dict[args.dataset_split].push_to_hub(args.upload_name, **hub_args)
-        else:
-            data_dict.push_to_hub(args.upload_name, **hub_args)
+            # load the full dataset, otherwise the existing splits will be overwritten
+            upload_ds = datasets.load_dataset(args.upload_name, args.dataset_subset)
+            for split in data_dict.keys():
+                upload_ds[split] = data_dict[split]
+            data_dict = upload_ds
+
+        data_dict.push_to_hub(args.upload_name, **hub_args)
     except Exception as e:
         print(f"Failed to push to hub: {e}")
 
@@ -174,6 +163,7 @@ def main(args: DatasetToolArgs):
             output_name = f"{split}-00000-of-00001.parquet"
             data_dict[split].to_parquet(output_name)
             print(f"Saved to {output_name}")
+            print(f"Sample {0} of {split}: {data_dict[split][0]}")
 
 
 if __name__ == "__main__":
