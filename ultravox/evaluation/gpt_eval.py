@@ -2,6 +2,7 @@ import dataclasses
 from typing import Optional
 
 import openai
+import jinja2
 
 from ultravox.evaluation import eval_types
 
@@ -18,9 +19,9 @@ Your response MUST start with either 0 or 1, followed by a space, and then an ex
 """
 INSTRUCT_USER_PROMPT = """
 Using the supplied correct answer as an example, evaluate the model's ability to follow the instructions in the question below:
-Question: {question}
-Model answer: {generated_answer}
-Correct answer: {expected_answer}
+Question: {{ question }}
+Model answer: {{ generated_answer }}
+Correct answer: {{ expected_answer }}
 """
 
 
@@ -36,9 +37,29 @@ Your response MUST start with either 0 or 1, followed by a space, and then a bri
 """
 BOOLQ_USER_PROMPT = """
 Using the supplied correct answer as ground truth, evaluate the model's answer to the question below:
-Question: {question}
-Model answer: {generated_answer}
-Correct answer: {expected_answer}
+Question: {{ question }}
+Model answer: {{ generated_answer }}
+Correct answer: {{ expected_answer }}
+"""
+
+
+CONVO_SYSTEM_PROMPT = f"""
+You are an expert evaluator of conversational AI systems.
+Given a conversation between two parties, the role of the AI system was to follow the flow of the conversation and respond appropriately.
+You are given the conversation, the AI model's response, and an exemplary (correct) response.
+Your should award 1 point if the model's response is appropriate and follows the conversation, and 0 points if it does not, such as being off-topic or nonsensical.
+Your response MUST start with either 0 or 1, followed by a space, and then an explanation for why you awarded that score.
+"""
+
+CONVO_USER_PROMPT = """
+Using the supplied example of a correct answer, evaluate the model's ability to follow the flow of the conversation in the last message:
+
+Conversation:
+{%- for turn in history + [ question ] %}
+    {{ loop.cycle('A', 'B') }}: {{ turn }}
+{% endfor %}
+    Model (as {% if history | length is odd %}A{% else %}B{% endif %}): {{ generated_answer }}
+    Correct: {{ expected_answer }}
 """
 
 RATING_MODEL = "gpt-4o"
@@ -51,13 +72,14 @@ def _evaluate_answer_gpt(
     global client
     if client is None:
         client = openai.Client()
+    template = jinja2.Template(user_prompt)
     response = client.chat.completions.create(
         model=RATING_MODEL,
         messages=[
             {"role": "system", "content": sys_prompt},
             {
                 "role": "user",
-                "content": user_prompt.format(**dataclasses.asdict(sample)),
+                "content": template.render(**dataclasses.asdict(sample)),
             },
         ],
         max_tokens=50,
@@ -82,3 +104,9 @@ def evaluate_answer_boolq(sample: eval_types.Sample) -> eval_types.InstructResul
 
 def evaluate_answer_instruct(sample: eval_types.Sample) -> eval_types.InstructResult:
     return _evaluate_answer_gpt(INSTRUCT_SYSTEM_PROMPT, INSTRUCT_USER_PROMPT, sample)
+
+
+def evaluate_conversation_response(
+    sample: eval_types.Sample,
+) -> eval_types.InstructResult:
+    return _evaluate_answer_gpt(CONVO_SYSTEM_PROMPT, CONVO_USER_PROMPT, sample)

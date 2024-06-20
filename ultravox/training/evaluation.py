@@ -29,6 +29,9 @@ def dataset_infer(
         expected_answer = sample.messages[-1]["content"]
         # Drop any assistant response from the sample.
         sample.messages = sample.messages[:-1]
+        history = [
+            msg["content"] for msg in sample.messages[:-2] if msg["role"] != "system"
+        ]
 
         output = inference.infer(
             sample, max_tokens=max_new_tokens, temperature=temperature
@@ -37,6 +40,7 @@ def dataset_infer(
             question=question_text,
             generated_answer=output.text,
             expected_answer=expected_answer,
+            history=history,
         )
         eval_samples.append(eval_sample)
 
@@ -76,6 +80,7 @@ def evaluate(
         ("boolq_in", "asr"),
         ("boolq", "boolq"),
         ("anyinstruct", "instruct"),
+        ("soda", "conversation"),
     ]:
         ds = datasets.Range(datasets.create_dataset(ds_name, ds_args), num_samples)
 
