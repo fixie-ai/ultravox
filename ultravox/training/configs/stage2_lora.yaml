@@ -1,10 +1,10 @@
-exp_name: stage2_lora__gs_ai_bq
+exp_name: stage2_lora__gs_ai_bq_soda
 
 text_model_lora_config:
   r: 64  # no/little change in the range [16, 64]
   target_modules: ['mlp.gate_proj', 'mlp.up_proj', 'mlp.down_proj', 'v_proj', 'o_proj', 'k_proj', 'q_proj']
 
-data_sets: ["gigaspeech", "anyinstruct", "boolq_extended"]
+data_sets: ["gigaspeech", "anyinstruct", "boolq_extended", "soda"]
 
 # disable_layer_drop: True
 # audio_model_lora_config:
