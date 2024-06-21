@@ -67,7 +67,7 @@ class TextGenerationTask:
         # Caching the client to avoid repeated calls to the API if the tool fails.
         chat_client = caching.CachingChatWrapper(
             openai.Client(base_url=self.base_url, api_key=self.api_key),
-            base_url=self.base_url,
+            unique_id=f"{self.base_url}__{self.language_model}",
         )
         if self.template.startswith("@"):
             with open(self.template[1:], "r") as template_file:

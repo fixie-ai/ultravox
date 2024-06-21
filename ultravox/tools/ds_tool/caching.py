@@ -9,11 +9,12 @@ from ultravox.tools.ds_tool import tts
 
 
 class CachingChatWrapper:
-    def __init__(self, client: openai.Client, base_url: str):
+    def __init__(self, client: openai.Client, unique_id: str):
         super().__init__()
         self._client = client
         self._base_path = os.path.join(
-            ".cache/ds_tool/textgen", base_url.split("://", 1)[-1].replace("/", "__")
+            ".cache/ds_tool/textgen",
+            unique_id.replace("https://", "").replace("/", "__"),
         )
         os.makedirs(self._base_path, exist_ok=True)
 
