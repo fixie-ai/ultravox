@@ -49,10 +49,6 @@ class TtsTask:
         return sample
 
 
-def _escape_quotes(s: str) -> str:
-    return s.replace('"', '\\"')
-
-
 @dataclasses.dataclass
 class TextGenerationTask:
     new_column_name: str = simple_parsing.field(alias="-c")
@@ -82,9 +78,7 @@ class TextGenerationTask:
         return ds_split.map(self._map_sample, num_proc=num_proc)
 
     def _map_sample(self, sample):
-        rendered = jinja2.Template(self.template).render(
-            **sample, escape_quotes=_escape_quotes
-        )
+        rendered = jinja2.Template(self.template).render(**sample)
 
         if self.json_mode:
             turns = json.loads(rendered)
