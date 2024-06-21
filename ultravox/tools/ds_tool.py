@@ -11,7 +11,7 @@ import simple_parsing
 from ultravox.tools import tts
 from ultravox.tools import wrappers
 
-tts_client: tts.Client
+tts_client: wrappers.CachingTtsWrapper
 chat_client: wrappers.CachingChatWrapper
 
 
@@ -29,7 +29,10 @@ class TtsTask:
         global tts_client
         if self.audio_column_name is None:
             self.audio_column_name = f"{self.column_name}_audio"
-        tts_client = tts.create_client(self.implementation, self.sample_rate)
+        tts_client = wrappers.CachingTtsWrapper(
+            tts.create_client(self.implementation, self.sample_rate),
+            provider=self.implementation,
+        )
 
     def map_split(self, ds_split: datasets.Dataset, num_proc: int) -> datasets.Dataset:
         print(f'TTS mapping "{self.column_name}" to "{self.audio_column_name}"...')
@@ -65,8 +68,10 @@ class TextGenerationTask:
     def __post_init__(self):
         # The OAI client is separate from the task to avoid pickling issues when multiprocessing.
         global chat_client
+        # Caching the client to avoid repeated calls to the API if the tool fails.
         chat_client = wrappers.CachingChatWrapper(
-            openai.Client(base_url=self.base_url, api_key=self.api_key), self.base_url
+            openai.Client(base_url=self.base_url, api_key=self.api_key),
+            base_url=self.base_url,
         )
         if self.template.startswith("@"):
             with open(self.template[1:], "r") as template_file:

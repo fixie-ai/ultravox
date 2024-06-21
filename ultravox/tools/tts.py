@@ -1,5 +1,4 @@
 import abc
-import hashlib
 import io
 import os
 from typing import Any, Dict, Optional
@@ -27,7 +26,7 @@ class Client(abc.ABC):
         self._sample_rate = sample_rate
 
     @abc.abstractmethod
-    def tts(self, text: str, voice: Optional[str] = None):
+    def tts(self, text: str, voice: Optional[str] = None) -> bytes:
         raise NotImplementedError
 
     def _post(self, url: str, headers: Dict[str, str], json: Dict[str, Any]):
@@ -35,7 +34,7 @@ class Client(abc.ABC):
         response.raise_for_status()
         return response
 
-    def _handle_pcm_response(self, response: requests.Response):
+    def _handle_pcm_response(self, response: requests.Response) -> bytes:
         pcm_array = np.frombuffer(response.content, dtype=np.int16)
         wav_bytes = io.BytesIO()
         sf.write(wav_bytes, pcm_array, self._sample_rate, format="wav")
@@ -145,38 +144,9 @@ class ElevenTts(Client):
         return self._handle_pcm_response(self._post(url, headers, body))
 
 
-class CachingClientWrapper:
-    def __init__(self, client: Client, provider: str):
-        super().__init__()
-        self._client = client
-        self._base_path = os.path.join(".cache/ds_tool/tts", provider)
-
-    def tts(self, text: str, voice: Optional[str] = None):
-        path = os.path.join(self._base_path, voice or "default")
-        text_hash = hashlib.sha256(text.encode()).hexdigest()
-        os.makedirs(path, exist_ok=True)
-
-        cache_path = os.path.join(path, f"{text_hash}.wav")
-
-        if os.path.exists(cache_path):
-            with open(cache_path, "rb") as f:
-                return f.read()
-
-        wav = self._client.tts(text, voice)
-
-        with open(cache_path, "wb") as f:
-            f.write(wav)
-
-        return wav
-
-
 def create_client(implementation: str, sample_rate: int):
-    client: Client
     if implementation == "azure":
-        client = AzureTts(sample_rate=sample_rate)
+        return AzureTts(sample_rate=sample_rate)
     elif implementation == "eleven":
-        client = ElevenTts(sample_rate=sample_rate)
-    else:
-        raise ValueError(f"Unknown TTS implementation: {implementation}")
-
-    return CachingClientWrapper(client, provider=implementation)
+        return ElevenTts(sample_rate=sample_rate)
+    raise ValueError(f"Unknown TTS implementation: {implementation}")
