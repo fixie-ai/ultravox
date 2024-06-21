@@ -1,5 +1,5 @@
 import dataclasses
-from typing import Optional, Union, List
+from typing import List, Optional, Union
 
 import dataclasses_json
 

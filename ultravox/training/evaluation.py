@@ -65,7 +65,7 @@ EVAL_SCENARIOS = [
         "boolq__binary", "boolq_extended", "exact_match_last_word", new_tokens=128
     ),
     EvalScenario("boolq__wer", "boolq_in", "asr"),
-    EvalScenario("soda__sensible_generation" "soda", "conversation", max_new_tokens=64),
+    EvalScenario("soda__sensible_generation", "soda", "conversation", new_tokens=64),
     # Text-only scenarios: tests for catastrophic forgetting.
     EvalScenario(
         "anyinstruct__instruct_follow__text_only",
@@ -81,9 +81,10 @@ EVAL_SCENARIOS = [
         include_audio=False,
     ),
     EvalScenario(
-        "soda__sensible_generation" "soda",
+        "soda__sensible_generation__text_only",
+        "soda",
         "conversation",
-        max_new_tokens=64,
+        new_tokens=64,
         include_audio=False,
     ),
 ]

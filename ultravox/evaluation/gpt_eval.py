@@ -1,8 +1,8 @@
 import dataclasses
 from typing import Optional
 
-import openai
 import jinja2
+import openai
 
 from ultravox.evaluation import eval_types
 
