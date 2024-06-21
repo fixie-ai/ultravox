@@ -1,5 +1,7 @@
 #!/bin/bash
-# Create the fixie-ai/boolq-audio dataset
+# Steps to reproduce the fixie-ai/boolq-audio dataset
+
+# Step 0: create the `fixie-ai/boolq-audio` dataset in the UI or using huggingface_hub.create_repo
 
 # Step 1: Create a plausible explanation for the answer
 # This explanation is only used in the `-extended` version of the dataset and is used mainly for better training.
