@@ -78,7 +78,7 @@ class TextGenerationTask:
         return ds_split.map(self._map_sample, num_proc=num_proc)
 
     def _map_sample(self, sample):
-        rendered = jinja2.Template(self.template).render(**sample)
+        rendered = jinja2.Template(self.template).render(**sample, json_dump=json.dumps)
 
         if self.json_mode:
             turns = json.loads(rendered)

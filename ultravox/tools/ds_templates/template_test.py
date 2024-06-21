@@ -14,7 +14,9 @@ def test_quotes():
         "last turn is ignored!",
     ]
 
-    messages = json.loads(jinja2.Template(template).render(dialogue=dialogue))
+    messages = json.loads(
+        jinja2.Template(template).render(dialogue=dialogue, json_dump=json.dumps)
+    )
     assert isinstance(messages, list)
     assert all(isinstance(turn, dict) for turn in messages)
     assert messages[-1]["role"] == "user"
