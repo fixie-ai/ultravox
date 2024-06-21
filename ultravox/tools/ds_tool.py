@@ -148,13 +148,11 @@ def main(args: DatasetToolArgs):
 
     try:
         if args.dataset_split:
-            # load the full dataset, otherwise the existing splits will be overwritten
-            upload_ds = datasets.load_dataset(args.upload_name, args.dataset_subset)
-            for split in data_dict.keys():
-                upload_ds[split] = data_dict[split]
-            data_dict = upload_ds
-
-        data_dict.push_to_hub(args.upload_name, **hub_args)
+            data_dict[args.dataset_split].push_to_hub(
+                args.upload_name, split=args.dataset_split, **hub_args
+            )
+        else:
+            data_dict.push_to_hub(args.upload_name, **hub_args)
     except Exception as e:
         print(f"Failed to push to hub: {e}")
 
