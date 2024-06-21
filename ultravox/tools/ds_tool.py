@@ -49,6 +49,7 @@ class TtsTask:
 class TextGenerationTask:
     new_column_name: str = simple_parsing.field(alias="-c")
     template: str = simple_parsing.field(alias="-T")
+    json_mode: bool = simple_parsing.field(default=False, alias="-j")
 
     language_model: str = simple_parsing.field(default="gpt-4o", alias="-m")
     base_url: Optional[str] = simple_parsing.field(default=None, alias="-b")
@@ -71,13 +72,13 @@ class TextGenerationTask:
     def _map_sample(self, sample):
         rendered = jinja2.Template(self.template).render(**sample)
 
-        try:
+        if self.json_mode:
             turns = json.loads(rendered)
             assert isinstance(turns, list)
             assert all(isinstance(turn, dict) for turn in turns)
             assert len(turns) > 0
             assert turns[-1].get("role", None) == "user"
-        except json.JSONDecodeError:
+        else:
             turns = [{"role": "user", "content": rendered}]
 
         response = chat_client.chat.completions.create(
