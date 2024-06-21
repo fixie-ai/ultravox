@@ -2,7 +2,7 @@
 [
     { "role": "system", "content": "Follow the flow of the conversation and respond just like a human would in the same situation."},
     {% for turn in dialogue[:-1] %}
-    { "role": {% if loop.revindex0 % 2 == 0 %} "user" {% else %} "assistant" {% endif %}, "content": "{{ turn }}" }
+    { "role": {% if loop.revindex0 % 2 == 0 %} "user" {% else %} "assistant" {% endif %}, "content": "{{ escape_quotes(turn) }}" }
     {%- if not loop.last %},{% endif %}
     {% endfor %}
 ]
