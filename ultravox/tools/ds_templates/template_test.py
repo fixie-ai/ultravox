@@ -1,5 +1,6 @@
-import jinja2
 import json
+
+import jinja2
 
 
 def test_quotes():
