@@ -9,9 +9,10 @@ import openai
 import simple_parsing
 
 from ultravox.tools import tts
+from ultravox.tools import wrappers
 
 tts_client: tts.Client
-chat_client: openai.Client
+chat_client: wrappers.CachingChatWrapper
 
 
 @dataclasses.dataclass
@@ -64,7 +65,9 @@ class TextGenerationTask:
     def __post_init__(self):
         # The OAI client is separate from the task to avoid pickling issues when multiprocessing.
         global chat_client
-        chat_client = openai.Client(base_url=self.base_url, api_key=self.api_key)
+        chat_client = wrappers.CachingChatWrapper(
+            openai.Client(base_url=self.base_url, api_key=self.api_key), self.base_url
+        )
         if self.template.startswith("@"):
             with open(self.template[1:], "r") as template_file:
                 self.template = template_file.read()
@@ -87,13 +90,12 @@ class TextGenerationTask:
         else:
             turns = [{"role": "user", "content": rendered}]
 
-        response = chat_client.chat.completions.create(
+        sample[self.new_column_name] = chat_client.chat_completion(
             model=self.language_model,
             messages=turns,
             max_tokens=self.max_tokens,
             temperature=self.temperature,
         )
-        sample[self.new_column_name] = response.choices[0].message.content
         return sample
 
 
