@@ -56,20 +56,21 @@ class EvalScenario:
 
 
 EVAL_SCENARIOS = [
-    EvalScenario("boolq__wer", "boolq_in", "asr"),
     EvalScenario("anyinstruct__instruct_follow", "anyinstruct", "instruct"),
     EvalScenario(
-        "boolq_binary", "boolq_passage", "exact_match_last_word", new_tokens=128
+        "boolq__binary", "boolq_extended", "exact_match_last_word", new_tokens=128
     ),
+    EvalScenario("boolq__wer", "boolq_in", "asr"),
+    # Text-only scenarios: tests for catastrophic forgetting.
     EvalScenario(
-        "anyinstruct__instruct_follow_text_only",
+        "anyinstruct__instruct_follow__text_only",
         "anyinstruct",
         "instruct",
         include_audio=False,
     ),
     EvalScenario(
-        "boolq_binary_text_only",
-        "boolq_passage",
+        "boolq__binary__text_only",
+        "boolq_extended",
         "exact_match_last_word",
         new_tokens=128,
         include_audio=False,
