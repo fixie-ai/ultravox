@@ -685,7 +685,7 @@ class PeopleSpeechDataset(VoiceDataset):
 
 class SodaDataset(VoiceDataset):
     SYS_PROMPTS = [
-        "Follow the flow of the conversation and respond just like a human would in the same situation."
+        "Follow the flow of the conversation and respond just like a human would in the same situation.",
         "Engage in the conversation naturally, responding as a human would.",
         "Follow the dialogue and reply like a person in that situation.",
         "Participate in the chat and answer as if you were a human.",
