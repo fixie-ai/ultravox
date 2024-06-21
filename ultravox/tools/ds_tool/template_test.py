@@ -4,7 +4,7 @@ import jinja2
 
 
 def test_quotes():
-    with open("tools/ds_templates/soda_alt_last_turn.jinja", "r") as template_file:
+    with open("tools/ds_tool/soda_alt_last_turn.jinja", "r") as template_file:
         template = template_file.read()
 
     dialogue = [

@@ -8,11 +8,11 @@ import jinja2
 import openai
 import simple_parsing
 
-from ultravox.tools import tts
-from ultravox.tools import wrappers
+from ultravox.tools.ds_tool import caching
+from ultravox.tools.ds_tool import tts
 
-tts_client: wrappers.CachingTtsWrapper
-chat_client: wrappers.CachingChatWrapper
+tts_client: caching.CachingTtsWrapper
+chat_client: caching.CachingChatWrapper
 
 
 @dataclasses.dataclass
@@ -29,7 +29,7 @@ class TtsTask:
         global tts_client
         if self.audio_column_name is None:
             self.audio_column_name = f"{self.column_name}_audio"
-        tts_client = wrappers.CachingTtsWrapper(
+        tts_client = caching.CachingTtsWrapper(
             tts.create_client(self.implementation, self.sample_rate),
             provider=self.implementation,
         )
@@ -65,7 +65,7 @@ class TextGenerationTask:
         # The OAI client is separate from the task to avoid pickling issues when multiprocessing.
         global chat_client
         # Caching the client to avoid repeated calls to the API if the tool fails.
-        chat_client = wrappers.CachingChatWrapper(
+        chat_client = caching.CachingChatWrapper(
             openai.Client(base_url=self.base_url, api_key=self.api_key),
             base_url=self.base_url,
         )

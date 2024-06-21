@@ -5,7 +5,7 @@ from typing import Optional
 
 import openai
 
-from ultravox.tools import tts
+from ultravox.tools.ds_tool import tts
 
 
 class CachingChatWrapper:
