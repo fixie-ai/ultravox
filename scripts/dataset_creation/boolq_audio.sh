@@ -1,7 +1,8 @@
 #!/bin/bash
 # Create the fixie-ai/boolq-audio dataset
 
-# Step 1: Create a plausible explanation using Llama3-8b Instruct model
+# Step 1: Create a plausible explanation for the answer
+# This explanation is only used in the `-extended` version of the dataset and is used mainly for better training.
 just ds_tool textgen -d google/boolq -u fixie-ai/boolq-audio -c explanation -T @ultravox/tools/ds_templates/boolq_template.jinja --token $HF_WRITE_TOKEN
 
 # Step 2: TTS the question into the audio input for the model
