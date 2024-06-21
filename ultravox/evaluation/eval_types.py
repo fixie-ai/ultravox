@@ -27,4 +27,12 @@ class WerResult:
     score: float
 
 
-Result = Union[InstructResult, WerResult]
+@dataclasses.dataclass
+class ExactMatchResult:
+    """Score is the 0-1 evaluation of the accuracy of the generated answer being equal to expected answer."""
+
+    score: float
+    reason: str
+
+
+Result = Union[InstructResult, WerResult, ExactMatchResult]
