@@ -9,6 +9,8 @@ import requests
 import soundfile as sf
 
 RANDOM_VOICE_KEY = "random"
+REQUEST_TIMEOUT = 30
+NUM_RETRIES = 3
 
 
 def _make_ssml(voice: str, text: str):
@@ -23,6 +25,10 @@ def _make_ssml(voice: str, text: str):
 class Client(abc.ABC):
     def __init__(self, sample_rate: int = 16000):
         self._session = requests.Session()
+        retries = requests.adapters.Retry(total=NUM_RETRIES)
+        self._session.mount(
+            "https://", requests.adapters.HTTPAdapter(max_retries=retries)
+        )
         self._sample_rate = sample_rate
 
     @abc.abstractmethod
@@ -30,7 +36,9 @@ class Client(abc.ABC):
         raise NotImplementedError
 
     def _post(self, url: str, headers: Dict[str, str], json: Dict[str, Any]):
-        response = self._session.post(url, headers=headers, json=json)
+        response = self._session.post(
+            url, headers=headers, json=json, timeout=REQUEST_TIMEOUT
+        )
         response.raise_for_status()
         return response
 
@@ -132,7 +140,6 @@ class ElevenTts(Client):
             i = np.random.randint(len(self.ALL_VOICES)) + os.getpid()
             voice = self.ALL_VOICES[i % len(self.ALL_VOICES)]
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice}/stream?output_format=pcm_16000"
-        print("url", url)
         headers = {"xi-api-key": os.environ["ELEVEN_API_KEY"]}
         body = {
             "text": text,

@@ -98,6 +98,7 @@ class DatasetToolArgs:
     num_workers: int = simple_parsing.field(default=16, alias="-w")
 
     upload_name: Optional[str] = simple_parsing.field(default=None, alias="-u")
+    upload_split: Optional[str] = simple_parsing.field(default=None)
     upload_branch: Optional[str] = simple_parsing.field(default="main", alias="-B")
     num_shards: Optional[int] = simple_parsing.field(default=None, alias="-N")
     private: bool = simple_parsing.field(default=False)
@@ -109,6 +110,11 @@ class DatasetToolArgs:
         default_factory=TtsTask,
         positional=True,
     )
+
+    def __post_init__(self):
+        assert (
+            not self.upload_split or self.dataset_split
+        ), "Must specify dataset_split when using upload_split"
 
 
 def main(args: DatasetToolArgs):
@@ -132,6 +138,7 @@ def main(args: DatasetToolArgs):
         "token": token,
         "revision": args.upload_branch,
         "private": args.private,
+        "split": args.upload_split,
     }
     if args.num_shards is not None:
         hub_args["num_shards"] = {split: args.num_shards for split in data_dict.keys()}

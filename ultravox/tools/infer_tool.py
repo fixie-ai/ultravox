@@ -78,6 +78,11 @@ class InferArgs:
     # JSON output
     json: bool = simple_parsing.field(default=False)
 
+    def __post_init__(self):
+        if self.prompt and self.prompt.startswith("@"):
+            with open(self.prompt[1:], "r") as f:
+                self.prompt = f.read()
+
 
 def run_tui(
     index: int,
