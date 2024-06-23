@@ -33,6 +33,16 @@ class FakeInference(infer.LocalInference):
         tokenizer: transformers.PreTrainedTokenizer,
         audio_processor: transformers.ProcessorMixin,
     ):
+        def fake_generate(**kwargs):
+            input = kwargs.get("input_ids")
+            output = [range(25)]
+            streamer = kwargs.get("streamer", None)
+            if streamer:
+                for token in output[0][input.shape[1] :]:
+                    streamer.on_finalized_text(tokenizer.decode(token))
+                streamer.on_finalized_text("", stream_end=True)
+            return output
+
         processor = ultravox_processing.UltravoxProcessor(
             audio_processor, tokenizer=tokenizer
         )
@@ -44,7 +54,7 @@ class FakeInference(infer.LocalInference):
             dtype=torch.float32,
         )
         self.model.device = "cpu"
-        self.model.generate = mock.MagicMock(return_value=[range(25)])
+        self.model.generate = mock.MagicMock(side_effect=fake_generate)
 
 
 EXPECTED_TOKEN_IDS_START = [128000, 128006, 882, 128007]
