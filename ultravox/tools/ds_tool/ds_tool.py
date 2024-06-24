@@ -104,21 +104,24 @@ class TextGenerationTask:
 #   just ds_tool textgen -d ylacombe/expresso -u fixie-ai/expresso -c continuation -T @expresso_template.txt
 @dataclasses.dataclass
 class DatasetToolArgs:
+    # HF source dataset parameters
     dataset_name: str = simple_parsing.field(alias="-d")
     dataset_subset: Optional[str] = simple_parsing.field(default=None, alias="-S")
     dataset_split: Optional[str] = simple_parsing.field(default=None, alias="-s")
 
+    # Local processing parameters
     shuffle: bool = simple_parsing.field(default=False)
     shuffle_seed: int = simple_parsing.field(default=42)
     num_samples: Optional[int] = simple_parsing.field(default=None, alias="-n")
     num_workers: int = simple_parsing.field(default=16, alias="-w")
 
+    # HF destination dataset parameters
     upload_name: Optional[str] = simple_parsing.field(default=None, alias="-u")
+    # eg if the original split="train", but we want to upload it as "validation"
     upload_split: Optional[str] = simple_parsing.field(default=None)
     upload_branch: Optional[str] = simple_parsing.field(default="main", alias="-B")
     num_shards: Optional[int] = simple_parsing.field(default=None, alias="-N")
     private: bool = simple_parsing.field(default=False)
-
     token: Optional[str] = None
 
     task: Union[TtsTask, TextGenerationTask] = simple_parsing.subgroups(
