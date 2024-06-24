@@ -1,0 +1,8 @@
+{# This template was used to create the synthetic "alt_last_turn" field (Llama3-8B alternative to the last turn) in `fixie-ai/soda-audio` -#}
+[
+    { "role": "system", "content": "Follow the flow of the conversation and respond just like a human would in the same situation."},
+    {% for turn in dialogue[:-1] %}
+    { "role": {% if loop.revindex0 % 2 == 0 %} "user" {% else %} "assistant" {% endif %}, "content": {{ json_dump(turn) }} }
+    {%- if not loop.last %},{% endif %}
+    {% endfor %}
+]
