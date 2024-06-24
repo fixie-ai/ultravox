@@ -717,8 +717,9 @@ class SodaDataset(VoiceDataset):
         messages += [
             {"role": roles[i % 2], "content": turn} for i, turn in enumerate(turns)
         ]
-        messages[-2]["content"] = "<|audio|>"
         messages[-1]["content"] = row["alt_last_turn"]
+        if self._args.include_audio:
+            messages[-2]["content"] = "<|audio|>"
 
         return self._make_sample(
             messages,
