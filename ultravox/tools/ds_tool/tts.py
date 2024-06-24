@@ -26,7 +26,7 @@ class Client(abc.ABC):
         self._sample_rate = sample_rate
 
     @abc.abstractmethod
-    def tts(self, text: str, voice: Optional[str] = None):
+    def tts(self, text: str, voice: Optional[str] = None) -> bytes:
         raise NotImplementedError
 
     def _post(self, url: str, headers: Dict[str, str], json: Dict[str, Any]):
@@ -34,7 +34,7 @@ class Client(abc.ABC):
         response.raise_for_status()
         return response
 
-    def _handle_pcm_response(self, response: requests.Response):
+    def _handle_pcm_response(self, response: requests.Response) -> bytes:
         pcm_array = np.frombuffer(response.content, dtype=np.int16)
         wav_bytes = io.BytesIO()
         sf.write(wav_bytes, pcm_array, self._sample_rate, format="wav")
@@ -132,7 +132,6 @@ class ElevenTts(Client):
             i = np.random.randint(len(self.ALL_VOICES)) + os.getpid()
             voice = self.ALL_VOICES[i % len(self.ALL_VOICES)]
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice}/stream?output_format=pcm_16000"
-        print("url", url)
         headers = {"xi-api-key": os.environ["ELEVEN_API_KEY"]}
         body = {
             "text": text,
