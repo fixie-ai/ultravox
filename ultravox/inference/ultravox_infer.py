@@ -35,16 +35,17 @@ class UltravoxInference(infer.LocalInference):
         """
         device = device or utils.default_device()
         dtype = utils.get_dtype(data_type) if data_type else utils.default_dtype()
-        quant_config = None
         if quant_bits is not None:
             if quant_bits == 8:
-                quant_config = bitsandbytes.BitsAndBytesConfig(load_in_8bit=True)
+                bnb_kwargs = {"load_in_8bit": True}
             elif quant_bits == 4:
-                quant_config = bitsandbytes.BitsAndBytesConfig(
-                    load_in_4bit=True, bnb_4bit_compute_dtype=torch.bfloat16
-                )
+                bnb_kwargs = {
+                    "load_in_4bit": True,
+                    "bnb_4bit_compute_dtype": torch.bfloat16,
+                }
             else:
                 raise ValueError(f"Unsupported quant_bits: {quant_bits}")
+        quant_config = transformers.BitsAndBytesConfig(**bnb_kwargs)
         if wandb_utils.is_wandb_url(model_path):
             model_path = wandb_utils.download_model_from_wandb(model_path)
         model = ultravox_model.UltravoxModel.from_pretrained(
