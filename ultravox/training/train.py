@@ -288,6 +288,7 @@ def main() -> None:
         if is_master:
             trainer.log(metrics)
 
+        t_end = datetime.now()
         logging.info(f"eval end time: {t_end}")
         logging.info(f"elapsed: {t_end - t_start}")
 
