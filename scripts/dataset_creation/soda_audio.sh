@@ -21,4 +21,4 @@ just ds_tool textgen -d allenai/soda --shuffle True -s train -n 100000 -u fixie-
 
 # Step 2: TTS the turn before last: audio input for the model
 
-just ds_tool tts -d fixie-ai/soda-audio -u fixie-ai/soda-audio -c "dialogue[-2]" -a audio_one_but_last -i eleven -V random --token $HF_WRITE_TOKEN -N 8
+just ds_tool tts -d fixie-ai/soda-audio -u fixie-ai/soda-audio -c "dialogue[-2]" -a audio_second_last_turn -i eleven -V random --token $HF_WRITE_TOKEN -N 8
