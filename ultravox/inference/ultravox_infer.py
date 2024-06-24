@@ -1,6 +1,5 @@
 from typing import Optional
 
-import bitsandbytes
 import torch
 import transformers
 
