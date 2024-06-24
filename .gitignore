@@ -4,6 +4,7 @@
 runs/
 outputs/
 wandb/
+*.parquet
 
 artifacts/
 

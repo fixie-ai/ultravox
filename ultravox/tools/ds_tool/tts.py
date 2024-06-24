@@ -32,7 +32,7 @@ class Client(abc.ABC):
         self._sample_rate = sample_rate
 
     @abc.abstractmethod
-    def tts(self, text: str, voice: Optional[str] = None):
+    def tts(self, text: str, voice: Optional[str] = None) -> bytes:
         raise NotImplementedError
 
     def _post(self, url: str, headers: Dict[str, str], json: Dict[str, Any]):
@@ -42,7 +42,7 @@ class Client(abc.ABC):
         response.raise_for_status()
         return response
 
-    def _handle_pcm_response(self, response: requests.Response):
+    def _handle_pcm_response(self, response: requests.Response) -> bytes:
         pcm_array = np.frombuffer(response.content, dtype=np.int16)
         wav_bytes = io.BytesIO()
         sf.write(wav_bytes, pcm_array, self._sample_rate, format="wav")
