@@ -723,7 +723,7 @@ class SodaDataset(VoiceDataset):
 
         return self._make_sample(
             messages,
-            audio=self._get_audio(row, "audio_one_but_last"),
+            audio=self._get_audio(row, "audio_second_last_turn"),
             audio_transcript=turns[-2],
         )
 
