@@ -1,5 +1,5 @@
 import dataclasses
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Dict
 
 import dataclasses_json
 
@@ -9,7 +9,7 @@ class Sample(dataclasses_json.DataClassJsonMixin):
     question: str
     generated_answer: str
     expected_answer: str
-    history: List[str] = dataclasses.field(default_factory=list)
+    history: List[Dict[str, str]] = dataclasses.field(default_factory=list)
 
 
 @dataclasses.dataclass

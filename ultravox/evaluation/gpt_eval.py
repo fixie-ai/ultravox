@@ -56,10 +56,10 @@ CONVO_USER_PROMPT = """
 Using the supplied example of a correct answer, evaluate the model's ability to follow the flow of the conversation in the last message:
 
 Conversation:
-{%- for turn in history + [ question ] %}
-    {{ loop.cycle('A', 'B') }}: {{ turn }}
+{%- for turn in history + [ {"role": "user", "content": question} ] %}
+    {% if turn["role"] == "user" %}A{% else %}B{% endif %}: {{ turn["content"] }}
 {% endfor %}
-    Model (as {% if history | length is odd %}A{% else %}B{% endif %}): {{ generated_answer }}
+    Model (as B): {{ generated_answer }}
     Correct: {{ expected_answer }}
 """
 
@@ -110,4 +110,5 @@ def evaluate_answer_instruct(sample: eval_types.Sample) -> eval_types.InstructRe
 def evaluate_conversation_response(
     sample: eval_types.Sample,
 ) -> eval_types.InstructResult:
+    sample.history = [msg for msg in sample.history if msg["role"] != "system"]
     return _evaluate_answer_gpt(CONVO_SYSTEM_PROMPT, CONVO_USER_PROMPT, sample)

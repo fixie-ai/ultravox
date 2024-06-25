@@ -30,9 +30,7 @@ def dataset_infer(
         expected_answer = sample.messages[-1]["content"]
         # Drop any assistant response from the sample.
         sample.messages = sample.messages[:-1]
-        history = [
-            msg["content"] for msg in sample.messages[:-2] if msg["role"] != "system"
-        ]
+        history = sample.messages[:-2]
 
         output = inference.infer(
             sample, max_tokens=max_new_tokens, temperature=temperature
