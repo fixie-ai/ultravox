@@ -25,7 +25,7 @@ class LocalInference(base.VoiceInference):
         device: str,
         dtype: torch.dtype,
     ):
-        self.model = model.to(device).to(dtype).eval()
+        self.model = model.eval()
         self.tokenizer = tokenizer
         self.processor = processor
         self.dtype = dtype

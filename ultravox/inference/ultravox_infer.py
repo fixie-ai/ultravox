@@ -2,6 +2,7 @@ from typing import Optional
 
 import torch
 import transformers
+import transformers.quantizers
 
 from ultravox.inference import infer
 from ultravox.inference import utils
@@ -34,6 +35,16 @@ class UltravoxInference(infer.LocalInference):
         """
         device = device or utils.default_device()
         dtype = utils.get_dtype(data_type) if data_type else utils.default_dtype()
+
+        if wandb_utils.is_wandb_url(model_path):
+            model_path = wandb_utils.download_model_from_wandb(model_path)
+        model = ultravox_model.UltravoxModel.from_pretrained(
+            model_path,
+            torch_dtype=dtype,
+        )
+        model.to(dtype=dtype, device=device)
+        model.merge_and_unload()
+
         if quant_bits is not None:
             if quant_bits == 8:
                 bnb_kwargs = {"load_in_8bit": True}
@@ -44,14 +55,12 @@ class UltravoxInference(infer.LocalInference):
                 }
             else:
                 raise ValueError(f"Unsupported quant_bits: {quant_bits}")
-        quant_config = transformers.BitsAndBytesConfig(**bnb_kwargs)
-        if wandb_utils.is_wandb_url(model_path):
-            model_path = wandb_utils.download_model_from_wandb(model_path)
-        model = ultravox_model.UltravoxModel.from_pretrained(
-            model_path, torch_dtype=dtype, quantization_config=quant_config
-        )
-        model.to(dtype=dtype, device=device)
-        model.merge_and_unload()
+
+            quant_config = transformers.BitsAndBytesConfig(**bnb_kwargs)
+            hf_quantizer = transformers.quantizers.AutoHfQuantizer.from_config(
+                quant_config
+            )
+            hf_quantizer.preprocess_model(model, device_map=device)
 
         tokenizer_id = tokenizer_id or model_path
         tokenizer = transformers.AutoTokenizer.from_pretrained(tokenizer_id)
