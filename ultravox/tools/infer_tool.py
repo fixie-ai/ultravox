@@ -91,7 +91,7 @@ def run_tui(
         print(f"--- Sample {index} ---")
     messages = sample.messages
     transcript = f' ["{sample.audio_transcript}"]' if sample.audio_transcript else ""
-    print(f"Q: {messages[-2]['content']}{transcript}")  # TODO: change?
+    print(f"Q: {messages[-2]['content']}{transcript}")
     print(f"A: ", end="")
     start_time = time.time()
     first_token_time = None
