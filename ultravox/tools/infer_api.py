@@ -83,13 +83,20 @@ class OpenAIInference(base.VoiceInference):
         return {"role": "user", "content": parts}
 
 
-class DatabricksInference(base.VoiceInference):
-    def __init__(self, url: str):
+class RestInference(base.VoiceInference):
+    def __init__(
+        self,
+        key_env_var: str,
+        url: str,
+        token: Optional[str] = None,
+        token_header: str = "Authorization",
+        token_type="Bearer",
+    ):
         super().__init__()
-        self.url = url
-        token = os.environ.get("DATABRICKS_TOKEN")
-        assert token, "DATABRICKS_TOKEN environment variable must be set"
-        self.token = token
+        self._url = url
+        self._token_header = token_header
+        self._token_type = token_type
+        self._token = token or os.environ[key_env_var]
 
     def infer(
         self,
@@ -97,15 +104,19 @@ class DatabricksInference(base.VoiceInference):
         max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
     ) -> base.VoiceOutput:
-        headers = {"Content-Type": "application/json"}
-        response = requests.post(
-            f"{self.url}/invocations",
-            headers=headers,
-            data=sample.to_json(),
-            auth=("token", self.token),
-        )
+        headers = {
+            "Content-Type": "application/json",
+            self._token_header: f"{self._token_type} {self._token}",
+        }
+        print(headers)
+        response = requests.post(self._url, headers=headers, data=sample.to_json())
         response.raise_for_status()
         return response.json()
+
+
+class BaseTenInference(RestInference):
+    def __init__(self, url: str, api_key: Optional[str] = None):
+        super().__init__("BASETEN_API_KEY", url, api_key, token_type="Api-Key")
 
 
 class GradioInference(base.VoiceInference):
@@ -164,8 +175,8 @@ def create_inference(
         or url.endswith(":7860")
     ):
         return GradioInference(url)
-    elif url.endswith("databricks.net"):
-        return DatabricksInference(url)
+    elif url.endswith("api.baseten.co/production/predict"):
+        return BaseTenInference(url, api_key)
     elif url.endswith("/v1"):
         assert model, "Model must be specified for OpenAI inference"
         return OpenAIInference(url, model, api_key)
