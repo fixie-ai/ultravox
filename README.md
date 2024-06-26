@@ -38,7 +38,7 @@ curl -X POST -H "Authorization: Bearer $ULTRAVOX_API_KEY" -H "Content-Type: appl
      -d @data.json https://ultravox.api.fixie.ai/v1/chat/completions
 ```
 
-where `data.json` contains:
+where `data.json` contains the following request (using the OpenAI inference protocol). You'll note that we're overloading `image_url` to handle non-image data (in this case, the input WAV file); this allows the use of existing OpenAI-compatible clients and serving frameworks without protocol changes. Also, because the message `content` is a list, no special tokens are needed in the text portion of the user message.
 
 ```json
 { 
