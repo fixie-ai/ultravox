@@ -42,12 +42,12 @@ where `data.json` contains:
 
 ```json
 { 
-  "model": "fixie-ai/ultravox-v0.1",
+  "model": "fixie-ai/ultravox-v0.2",
   "messages": [{ 
     "role": "user",
     "content": [{
       "type": "text",
-      "text": "What’s in <|audio|>?"
+      "text": "Listen to the following audio and respond accordingly:"
     }, {
       "type": "image_url",
       "image_url": {
