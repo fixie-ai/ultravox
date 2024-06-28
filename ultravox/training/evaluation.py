@@ -26,10 +26,11 @@ def dataset_infer(
 
     for sample in ddp_utils.sharded_iterator(ds, world_size, local_rank):
         # Store the original question and answer for JSON output.
-        question_text = sample.audio_transcript or sample.messages[0]["content"]
-        expected_answer = sample.messages[1]["content"]
+        question_text = sample.audio_transcript or sample.messages[-2]["content"]
+        expected_answer = sample.messages[-1]["content"]
         # Drop any assistant response from the sample.
-        sample.messages = sample.messages[:1]
+        sample.messages = sample.messages[:-1]
+        history = sample.messages[:-2]
 
         output = inference.infer(
             sample, max_tokens=max_new_tokens, temperature=temperature
@@ -38,6 +39,7 @@ def dataset_infer(
             question=question_text,
             generated_answer=output.text,
             expected_answer=expected_answer,
+            history=history,
         )
         eval_samples.append(eval_sample)
 
@@ -61,6 +63,7 @@ EVAL_SCENARIOS = [
         "boolq__binary", "boolq_extended", "exact_match_last_word", new_tokens=128
     ),
     EvalScenario("boolq__wer", "boolq_in", "asr"),
+    EvalScenario("soda__sensible_generation", "soda", "conversation", new_tokens=64),
     # Text-only scenarios: tests for catastrophic forgetting.
     EvalScenario(
         "anyinstruct__instruct_follow__text_only",
@@ -73,6 +76,13 @@ EVAL_SCENARIOS = [
         "boolq_extended",
         "exact_match_last_word",
         new_tokens=128,
+        include_audio=False,
+    ),
+    EvalScenario(
+        "soda__sensible_generation__text_only",
+        "soda",
+        "conversation",
+        new_tokens=64,
         include_audio=False,
     ),
 ]

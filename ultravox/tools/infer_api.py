@@ -48,7 +48,7 @@ class OpenAIInference(base.VoiceInference):
             headers["Authorization"] = f"Bearer {self._api_key}"
         data = {
             "model": self._model,
-            "messages": [self._build_message(sample)],
+            "messages": self._build_messages(sample),
             "stream": True,
         }
         if max_tokens is not None:
@@ -68,11 +68,18 @@ class OpenAIInference(base.VoiceInference):
                         obj["usage"]["prompt_tokens"], obj["usage"]["completion_tokens"]
                     )
 
-    def _build_message(self, sample: datasets.VoiceSample):
-        if sample.audio is None:
-            return {"role": "user", "content": sample.messages[0]["content"]}
+    def _build_messages(self, sample: datasets.VoiceSample):
+        """
+        Convert a VoiceSample into a list of messages for the OpenAI API.
+        This function assumes that if the sample has an audio field, it is in
+        the last message, indicated by a "<|audio|>" placeholder.
 
-        fragments = sample.messages[0]["content"].split("<|audio|>")
+        Audio is converted to a data URI and inserted into the message under an image_url type.
+        """
+        if sample.audio is None:
+            return sample
+
+        fragments = sample.messages[-1]["content"].split("<|audio|>")
         assert len(fragments) == 2, "Expected one <|audio|> placeholder"
         url = datasets.audio_to_data_uri(sample.audio, sample.sample_rate)
         parts = [
@@ -80,7 +87,8 @@ class OpenAIInference(base.VoiceInference):
             {"type": "image_url", "image_url": {"url": url}},
             {"type": "text", "text": fragments[1]},
         ]
-        return {"role": "user", "content": parts}
+        last_turn = {"role": "user", "content": parts}
+        return sample.messages[:-1] + [last_turn]
 
 
 class DatabricksInference(base.VoiceInference):
@@ -124,7 +132,9 @@ class GradioInference(base.VoiceInference):
         # audio as a file, not as a base64-encoded string. There's probably
         # a better way to do this, but I spent too much time on this already.
         # api = self._client.view_api(print_info=False, return_format="dict")
-        text = sample.messages[0]["content"]
+        text = sample.messages[0][
+            "content"
+        ]  # TODO: change regarding multiple messages?
         if self._url.startswith("https://demo.tincans.ai"):
             args: List[Any] = [text]
             if sample.audio is not None:
