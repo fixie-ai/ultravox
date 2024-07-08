@@ -44,8 +44,8 @@ class FakeTranscribeDataset(datasets.VoiceDataset):
         super().__init__(args or datasets.VoiceDatasetArgs())
         self._init_dataset(FakeHuggingFaceIterableDataset(n))
 
-    def _get_sample(self, idx: int, row: BatchFeature) -> datasets.VoiceSample:
-        return self._get_transcribe_sample(idx, row)
+    def _get_sample(self, row: BatchFeature) -> datasets.VoiceSample:
+        return self._get_transcribe_sample(row)
 
 
 class FakeDataproc(datasets.Dataproc):
@@ -122,13 +122,16 @@ def test_num_prompts():
     assert samples[0].messages[0]["content"] == "Transcribe <|audio|>"
     assert (
         samples[1].messages[0]["content"]
-        == "Transcribe exactly what is said here <|audio|>"
+        == "Repeat exactly what is written here: <|audio|>"
     )
     assert (
         samples[2].messages[0]["content"]
-        == "Repeat exactly what is written here: <|audio|>"
+        == "Transcribe exactly what is said here <|audio|>"
     )
-    assert samples[3].messages[0]["content"] == "Transcribe <|audio|>"
+    assert (
+        samples[3].messages[0]["content"]
+        == "Transcribe exactly what is said here <|audio|>"
+    )
 
 
 def _create_sine_wave(
