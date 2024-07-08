@@ -1,3 +1,4 @@
+import copy
 import dataclasses
 import glob
 import logging
@@ -160,7 +161,12 @@ def main() -> None:
 
     # Prepare dataset, subsetting if needed
     train_dataset: data.IterableDataset
-    val_dataset: data.IterableDataset
+    val_datasets: data.IterableDataset
+    val_sets = dict(
+        [("train", args.data_sets)]
+        + [(x, [x]) for x in args.val_sets]
+        + [(f"text_{x}", [x]) for x in args.val_sets]  # TODO: include ASR datasets?
+    )
     if is_master:
         train_dataset = prepare_dataset(
             dataset_names=args.data_sets,
@@ -178,21 +184,27 @@ def main() -> None:
                 mds_batch_size=args.batch_size,
             ),
         )
-        val_dataset = prepare_dataset(
-            dataset_names=args.data_sets,
-            train_on_inputs=args.train_on_inputs,
-            repeat_data=args.repeat_data,
-            processor=processor,
-            num_samples=args.val_num_samples,
-            data_args=datasets.VoiceDatasetArgs(
-                num_prompts=1,
-                data_dir=args.data_dir,
-                shuffle=False,
-                max_audio_duration_secs=16,
-                use_mds=args.mds,
-                mds_batch_size=args.batch_size,
-            ),
+        val_ds_args = datasets.VoiceDatasetArgs(
+            num_prompts=1,
+            data_dir=args.data_dir,
+            shuffle=False,
+            max_audio_duration_secs=16,
+            use_mds=args.mds,
+            mds_batch_size=args.batch_size,
         )
+        val_ds_args_text = copy.copy(val_ds_args)
+        val_ds_args_text.include_audio = False
+        val_datasets = {
+            k: prepare_dataset(
+                dataset_names=val_sets[k],
+                train_on_inputs=args.train_on_inputs,
+                repeat_data=args.repeat_data,
+                processor=processor,
+                num_samples=args.val_num_samples,
+                data_args=val_ds_args_text if k.startswith("text_") else val_ds_args,
+            )
+            for k in val_sets
+        }
         logging.info(
             f"Loaded {args.data_sets} data sets, sample limit: {args.num_samples} (val sample limit: {args.val_num_samples})"
         )
@@ -200,7 +212,7 @@ def main() -> None:
         # When using DDP with split_batches=True, the primary process will distribute the batches to the workers
         # The point of this is to avoid unnecessary data processing/downloading in the workers.
         train_dataset = datasets.EmptyDataset()
-        val_dataset = datasets.EmptyDataset()
+        val_datasets = {k: datasets.EmptyDataset() for k in val_sets}
 
     # Set up the data loader
     data_collator = datasets.DataCollatorForSeq2SeqWithAudio(tokenizer=text_tokenizer)
@@ -210,7 +222,7 @@ def main() -> None:
     trainer = transformers.Seq2SeqTrainer(
         model,
         train_dataset=train_dataset,
-        eval_dataset=val_dataset,
+        eval_dataset=val_datasets,
         data_collator=data_collator,
         tokenizer=text_tokenizer,
         args=transformers.Seq2SeqTrainingArguments(
