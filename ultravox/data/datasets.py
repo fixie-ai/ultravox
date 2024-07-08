@@ -316,6 +316,11 @@ class VoiceDataset(abc.ABC, data.IterableDataset):
     def _get_audio(
         self, row: transformers.BatchFeature, column_name: str = "audio"
     ) -> np.ndarray:
+        if column_name not in self.BASE_AUDIO_COLUMNS:
+            raise ValueError(
+                f"Unknown audio column: {column_name}. This is likely a bug and the audio might not be resampled to {SAMPLE_RATE} Hz."
+            )
+
         # Hugging Face datasets have an Audio object, with array and sampling_rate fields.
         # For MDS, this object is flattened into audio_array and audio_sampling_rate fields.
         if column_name in row:
