@@ -194,6 +194,8 @@ class VoiceDatasetArgs:
     """Whether to include audio in the samples."""
     include_context: bool = True
     """Whether to include additional textual context from the dataset to the prompt."""
+    max_context_length: int = 1500
+    """Maximum length of context to include in the prompt. Otherwise, skip the sample."""
     shuffle: bool = False
     """Whether to shuffle the dataset."""
     shuffle_seed: int = 42
@@ -274,14 +276,19 @@ class VoiceDataset(abc.ABC, data.IterableDataset):
         for _, row in enumerate(self._dataset):
             sample = self._get_sample(row)
             if (
-                self._args.max_audio_duration_secs is None
+                sample is not None
+                and self._args.max_audio_duration_secs is None
                 or sample.audio.shape[-1] / SAMPLE_RATE
                 <= self._args.max_audio_duration_secs
             ):
                 yield sample
 
     @abc.abstractmethod
-    def _get_sample(self, row: transformers.BatchFeature) -> VoiceSample:
+    def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
+        """
+        Converts a row from the dataset into a VoiceSample.
+        Returns None if the sample should be skipped.
+        """
         pass
 
     def _choice(self, prompts: List[str]) -> str:
@@ -492,9 +499,62 @@ class BoolQInputDataset(BoolQDataset):
         return self._get_transcribe_sample(row, tcol="question")
 
 
-class BoolQWithExtendedAnswerDataset(BoolQDataset):
+class QAVoiceDatasetMixin(VoiceDataset):
     SEPARATORS = ["\n\n", "\n", "\n----\n"]
-    BOOLQ_PASSAGE_PROMPTS = [
+    QUERY_PREFIX = ["Question: ", "Question:\n", "Q: ", "Q:\n", "Query: ", "Query:\n"]
+    CONTEXT_PREFIX = [
+        "Passage: ",
+        "Passage:\n",
+        "Context: ",
+        "Context:\n",
+        "Background: ",
+        "Background:\n",
+    ]
+    ANSWER_PREFIX = [
+        "Answer: ",
+        "A: ",
+        "",
+        "The answer is: ",
+        "Result: ",
+        "Conclusion: ",
+    ]
+    # In most cases there is no extra prompt-suffix needed
+    PROMPT_SUFFIXES = [""]
+
+    def _get_query_prompt(self, question_str: str, context: str) -> str:
+        """
+        Creates a random prompt for a QA sample with a passage and question.
+
+        Example prompt:
+            Passage: {context}
+            Question: {question}
+            {optional-prompt-suffix}
+        """
+        if self._args.prompt:
+            prompt = self._args.prompt
+        else:
+            prompt = self._choice(self.PROMPT_SUFFIXES)
+
+        # Separate either with 1 or 2 newlines
+        separator = self._choice(self.SEPARATORS)
+
+        query_prompt = self._choice(self.QUERY_PREFIX)
+        question = "<|audio|>" if self._args.include_audio else question_str
+        prompt = f"{query_prompt}{question}{separator}{prompt}"
+
+        if self._args.include_context:
+            context_prompt = self._choice(self.CONTEXT_PREFIX)
+            prompt = f"{context_prompt}{context}{separator}{prompt}"
+
+        return prompt.strip()
+
+
+class BoolQWithExtendedAnswerDataset(BoolQDataset, QAVoiceDatasetMixin):
+    """
+    A version of BoolQ that includes the context in the prompt and a longer explanation in the answer.
+    """
+
+    PROMPT_SUFFIXES = [
         "Provide a short explanation, then respond with True/False on the last line",
         "Explain briefly, concluding with True/False on a new line."
         "Write a quick explanation, and finish with True/False on the last line"
@@ -507,63 +567,27 @@ class BoolQWithExtendedAnswerDataset(BoolQDataset):
         "Present a concise explanation, ending with a True/False answer on the final line",
         "Start with a brief explanation, and then answer with True/False at the end.",
     ]
-    QUERY_PROMPTS = ["Question: ", "Question:\n", "Q: ", "Q:\n", "Query: ", "Query:\n"]
-    CONTEXT_PROMPTS = [
-        "Passage: ",
-        "Passage:\n",
-        "Context: ",
-        "Context:\n",
-        "Background: ",
-        "Background:\n",
-    ]
-    ANSWER_PROMPTS = [
-        "Answer: ",
-        "A: ",
-        "",
-        "The answer is: ",
-        "Result: ",
-        "Conclusion: ",
-    ]
 
-    def _get_query_prompt(self) -> str:
+    def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
         """
-        Creates a random prompt for a BoolQ sample with a passage and question.
-        Example prompt:
+        Example conversation:
             <|user|> Passage: {context}
-
             Question: {question}
-
-            Provide a short explanation, then respond with True/False on the last line.
-
+            Provide a short explanation, then respond with True/False on the last line
             <|assistant|> {short_explanation}
             Answer: {answer}
         """
-        if self._args.prompt:
-            return self._args.prompt
-        prompt = self._choice(self.BOOLQ_PASSAGE_PROMPTS)
+        if len(row["passage"]) > self._args.max_context_length:
+            # Skip samples with long context
+            return None
 
-        # Separate either with 1 or 2 newlines
-        separator = self._choice(self.SEPARATORS)
-
-        query_prompt = self._choice(self.QUERY_PROMPTS)
-        prompt = f"{query_prompt}{{question}}{separator}{prompt}"
-
-        if self._args.include_context:
-            context_prompt = self._choice(self.CONTEXT_PROMPTS)
-            prompt = f"{context_prompt}{{context}}{separator}{prompt}"
-
-        return prompt
-
-    def _get_sample(self, row: transformers.BatchFeature) -> VoiceSample:
         answer = "True" if row["answer"] else "False"
-        answer_prompt = self._choice(self.ANSWER_PROMPTS)
-        query_prompt = self._get_query_prompt()
-        user_content = query_prompt.format(
-            question="<|audio|>" if self._args.include_audio else row["question"],
-            context=row["passage"],
+        answer_prompt = self._choice(self.ANSWER_PREFIX)
+        user_message = self._get_query_prompt(
+            question_str=row["question"], context=row["passage"]
         )
         messages = [
-            {"role": "user", "content": user_content},
+            {"role": "user", "content": user_message},
             {
                 "role": "assistant",
                 "content": f"{row['explanation']}\n{answer_prompt}{answer}",
@@ -572,6 +596,96 @@ class BoolQWithExtendedAnswerDataset(BoolQDataset):
 
         return self._make_sample(
             messages, self._get_audio(row), audio_transcript=row["question"]
+        )
+
+
+class HeySQuADHumanDataset(QAVoiceDatasetMixin):
+    """
+    HeySQuAD is a large-scale Spoken Question Answering (SQA) dataset which includes 76k human-spoken questions,
+    97k machine-generated questions, and their corresponding textual answers from the SQuAD QA dataset.
+    https://arxiv.org/abs/2304.13689
+
+    This dataset is the human-spoken version of HeySQuAD.
+    """
+
+    def __init__(self, args: VoiceDatasetArgs) -> None:
+        super().__init__(args)
+        dataset = self._load_audio_dataset(
+            "yijingwu/HeySQuAD_human", split=args.split.value
+        )
+        self._init_dataset(dataset)
+
+    def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
+        """
+        Example conversation
+            <|user|> Context: {context}
+            Question: {question}
+            <|assistant|> {answer}
+        """
+        if len(row["context"]) > self._args.max_context_length:
+            # Skip samples with long context
+            return None
+
+        prompt = self._get_query_prompt(
+            question_str=row["question"], context=row["context"]
+        )
+        messages = [
+            {"role": "user", "content": prompt},
+            {"role": "assistant", "content": row["answers"][0]["text"]},
+        ]
+        return self._make_sample(
+            messages, self._get_audio(row), audio_transcript=row["question"]
+        )
+
+
+class SlueSQA5Dataset(QAVoiceDatasetMixin):
+    """
+    SLUE-SQA-5 Dataset contains question texts, question audio, answer text, document text, and document audio from these datasets:
+      * SQuAD1.1 (for questions whose question_id starts with 'squad-')
+      * Natural Questions (for questions whose question_id starts with 'nq-')
+      * TriviaQA (for questions whose question_id starts with 'triviaqa-')
+    The following datasets are supposed to be included, but I haven't found them everywhere:
+      * WebQuestions (for questions whose question_id starts with 'wq-')
+      * CuratedTREC (for questions whose question_id starts with 'trec-')
+      * Spoken Wikipedia
+
+
+    Splits: train, validation, test, verified_test
+    """
+
+    BASE_AUDIO_COLUMNS = ["question_audio", "document_audio"]
+
+    def __init__(self, args: VoiceDatasetArgs) -> None:
+        super().__init__(args)
+        dataset = self._load_audio_dataset(
+            "asapp/slue-phase-2", "sqa5", split=args.split.value
+        )
+        self._init_dataset(dataset)
+
+    def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
+        """
+        Example conversation
+            <|user|> Context: {context}
+            Question: {question}
+            <|assistant|> {answer}
+        """
+        if len(row["raw_document_text"]) > self._args.max_context_length:
+            # Skip samples with long context
+            return None
+
+        print(row["question_id"], f"len spans: {len(row['answer_spans']['answer'])}")
+
+        prompt = self._get_query_prompt(
+            question_str=row["raw_question_text"], context=row["raw_document_text"]
+        )
+        messages = [
+            {"role": "user", "content": prompt},
+            {"role": "assistant", "content": row["answer_spans"]["answer"][0]},
+        ]
+        return self._make_sample(
+            messages,
+            self._get_audio(row, "question_audio"),
+            audio_transcript=row["raw_question_text"],
         )
 
 
@@ -742,6 +856,8 @@ def create_dataset(name: str, args: VoiceDatasetArgs) -> data.IterableDataset:
         "boolq": BoolQDataset,
         "boolq_in": BoolQInputDataset,
         "boolq_extended": BoolQWithExtendedAnswerDataset,
+        "heysquad_human": HeySQuADHumanDataset,
+        "slue_sqa5": SlueSQA5Dataset,
         "gigaspeech": GigaSpeechDataset,
         "librispeech": LibriSpeechDataset,
         "voxpopuli": VoxPopuliDataset,
