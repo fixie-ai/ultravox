@@ -225,11 +225,12 @@ class UltravoxDataproc(datasets.Dataproc):
         )
 
         # Extract input_ids, attention_mask, and audio_values from the processed inputs
-        input_ids = inputs["input_ids"].squeeze(0)
-        attention_mask = inputs["attention_mask"].squeeze(0)
-        audio_values = inputs["audio_values"].squeeze(0)
-        audio_token_start_idx = inputs["audio_token_start_idx"].squeeze(0)
-        audio_token_len = inputs["audio_token_len"].squeeze(0)
+        input_ids = inputs["input_ids"].squeeze_(0)
+        inputs["attention_mask"].squeeze_(0)
+        if "audio_values" in inputs:
+            inputs["audio_values"].squeeze_(0)
+            inputs["audio_token_start_idx"].squeeze_(0)
+            inputs["audio_token_len"].squeeze_(0)
 
         # No need to shift the labels as the model does it internally
         labels = input_ids.clone()
@@ -258,10 +259,7 @@ class UltravoxDataproc(datasets.Dataproc):
             labels[:input_text_len] = -100
 
         return {
-            "input_ids": input_ids,
-            "attention_mask": attention_mask,
-            "audio_values": audio_values,
+            **inputs,
+            # input_ids, attention_mask, audio_values, audio_token_start_idx, audio_token_len
             "labels": labels,
-            "audio_token_start_idx": audio_token_start_idx,
-            "audio_token_len": audio_token_len,
         }

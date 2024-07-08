@@ -70,13 +70,16 @@ logging.getLogger("streaming.base.dataset").setLevel(logging.ERROR)
 @dataclasses.dataclass
 class DataCollatorForSeq2SeqWithAudio(transformers.DataCollatorForSeq2Seq):
     def __call__(self, features, *args, **kwargs):
-        audio_features = [f.pop("audio_values") for f in features]
+        audio_values = [f.pop("audio_values", None) for f in features]
         batch = super().__call__(features, *args, **kwargs)
+
         # Pad the last dimension of all audio_values to the same length, with 0s on the right.
-        max_len = max([x.shape[-1] for x in audio_features])
-        batch["audio_values"] = torch.stack(
-            [F.pad(x, (0, max_len - x.shape[-1])) for x in audio_features]
-        )
+        if audio_values and audio_values[0] is not None:
+            max_len = max([x.shape[-1] for x in audio_values])
+            batch["audio_values"] = torch.stack(
+                [F.pad(x, (0, max_len - x.shape[-1])) for x in audio_values]
+            )
+
         return batch
 
 
@@ -275,13 +278,14 @@ class VoiceDataset(abc.ABC, data.IterableDataset):
     def __iter__(self):
         for _, row in enumerate(self._dataset):
             sample = self._get_sample(row)
-            if (
-                sample is not None
-                and self._args.max_audio_duration_secs is None
-                or sample.audio.shape[-1] / SAMPLE_RATE
-                <= self._args.max_audio_duration_secs
-            ):
-                yield sample
+            if sample is not None:
+                if (
+                    self._args.max_audio_duration_secs is None
+                    or sample.audio is None
+                    or sample.audio.shape[-1] / SAMPLE_RATE
+                    <= self._args.max_audio_duration_secs
+                ):
+                    yield sample
 
     @abc.abstractmethod
     def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
@@ -315,8 +319,11 @@ class VoiceDataset(abc.ABC, data.IterableDataset):
         ]
 
     def _get_transcribe_messages(self, text: str) -> List[Dict[str, str]]:
+        prompt = self._get_transcribe_prompt()
+        if not self._args.include_audio:
+            prompt = prompt.replace("<|audio|>", text)
         return [
-            {"role": "user", "content": self._get_transcribe_prompt()},
+            {"role": "user", "content": prompt},
             {"role": "assistant", "content": text},
         ]
 
@@ -622,7 +629,7 @@ class HeySQuADHumanDataset(QAVoiceDatasetMixin):
             Question: {question}
             <|assistant|> {answer}
         """
-        if len(row["context"]) > self._args.max_context_length:
+        if len(row["context"]) > self._args.max_context_length or not row["answers"]:
             # Skip samples with long context
             return None
 

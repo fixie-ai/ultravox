@@ -163,7 +163,7 @@ def main() -> None:
     train_dataset: data.IterableDataset
     val_datasets: data.IterableDataset
     val_sets = dict(
-        [("train", args.data_sets)]
+        [("matchtrain", args.data_sets)]
         + [(x, [x]) for x in args.val_sets]
         + [(f"text_{x}", [x]) for x in args.val_sets]  # TODO: include ASR datasets?
     )
@@ -200,7 +200,11 @@ def main() -> None:
                 train_on_inputs=args.train_on_inputs,
                 repeat_data=args.repeat_data,
                 processor=processor,
-                num_samples=args.val_num_samples,
+                num_samples=(
+                    args.val_num_samples
+                    if k == "matchtrain"
+                    else args.val_num_samples // 2
+                ),
                 data_args=val_ds_args_text if k.startswith("text_") else val_ds_args,
             )
             for k in val_sets
