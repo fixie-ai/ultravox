@@ -20,4 +20,4 @@ Correct answer: {{ expected_answer }}
 
 
 def evaluate_answer_boolq(sample: eval_types.Sample) -> eval_types.InstructResult:
-    return gpt_eval._evaluate_answer_gpt(BOOLQ_SYSTEM_PROMPT, BOOLQ_USER_PROMPT, sample)
+    return gpt_eval.evaluate_answer_gpt(BOOLQ_SYSTEM_PROMPT, BOOLQ_USER_PROMPT, sample)

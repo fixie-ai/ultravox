@@ -10,7 +10,7 @@ RATING_MODEL = "gpt-4o"
 client: Optional[openai.Client] = None
 
 
-def _evaluate_answer_gpt(
+def evaluate_answer_gpt(
     sys_prompt: str, user_prompt: str, sample: eval_types.Sample
 ) -> eval_types.InstructResult:
     global client
