@@ -629,7 +629,10 @@ class HeySQuADHumanDataset(QAVoiceDatasetMixin):
             Question: {question}
             <|assistant|> {answer}
         """
-        if len(row["context"]) > self._args.max_context_length or not row["answers"]:
+        if row["is_impossible"] or not row["answers"]:
+            # Skip samples with no answer
+            return None
+        if len(row["context"]) > self._args.max_context_length:
             # Skip samples with long context
             return None
 
