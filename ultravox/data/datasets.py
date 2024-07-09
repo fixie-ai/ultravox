@@ -293,7 +293,6 @@ class VoiceDataset(abc.ABC, data.IterableDataset):
         Converts a row from the dataset into a VoiceSample.
         Returns None if the sample should be skipped.
         """
-        pass
 
     def _choice(self, prompts: List[str]) -> str:
         return self._rng.choice(prompts[: self._args.num_prompts])
