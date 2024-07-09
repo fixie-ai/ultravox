@@ -157,7 +157,6 @@ def main() -> None:
         f"Using dtype and device (world_size): {dtype}, {device} ({world_size})"
     )
     model.to(device=device, dtype=dtype)
-    # TODO: check if the whole model can now be moved to dtype instead
 
     # Prepare dataset, subsetting if needed
     train_dataset: data.IterableDataset

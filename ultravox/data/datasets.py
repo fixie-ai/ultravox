@@ -779,10 +779,10 @@ class CommonVoiceDataset(VoiceDataset):
     NOTE: requires HF login
     """
 
-    def __init__(self, args: VoiceDatasetArgs) -> None:
+    def __init__(self, args: VoiceDatasetArgs, lang: str = "en") -> None:
         super().__init__(args)
         dataset = self._load_audio_dataset(
-            "mozilla-foundation/common_voice_16_1", "en", split=args.split.value
+            "mozilla-foundation/common_voice_16_1", lang, split=args.split.value
         )
         self._init_dataset(dataset)
 
@@ -873,7 +873,8 @@ def create_dataset(name: str, args: VoiceDatasetArgs) -> data.IterableDataset:
         "soda": SodaDataset,
         "dummy": LibriSpeechDummyDataset,
     }
-    return DATASET_MAP[name](args)
+    name, *ext = name.split(":")
+    return DATASET_MAP[name](args, *ext)
 
 
 class InterleaveDataset(data.IterableDataset):

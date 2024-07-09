@@ -2,7 +2,7 @@ text_model: "meta-llama/Meta-Llama-3-8B-Instruct"
 audio_model: "facebook/wav2vec2-base-960h"
 
 data_sets: ["gigaspeech"]
-val_sets: ["heysquad_human", "anyinstruct", "gigaspeech", "soda"]
+val_sets: ["heysquad_human", "anyinstruct", "soda", "commonvoice", "commonvoice:zh-CN", "commonvoice:es"]
 repeat_data: True
 
 train_on_inputs: False
