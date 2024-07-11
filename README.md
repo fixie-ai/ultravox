@@ -42,7 +42,7 @@ where `data.json` contains the following request (using the OpenAI inference pro
 
 ```json
 { 
-  "model": "fixie-ai/ultravox-v0.2",
+  "model": "fixie-ai/ultravox-v0_2",
   "messages": [{ 
     "role": "user",
     "content": [{
@@ -61,7 +61,7 @@ where `data.json` contains the following request (using the OpenAI inference pro
 
 ### Model
 
-You can download the latest weights from the [Ultravox Hugging Face page](https://huggingface.co/fixie-ai/ultravox-v0.2).
+You can download the latest weights from the [Ultravox Hugging Face page](https://huggingface.co/fixie-ai/ultravox-v0_2).
 
 ### Architecture
 

@@ -17,6 +17,7 @@ import wandb
 from torch.distributed.elastic.multiprocessing.errors import record
 from torch.utils import data
 
+from ultravox.data import data_processing
 from ultravox.data import datasets
 from ultravox.inference import infer
 from ultravox.model import ultravox_config
@@ -46,7 +47,7 @@ def prepare_dataset(
 
     data_sets = [datasets.create_dataset(ds, data_args) for ds in dataset_names]
     interleave = datasets.InterleaveDataset(data_sets, repeat=repeat_data)
-    ds_with_proc = ultravox_processing.UltravoxDataproc(
+    ds_with_proc = data_processing.UltravoxDataproc(
         interleave, processor=processor, train_on_inputs=train_on_inputs
     )
     limited_ds = datasets.Range(ds_with_proc, num_samples=num_samples)

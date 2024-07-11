@@ -3,9 +3,12 @@
 import dataclasses
 from typing import Optional
 
+import numpy as np
 import simple_parsing
+import transformers
 
 from ultravox.inference import ultravox_infer
+from ultravox.model import ultravox_pipeline
 
 
 # This script is used to upload a model to the HuggingFace Hub, for either internal or external consumption.
@@ -34,11 +37,20 @@ def main(args: UploadToHubArgs):
         device=args.device,
         data_type=args.data_type,
     )
+    pipe = ultravox_pipeline.UltravoxPipeline(
+        model=inference.model,
+        tokenizer=inference.tokenizer,
+        audio_processor=inference.processor.audio_processor,
+    )
     print("Uploading model to HuggingFace Hub...")
-    inference.model.push_to_hub(args.hf_upload_model, private=args.private)
-    # It's not necessary to upload the tokenizer, but it can be useful for consistency
-    print("Uploading tokenizer to HuggingFace Hub...")
-    inference.tokenizer.push_to_hub(args.hf_upload_model, private=args.private)
+    pipe.push_to_hub(args.hf_upload_model, private=args.private)
+
+    print("Model uploaded. Testing model...")
+    loaded_pipe = transformers.pipeline(
+        model="fixie-ai/ultravox-v0_2", trust_remote_code=True
+    )
+    generated = loaded_pipe({"audio": np.array(16000)}, max_new_tokens=10)
+    print(f"Generated (max 10 token): {generated}")
 
 
 if __name__ == "__main__":
