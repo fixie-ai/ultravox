@@ -23,7 +23,7 @@ class Dataproc(abc.ABC, data.IterableDataset):
         return (self._process(sample) for sample in self._dataset)
 
 
-class UltravoxDataproc(datasets.Dataproc):
+class UltravoxDataproc(Dataproc):
     def __init__(
         self,
         dataset: data.IterableDataset,
