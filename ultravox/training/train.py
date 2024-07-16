@@ -17,9 +17,9 @@ import wandb
 from torch.distributed.elastic.multiprocessing.errors import record
 from torch.utils import data
 
-from ultravox.model import data_processing
 from ultravox.data import datasets
 from ultravox.inference import infer
+from ultravox.model import data_processing
 from ultravox.model import ultravox_config
 from ultravox.model import ultravox_model
 from ultravox.model import ultravox_processing

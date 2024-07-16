@@ -3,13 +3,12 @@
 import dataclasses
 from typing import Optional
 
-import numpy as np
 import simple_parsing
 import transformers
 
+from ultravox.data import datasets
 from ultravox.inference import ultravox_infer
 from ultravox.model import ultravox_pipeline
-from ultravox.data import datasets
 
 
 # This script is used to upload a model to the HuggingFace Hub, for either internal or external consumption.
