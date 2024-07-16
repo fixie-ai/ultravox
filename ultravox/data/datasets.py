@@ -793,6 +793,20 @@ class InterleaveDataset(data.IterableDataset):
                     iters[iter_index] = iter(self._datasets[iter_index])
 
 
+class Dataproc(abc.ABC, data.IterableDataset):
+    """Base class to preprocess a dataset of VoiceSamples."""
+
+    def __init__(self, dataset: data.IterableDataset) -> None:
+        self._dataset = dataset
+
+    @abc.abstractmethod
+    def _process(self, sample: VoiceSample) -> Dict[str, Any]:
+        pass
+
+    def __iter__(self):
+        return (self._process(sample) for sample in self._dataset)
+
+
 class Range(data.IterableDataset):
     """Limits the number of samples from another dataset."""
 

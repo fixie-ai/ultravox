@@ -9,21 +9,7 @@ from ultravox.data import datasets
 from ultravox.model import ultravox_processing
 
 
-class Dataproc(abc.ABC, data.IterableDataset):
-    """Base class to preprocess a dataset of VoiceSamples."""
-
-    def __init__(self, dataset: data.IterableDataset) -> None:
-        self._dataset = dataset
-
-    @abc.abstractmethod
-    def _process(self, sample: datasets.VoiceSample) -> Dict[str, Any]:
-        pass
-
-    def __iter__(self):
-        return (self._process(sample) for sample in self._dataset)
-
-
-class UltravoxDataproc(Dataproc):
+class UltravoxDataproc(datasets.Dataproc):
     def __init__(
         self,
         dataset: data.IterableDataset,

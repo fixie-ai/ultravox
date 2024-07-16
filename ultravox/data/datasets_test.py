@@ -8,7 +8,6 @@ import torch
 from torch.utils import data
 from transformers.feature_extraction_utils import BatchFeature
 
-from ultravox.data import data_processing
 from ultravox.data import datasets
 
 
@@ -49,7 +48,7 @@ class FakeTranscribeDataset(datasets.VoiceDataset):
         return self._get_transcribe_sample(row)
 
 
-class FakeDataproc(data_processing.Dataproc):
+class FakeDataproc(datasets.Dataproc):
     def __init__(self, dataset):
         super().__init__(dataset)
 
