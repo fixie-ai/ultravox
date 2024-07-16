@@ -18,9 +18,14 @@ class UltravoxPipeline(transformers.Pipeline):
         **kwargs
     ):
         if tokenizer is None:
-            tokenizer = transformers.AutoTokenizer.from_pretrained(
-                model.config._name_or_path
-            )
+            try:
+                tokenizer = transformers.AutoTokenizer.from_pretrained(
+                    model.config._name_or_path
+                )
+            except:
+                tokenizer = transformers.AutoTokenizer.from_pretrained(
+                    model.config.text_model_id or model.config.text_config._name_or_path
+                )
 
         if audio_processor is None:
             audio_processor = transformers.AutoProcessor.from_pretrained(
@@ -36,40 +41,34 @@ class UltravoxPipeline(transformers.Pipeline):
         super().__init__(model=model, tokenizer=tokenizer, **kwargs)
 
     def _sanitize_parameters(self, **kwargs):
-        generation_kwargs = {}
-        if "temperature" in kwargs:
-            generation_kwargs["temperature"] = kwargs["temperature"]
-        if "max_new_tokens" in kwargs:
-            generation_kwargs["max_new_tokens"] = kwargs["max_new_tokens"]
-        if "repetition_penalty" in kwargs:
-            generation_kwargs["repetition_penalty"] = kwargs["repetition_penalty"]
+        generation_keys = ["temperature", "max_new_tokens", "repetition_penalty"]
+        generation_kwargs = {k: kwargs[k] for k in kwargs if k in generation_keys}
         return {}, generation_kwargs, {}
 
     def preprocess(self, inputs: Dict[str, Any]):
-        if "turns" in inputs:
-            turns = inputs["turns"]
-        else:
+        turns: list = inputs.get("turns", [])
+
+        if "audio" in inputs and (len(turns) == 0 or turns[-1]["role"] != "user"):
             prompt = inputs.get("prompt", "<|audio|>")
             if "<|audio|>" not in prompt:
                 logging.warning(
                     "Prompt does not contain '<|audio|>', appending '<|audio|>' to the end of the prompt."
                 )
                 prompt += " <|audio|>"
-            turns = [{"role": "user", "content": prompt}]
+            turns.append({"role": "user", "content": prompt})
 
-        text = self.processor.tokenizer.apply_chat_template(turns, tokenize=False)
+        text = self.processor.tokenizer.apply_chat_template(
+            turns, add_generation_prompt=True, tokenize=False
+        )
 
-        # TODO: allow text-only mode?
-        assert "audio" in inputs, "Audio input is required"
-
-        if "sampling_rate" not in inputs:
+        if "sampling_rate" not in inputs and "audio" in inputs:
             logging.warning(
                 "No sampling rate provided, using default of 16kHz. We highly recommend providing the correct sampling rate."
             )
 
         output = self.processor(
             text=text,
-            audio=inputs["audio"],
+            audio=inputs.get("audio", None),
             sampling_rate=inputs.get("sampling_rate", 16000),
         )
         if "audio_values" in output:
