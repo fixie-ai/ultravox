@@ -402,6 +402,6 @@ UltravoxModel.register_for_auto_class()
 
 transformers.AutoConfig.register("ultravox", UltravoxConfig)
 transformers.AutoModel.register(UltravoxConfig, UltravoxModel)
-# transformers.AutoProcessor.register(UltravoxConfig, UltravoxProcessor)  # TODO: make processo work standalone
+# transformers.AutoProcessor.register(UltravoxConfig, UltravoxProcessor)  # TODO: make processor work standalone
 
 transformers.activations.ACT2FN["swiglu"] = SwiGLU

@@ -9,6 +9,7 @@ import transformers
 
 from ultravox.inference import ultravox_infer
 from ultravox.model import ultravox_pipeline
+from ultravox.data import datasets
 
 
 # This script is used to upload a model to the HuggingFace Hub, for either internal or external consumption.
@@ -49,8 +50,12 @@ def main(args: UploadToHubArgs):
     loaded_pipe = transformers.pipeline(
         model="fixie-ai/ultravox-v0_2", trust_remote_code=True
     )
-    generated = loaded_pipe({"audio": np.array(16000)}, max_new_tokens=10)
-    print(f"Generated (max 10 token): {generated}")
+    ds = datasets.BoolQDataset(datasets.VoiceDatasetArgs())
+    sample = next(iter(ds))
+    generated = loaded_pipe(
+        {"audio": sample.audio, "turns": sample.messages[:-1]}, max_new_tokens=10
+    )
+    print(f"Generated (max 10 tokens): {generated}")
 
 
 if __name__ == "__main__":
