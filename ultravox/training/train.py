@@ -6,7 +6,7 @@ import os
 import re
 import sys
 from datetime import datetime
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import datasets as hf_datasets
 import safetensors.torch
@@ -161,7 +161,7 @@ def main() -> None:
 
     # Prepare dataset, subsetting if needed
     train_dataset: data.IterableDataset
-    val_datasets: data.IterableDataset
+    val_datasets: Dict[str, data.IterableDataset]
     val_sets = dict(
         [("matchtrain", args.data_sets)]
         + [(x, [x]) for x in args.val_sets]

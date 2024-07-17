@@ -489,7 +489,7 @@ class BoolQDataset(VoiceDataset):
         )
         self._init_dataset(dataset)
 
-    def _get_sample(self, row: transformers.BatchFeature) -> VoiceSample:
+    def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
         question = row["question"]
         answer = "True" if row["answer"] else "False"
         context = row["passage"] if self._args.include_context else None
