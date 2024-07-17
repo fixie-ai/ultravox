@@ -1,6 +1,7 @@
 import logging
 from typing import Any, Dict, List, Optional
 
+import numpy as np
 import transformers
 
 # We must use relative import in this directory to allow uploading to HF Hub
@@ -48,12 +49,23 @@ class UltravoxPipeline(transformers.Pipeline):
     def preprocess(self, inputs: Dict[str, Any]):
         turns: list = inputs.get("turns", [])
 
-        if "audio" in inputs and (len(turns) == 0 or turns[-1]["role"] != "user"):
+        audio = inputs.get("audio", None)
+        # Convert to float32 if needed.
+        if isinstance(audio, np.ndarray):
+            if audio.dtype == np.float64:
+                audio = audio.astype(np.float32)
+            elif audio.dtype == np.int16:
+                audio = audio.astype(np.float32) / np.float32(32768.0)
+            elif audio.dtype == np.int32:
+                audio = audio.astype(np.float32) / np.float32(2147483648.0)
+
+        if audio is not None and (len(turns) == 0 or turns[-1]["role"] != "user"):
             prompt = inputs.get("prompt", "<|audio|>")
             if "<|audio|>" not in prompt:
                 logging.warning(
                     "Prompt does not contain '<|audio|>', appending '<|audio|>' to the end of the prompt."
                 )
+
                 prompt += " <|audio|>"
             turns.append({"role": "user", "content": prompt})
 
@@ -61,14 +73,14 @@ class UltravoxPipeline(transformers.Pipeline):
             turns, add_generation_prompt=True, tokenize=False
         )
 
-        if "sampling_rate" not in inputs and "audio" in inputs:
+        if "sampling_rate" not in inputs and audio is not None:
             logging.warning(
                 "No sampling rate provided, using default of 16kHz. We highly recommend providing the correct sampling rate."
             )
 
         output = self.processor(
             text=text,
-            audio=inputs.get("audio", None),
+            audio=audio,
             sampling_rate=inputs.get("sampling_rate", 16000),
         )
         if "audio_values" in output:

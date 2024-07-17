@@ -120,6 +120,7 @@ class UltravoxProcessor(transformers.ProcessorMixin):
             audio_embed_frames = int(np.ceil(nb_encoder_frames / self.stack_factor))
             data["audio_token_len"] = [audio_embed_frames]
 
+            # Main audio processing. The processor is model-specific.
             x = self.audio_processor(
                 audio,
                 sampling_rate=sampling_rate,
@@ -149,6 +150,10 @@ class UltravoxProcessor(transformers.ProcessorMixin):
                     )
                 )
                 data["audio_token_start_idx"] = [start_idx]
+
+                # Replace the audio placeholder with the audio token.
+                #   e.g. "Transcribe <|audio|>" -> "Transcribe </s></s></s></s></s></s></s></s>"
+                #        where the number of </s> is the number of audio frames.
                 text = text.replace(
                     self.audio_placeholder,
                     self.audio_token_replacement * audio_embed_frames,
