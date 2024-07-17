@@ -10,8 +10,10 @@ import transformers.activations
 import transformers.modeling_outputs
 import transformers.models
 
-from ultravox.model import ultravox_config
-from ultravox.model import whisper_model_modified
+# We must use relative import in this directory to allow uploading to HF Hub
+# Even "from . import X" pattern doesn't work (undocumented and unclear why)
+from .ultravox_config import UltravoxConfig
+from .whisper_model_modified import WhisperEncoder as ModifiedWhisperEncoder
 
 
 class UltravoxModel(
@@ -31,11 +33,11 @@ class UltravoxModel(
         config: Model configuration class with all the parameters of the model.
     """
 
-    config_class = ultravox_config.UltravoxConfig
-    config: ultravox_config.UltravoxConfig  # for type hinting
+    config_class = UltravoxConfig
+    config: UltravoxConfig  # for type hinting
     _no_split_modules = ["Wav2Vec2Model", "WhisperEncoder", "LlamaDecoderLayer"]
 
-    def __init__(self, config: ultravox_config.UltravoxConfig):
+    def __init__(self, config: UltravoxConfig):
         super().__init__(config)
 
         self.keep_params: Set[str] = set()
@@ -186,13 +188,12 @@ class UltravoxModel(
         return model_input
 
     @classmethod
-    def _create_audio_tower(cls, config: ultravox_config.UltravoxConfig) -> Union[
-        transformers.Wav2Vec2Model,
-        transformers.models.whisper.modeling_whisper.WhisperEncoder,
-    ]:
+    def _create_audio_tower(
+        cls, config: UltravoxConfig
+    ) -> Union[transformers.Wav2Vec2Model, ModifiedWhisperEncoder]:
         if config.audio_model_id is not None:
             if "whisper" in config.audio_model_id is not None:
-                audio_tower = whisper_model_modified.WhisperEncoder.from_pretrained(
+                audio_tower = ModifiedWhisperEncoder.from_pretrained(
                     config.audio_model_id
                 )
             else:
@@ -201,7 +202,7 @@ class UltravoxModel(
                 )
         else:
             if "whisper" in config.audio_config._name_or_path:
-                audio_tower = whisper_model_modified.WhisperEncoder(config.audio_config)
+                audio_tower = ModifiedWhisperEncoder(config.audio_config)
             else:
                 audio_tower = transformers.AutoModel.from_config(config.audio_config)
 
@@ -219,7 +220,7 @@ class UltravoxModel(
 
     @classmethod
     def _create_language_model(
-        cls, config: ultravox_config.UltravoxConfig
+        cls, config: UltravoxConfig
     ) -> transformers.LlamaForCausalLM:
         if config.text_model_id is not None:
             language_model = transformers.AutoModelForCausalLM.from_pretrained(
@@ -373,7 +374,7 @@ class SwiGLU(nn.Module):
 
 
 class UltravoxProjector(nn.Sequential):
-    def __init__(self, config: ultravox_config.UltravoxConfig):
+    def __init__(self, config: UltravoxConfig):
         super().__init__()
         self.hidden_dim = config.hidden_size
         self._pad_and_stack = StackAudioFrames(config.stack_factor)
@@ -396,8 +397,11 @@ class UltravoxProjector(nn.Sequential):
         return hidden_states
 
 
-transformers.AutoModelForCausalLM.register(
-    ultravox_config.UltravoxConfig, UltravoxModel
-)
+UltravoxConfig.register_for_auto_class()
+UltravoxModel.register_for_auto_class()
+
+transformers.AutoConfig.register("ultravox", UltravoxConfig)
+transformers.AutoModel.register(UltravoxConfig, UltravoxModel)
+# transformers.AutoProcessor.register(UltravoxConfig, UltravoxProcessor)  # TODO: make processor work standalone
 
 transformers.activations.ACT2FN["swiglu"] = SwiGLU
