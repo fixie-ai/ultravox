@@ -72,6 +72,8 @@ class TrainConfig:
     shuffle_seed: int = 42
     # Experiment logging destinations: tensorboard, wandb, neptune, mlflow, etc
     report_logs_to: List[str] = simple_parsing.list_field("tensorboard")
+    # A list of tags for filtering runs. Only used for wandb.
+    run_tags: List[str] = simple_parsing.list_field()
 
     def __post_init__(self):
         assert self.data_type in ["bfloat16", "float16", "float32"]

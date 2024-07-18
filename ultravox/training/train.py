@@ -129,6 +129,7 @@ def main() -> None:
             config=dataclasses.asdict(args),
             name=args.exp_name,
             dir="runs",
+            tags=args.run_tags,
         )
 
     if args.model_load_dir:
