@@ -140,6 +140,8 @@ def main() -> None:
                 load_path = wandb_utils.download_model_from_wandb(load_path)
         if os.path.isdir(load_path):
             load_path = os.path.join(load_path, "model*.safetensors")
+        paths = glob.glob(load_path)
+        assert len(paths) > 0, f"No model files found at {load_path}"
         for path in glob.glob(load_path):
             state_dict = safetensors.torch.load_file(path)
             mismatch = model.load_state_dict(state_dict, strict=False)
