@@ -62,7 +62,6 @@ class TextGenerationTask:
     api_key: Optional[str] = simple_parsing.field(default=None, alias="-k")
     max_tokens: int = 128
     temperature: float = 0
-    format_text: bool = False
     format_fields: List[str] = simple_parsing.field(default_factory=list)
 
     def __post_init__(self):
@@ -82,9 +81,8 @@ class TextGenerationTask:
         return ds_split.map(self._map_sample, num_proc=num_proc)
 
     def _map_sample(self, sample):
-        if self.format_text:
-            for field in self.format_fields:
-                sample[field] = format_asr_text(sample[field])
+        for field in self.format_fields:
+            sample[field] = format_asr_text(sample[field])
         rendered = jinja2.Template(self.template).render(**sample, json_dump=json.dumps)
 
         if self.json_mode:
