@@ -1,7 +1,7 @@
 import dataclasses
 import json
 import os
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Union, List
 
 import datasets
 import jinja2
@@ -10,6 +10,8 @@ import simple_parsing
 
 from ultravox.tools.ds_tool import caching
 from ultravox.tools.ds_tool import tts
+
+from ultravox.data.text_proc import format_asr_text
 
 tts_client: caching.CachingTtsWrapper
 chat_client: caching.CachingChatWrapper
@@ -60,6 +62,8 @@ class TextGenerationTask:
     api_key: Optional[str] = simple_parsing.field(default=None, alias="-k")
     max_tokens: int = 128
     temperature: float = 0
+    format_text: bool = False
+    format_fields: List[str] = simple_parsing.field(default_factory=list)
 
     def __post_init__(self):
         # The OAI client is separate from the task to avoid pickling issues when multiprocessing.
@@ -78,6 +82,9 @@ class TextGenerationTask:
         return ds_split.map(self._map_sample, num_proc=num_proc)
 
     def _map_sample(self, sample):
+        if self.format_text:
+            for field in self.format_fields:
+                sample[field] = format_asr_text(sample[field])
         rendered = jinja2.Template(self.template).render(**sample, json_dump=json.dumps)
 
         if self.json_mode:
@@ -117,9 +124,10 @@ class DatasetToolArgs:
 
     # HF destination dataset parameters
     upload_name: Optional[str] = simple_parsing.field(default=None, alias="-u")
-    # eg if the original split="train", but we want to upload it as "validation"
-    upload_split: Optional[str] = simple_parsing.field(default=None)
     upload_branch: Optional[str] = simple_parsing.field(default="main", alias="-B")
+    # eg if the original split="train", but we want to upload it as "validation"
+    upload_subset: Optional[str] = simple_parsing.field(default=None)
+    upload_split: Optional[str] = simple_parsing.field(default=None)
     num_shards: Optional[int] = simple_parsing.field(default=None, alias="-N")
     private: bool = simple_parsing.field(default=False)
     token: Optional[str] = None
@@ -131,55 +139,55 @@ class DatasetToolArgs:
     )
 
     def __post_init__(self):
-        assert (
-            not self.upload_split or self.dataset_split
-        ), "Must specify dataset_split when using upload_split"
-
+        assert self.dataset_subset, "dataset_subset must be specified"
+        if not self.upload_subset:
+            self.upload_subset = self.dataset_subset
+        if self.dataset_split and not self.upload_split:
+            self.upload_split = self.dataset_split
 
 def main(args: DatasetToolArgs):
     ds_name = args.dataset_name
     print(f'Loading dataset "{ds_name}" for task {args.task}')
-    data_dict: datasets.DatasetDict = datasets.load_dataset(
+    ds: datasets.DatasetDict = datasets.load_dataset(
         ds_name, args.dataset_subset, split=args.dataset_split
     )
-    if args.dataset_split:
-        data_dict = datasets.DatasetDict(**{args.dataset_split: data_dict})
 
-    for split, ds_split in data_dict.items():
-        print(f'Processing split "{split}"...')
+    if isinstance(ds, datasets.Dataset):
+        ds = datasets.DatasetDict({args.upload_split: ds})
+
+    if len(ds) > 1 and args.upload_split:
+        raise ValueError("Cannot upload multiple splits to a single split")
+
+    token = args.token or os.environ.get("HF_TOKEN")
+    hub_args: Dict[str, Any] = {
+        "config_name": args.upload_subset,
+        "token": token,
+        "revision": args.upload_branch,
+        "private": args.private,
+    }
+    if args.num_shards is not None:
+        hub_args["num_shards"] = args.num_shards
+
+    for split, ds_split in ds.items():
+        print(f"Processing dataset: {ds_name}, subset {args.dataset_subset}, split {args.dataset_split}, containing {len(ds_split)} samples")
         if args.shuffle:
             ds_split = ds_split.shuffle(seed=args.shuffle_seed)
         if args.num_samples:
             ds_split = ds_split.select(range(args.num_samples))
-        data_dict[split] = args.task.map_split(ds_split, args.num_workers)
+        ds_split = args.task.map_split(ds_split, args.num_workers)
 
-    token = args.token or os.environ.get("HF_TOKEN")
-    hub_args: Dict[str, Any] = {
-        "config_name": args.dataset_subset or "default",
-        "token": token,
-        "revision": args.upload_branch,
-        "private": args.private,
-        "split": args.upload_split,
-    }
-    if args.num_shards is not None:
-        hub_args["num_shards"] = {split: args.num_shards for split in data_dict.keys()}
+        upload_split = args.upload_split or split
 
-    try:
-        if args.dataset_split:
-            data_dict[args.dataset_split].push_to_hub(
-                args.upload_name, split=args.dataset_split, **hub_args
-            )
-        else:
-            data_dict.push_to_hub(args.upload_name, **hub_args)
-    except Exception as e:
-        print(f"Failed to push to hub: {e}")
+        try:
+            ds_split.push_to_hub(args.upload_name, split=upload_split, **hub_args)
+        except Exception as e:
+            print(f"Failed to push to hub: {e}")
 
-        # If the push fails or upload_name is not specified, save the data locally.
-        for split in data_dict.keys():
-            output_name = f"{split}-00000-of-00001.parquet"
-            data_dict[split].to_parquet(output_name)
+            # If the push fails or upload_name is not specified, save the data locally.
+            output_name = f"{args.upload_subset}-{upload_split}-00000-of-00001.parquet"
+            ds_split.to_parquet(output_name)
             print(f"Saved to {output_name}")
-            print(f"Sample {0} of {split}: {data_dict[split][0]}")
+            print(f"Sample {0} of {args.upload_subset}: {ds[0]}")
 
 
 if __name__ == "__main__":
