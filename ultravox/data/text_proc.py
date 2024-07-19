@@ -1,6 +1,7 @@
 import os
 import sys
-sys.modules['tkinter'] = None
+
+sys.modules["tkinter"] = None  # type: ignore
 import nltk  # needed for truecase
 import truecase
 

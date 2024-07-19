@@ -1,17 +1,16 @@
 import dataclasses
 import json
 import os
-from typing import Any, Dict, Optional, Union, List
+from typing import Any, Dict, List, Optional, Union
 
 import datasets
 import jinja2
 import openai
 import simple_parsing
 
+from ultravox.data.text_proc import format_asr_text
 from ultravox.tools.ds_tool import caching
 from ultravox.tools.ds_tool import tts
-
-from ultravox.data.text_proc import format_asr_text
 
 tts_client: caching.CachingTtsWrapper
 chat_client: caching.CachingChatWrapper
@@ -40,7 +39,9 @@ class TtsTask:
 
     def map_split(self, ds_split: datasets.Dataset, num_proc: int) -> datasets.Dataset:
         print(f'TTS mapping "{self.column_name}" to "{self.audio_column_name}"...')
-        return ds_split.map(self._map_sample, num_proc=num_proc, writer_batch_size=self.write_batch_size).cast_column(
+        return ds_split.map(
+            self._map_sample, num_proc=num_proc, writer_batch_size=self.write_batch_size
+        ).cast_column(
             self.audio_column_name, datasets.Audio(sampling_rate=self.sample_rate)
         )
 
@@ -83,7 +84,9 @@ class TextGenerationTask:
 
     def map_split(self, ds_split: datasets.Dataset, num_proc: int) -> datasets.Dataset:
         print(f'Generating "{self.new_column_name}" with template:\n{self.template}')
-        return ds_split.map(self._map_sample, num_proc=num_proc, writer_batch_size=self.write_batch_size)
+        return ds_split.map(
+            self._map_sample, num_proc=num_proc, writer_batch_size=self.write_batch_size
+        )
 
     def _map_sample(self, sample):
         for field in self.format_fields:
@@ -152,6 +155,7 @@ class DatasetToolArgs:
         if self.dataset_split and not self.upload_split:
             self.upload_split = self.dataset_split
 
+
 def main(args: DatasetToolArgs):
     ds_name = args.dataset_name
     print(f'Loading dataset "{ds_name}" for task {args.task}')
@@ -175,7 +179,9 @@ def main(args: DatasetToolArgs):
         hub_args["num_shards"] = args.num_shards
 
     for split, ds_split in ds.items():
-        print(f"Processing dataset: {ds_name}, subset {args.dataset_subset}, split {args.dataset_split}, containing {len(ds_split)} samples")
+        print(
+            f"Processing dataset: {ds_name}, subset {args.dataset_subset}, split {args.dataset_split}, containing {len(ds_split)} samples"
+        )
         if args.shuffle:
             ds_split = ds_split.shuffle(seed=args.shuffle_seed)
         if args.num_samples:
