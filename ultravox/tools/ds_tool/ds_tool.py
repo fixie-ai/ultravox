@@ -25,6 +25,8 @@ class TtsTask:
     audio_column_name: Optional[str] = simple_parsing.field(default=None, alias="-a")
     voice: Optional[str] = simple_parsing.field(default=None, alias="-V")
     sample_rate: int = simple_parsing.field(default=16000, alias="-r")
+    write_batch_size: int = 1000
+    format_fields: List[str] = simple_parsing.field(default_factory=list)
 
     def __post_init__(self):
         # The TTS client is separate from the task to avoid pickling issues when multiprocessing.
@@ -38,11 +40,13 @@ class TtsTask:
 
     def map_split(self, ds_split: datasets.Dataset, num_proc: int) -> datasets.Dataset:
         print(f'TTS mapping "{self.column_name}" to "{self.audio_column_name}"...')
-        return ds_split.map(self._map_sample, num_proc=num_proc).cast_column(
+        return ds_split.map(self._map_sample, num_proc=num_proc, writer_batch_size=self.write_batch_size).cast_column(
             self.audio_column_name, datasets.Audio(sampling_rate=self.sample_rate)
         )
 
     def _map_sample(self, sample):
+        for field in self.format_fields:
+            sample[field] = format_asr_text(sample[field])
         # using a Jinja template for some added flexibility
         # The {{ var }} syntax is how Jinja denotes variables
         text = jinja2.Template("{{" + self.column_name + "}}").render(**sample)
@@ -62,6 +66,7 @@ class TextGenerationTask:
     api_key: Optional[str] = simple_parsing.field(default=None, alias="-k")
     max_tokens: int = 128
     temperature: float = 0
+    write_batch_size: int = 1000
     format_fields: List[str] = simple_parsing.field(default_factory=list)
 
     def __post_init__(self):
@@ -78,7 +83,7 @@ class TextGenerationTask:
 
     def map_split(self, ds_split: datasets.Dataset, num_proc: int) -> datasets.Dataset:
         print(f'Generating "{self.new_column_name}" with template:\n{self.template}')
-        return ds_split.map(self._map_sample, num_proc=num_proc)
+        return ds_split.map(self._map_sample, num_proc=num_proc, writer_batch_size=self.write_batch_size)
 
     def _map_sample(self, sample):
         for field in self.format_fields:
