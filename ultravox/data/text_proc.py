@@ -1,5 +1,6 @@
 import os
-
+import sys
+sys.modules['tkinter'] = None
 import nltk  # needed for truecase
 import truecase
 
