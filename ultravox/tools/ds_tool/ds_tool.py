@@ -112,6 +112,10 @@ class TextGenerationTask:
 #   just ds_tool tts -d google/boolq -u fixie-ai/boolq-audio -c question -a audio --token $HF_WRITE_TOKEN
 #   just ds_tool textgen -d fixie-ai/boolq-audio -u fixie-ai/bar -c explanation -b https://api.fireworks.ai/inference/v1 -k $FIREWORKS_API_KEY -m accounts/fireworks/models/llama-v3-8b-instruct
 #   just ds_tool textgen -d ylacombe/expresso -u fixie-ai/expresso -c continuation -T @expresso_template.txt
+#   just ds_tool textgen --new_column_name continuation --dataset_name openslr/librispeech_asr --dataset_subset clean --dataset_split train.360 \
+#        --shuffle --format_fields text --upload_name fixie-ai/librispeech_asr --private --base_url https://api.fireworks.ai/inference/v1 \
+#        --api_key $FIREWORKS_API_KEY --token $HF_TOKEN --language_model accounts/fireworks/models/llama-v3-8b-instruct \
+#        --template @ultravox/tools/ds_tool/continuation.jinja --max_tokens 64 --num_workers 30 --write_batch_size 30
 @dataclasses.dataclass
 class DatasetToolArgs:
     # HF source dataset parameters
@@ -161,10 +165,9 @@ def main(args: DatasetToolArgs):
     if len(ds) > 1 and args.upload_split:
         raise ValueError("Cannot upload multiple splits to a single split")
 
-    token = args.token or os.environ.get("HF_TOKEN")
     hub_args: Dict[str, Any] = {
         "config_name": args.upload_subset,
-        "token": token,
+        "token": args.token or os.environ.get("HF_TOKEN"),
         "revision": args.upload_branch,
         "private": args.private,
     }
