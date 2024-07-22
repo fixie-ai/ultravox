@@ -14,6 +14,7 @@ from ultravox.model import ultravox_config
 @dataclasses.dataclass
 class TrainConfig:
     data_sets: List[str]
+    val_sets: List[str]
     # language model to use
     text_model: str
     # audio encoder model to use

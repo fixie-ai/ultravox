@@ -66,7 +66,7 @@ def test_infer_16kHz(tokenizer, audio_processor):
     inference = FakeInference(tokenizer, audio_processor)
     array = np.ones(16000, dtype=np.float32)
     sample = datasets.VoiceSample.from_prompt_and_raw(
-        "Transcribe <|audio|>", array, 16000
+        "Transcribe\n<|audio|>", array, 16000
     )
     output = inference.infer(sample)
     assert output.input_tokens == 20
@@ -89,7 +89,7 @@ def test_infer_48kHz(tokenizer, audio_processor):
     inference = FakeInference(tokenizer, audio_processor)
     array = np.ones(48000, dtype=np.float32)
     sample = datasets.VoiceSample.from_prompt_and_raw(
-        "Transcribe <|audio|>", array, 48000
+        "Transcribe\n<|audio|>", array, 48000
     )
     output = inference.infer(sample)
     assert output.input_tokens == 20
@@ -112,7 +112,7 @@ def test_infer_16kHz_stream(tokenizer, audio_processor):
     inference = FakeInference(tokenizer, audio_processor)
     array = np.ones(16000, dtype=np.float32)
     sample = datasets.VoiceSample.from_prompt_and_raw(
-        "Transcribe <|audio|>", array, 16000
+        "Transcribe\n<|audio|>", array, 16000
     )
     gen = inference.infer_stream(sample)
     text = ""

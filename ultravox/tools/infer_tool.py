@@ -22,7 +22,7 @@ from ultravox.tools import infer_api
 # transcription of the audio content and the tool can perfom a WER calculation.
 # Remember to set the --asr flag when using an ASR input.
 DEFAULT_PROMPT = "Listen to <|audio|> and respond to it"
-DEFAULT_ASR_PROMPT = "Transcribe <|audio|>"
+DEFAULT_ASR_PROMPT = "Transcribe\n<|audio|>"
 
 
 @dataclasses.dataclass
