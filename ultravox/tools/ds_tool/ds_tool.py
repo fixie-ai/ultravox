@@ -1,7 +1,7 @@
 import dataclasses
 import json
 import os
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, Optional, Union
 
 import datasets
 import jinja2
@@ -26,7 +26,6 @@ class TtsTask:
     audio_column_name: Optional[str] = simple_parsing.field(default=None, alias="-a")
     voice: Optional[str] = simple_parsing.field(default=None, alias="-V")
     sample_rate: int = simple_parsing.field(default=16000, alias="-r")
-    format_fields: List[str] = simple_parsing.field(default_factory=list)
 
     def __post_init__(self):
         # The TTS client is separate from the task to avoid pickling issues when multiprocessing.
@@ -49,12 +48,8 @@ class TtsTask:
         )
 
     def _map_sample(self, sample):
-        for field in self.format_fields:
-            sample[field] = text_proc.format_asr_text(sample[field])
         # using a Jinja template for some added flexibility
         # The {{ var }} syntax is how Jinja denotes variables
-        text = jinja2.Template("{{" + self.column_name + "}}").render(**sample)
-
         try:
             text = jinja2.Template("{{" + self.column_name + "}}").render(**sample)
         except TemplateError as e:
@@ -81,7 +76,6 @@ class TextGenerationTask:
     api_key: Optional[str] = simple_parsing.field(default=None, alias="-k")
     max_tokens: int = 128
     temperature: float = 0
-    format_fields: List[str] = simple_parsing.field(default_factory=list)
 
     def __post_init__(self):
         # The OAI client is separate from the task to avoid pickling issues when multiprocessing.
@@ -104,12 +98,11 @@ class TextGenerationTask:
         )
 
     def _map_sample(self, sample):
-        for field in self.format_fields:
-            sample[field] = text_proc.format_asr_text(sample[field])
-
+        # using a Jinja template for some added flexibility, template can include variables and functions
+        # e.g., {{ text }} or {{ text_proc.format_asr_text(text) }}
         try:
             rendered = jinja2.Template(self.template, undefined=StrictUndefined).render(
-                **sample, json_dump=json.dumps
+                **sample, json_dump=json.dumps, text_proc=text_proc
             )
         except TemplateError as e:
             print(f"Error rendering template: {e}")
@@ -142,7 +135,7 @@ class TextGenerationTask:
 #   just ds_tool textgen -d fixie-ai/boolq-audio -u fixie-ai/bar -c explanation -b https://api.fireworks.ai/inference/v1 -k $FIREWORKS_API_KEY -m accounts/fireworks/models/llama-v3-8b-instruct
 #   just ds_tool textgen -d ylacombe/expresso -u fixie-ai/expresso -c continuation -T @expresso_template.txt
 #   just ds_tool textgen --new_column_name continuation --dataset_name openslr/librispeech_asr --dataset_subset clean --dataset_split train.360 \
-#        --shuffle --format_fields text --upload_name fixie-ai/librispeech_asr --private --base_url https://api.fireworks.ai/inference/v1 \
+#        --shuffle --upload_name fixie-ai/librispeech_asr --private --base_url https://api.fireworks.ai/inference/v1 \
 #        --api_key $FIREWORKS_API_KEY --token $HF_TOKEN --language_model accounts/fireworks/models/llama-v3-8b-instruct \
 #        --template @ultravox/tools/ds_tool/continuation.jinja --max_tokens 64 --num_workers 30 --writer_batch_size 30
 @dataclasses.dataclass
