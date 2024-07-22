@@ -28,6 +28,13 @@ class WerResult:
 
 
 @dataclasses.dataclass
+class CometResult:
+    """Score is computed by comparing the source, reference, and translation using a trained regression model."""
+
+    score: float
+
+
+@dataclasses.dataclass
 class ExactMatchResult:
     """Score is the 0-1 evaluation of the accuracy of the generated answer being equal to expected answer."""
 
@@ -35,4 +42,5 @@ class ExactMatchResult:
     reason: str
 
 
-Result = Union[InstructResult, WerResult, ExactMatchResult]
+Result = Union[InstructResult, WerResult, ExactMatchResult, CometResult]
+

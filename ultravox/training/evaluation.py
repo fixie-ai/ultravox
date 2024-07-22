@@ -58,6 +58,10 @@ class EvalScenario:
 
 
 EVAL_SCENARIOS = [
+    EvalScenario("covost2_en_fr__comet", "covost2:en_fr", "comet"),
+    EvalScenario(
+        "covost2_en_fr__comet__text_only", "covost2:en_fr", "comet", include_audio=False
+    ),
     EvalScenario("anyinstruct__instruct_follow", "anyinstruct", "instruct"),
     EvalScenario(
         "boolq__binary", "boolq_extended", "exact_match_last_word", new_tokens=128
