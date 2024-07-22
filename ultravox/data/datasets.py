@@ -547,7 +547,7 @@ class QAVoiceDatasetMixin(VoiceDataset):
 
     # TODO: combine `_get_query_prompt` and `_get_answer_messages` into a single method
     # and use this mixin for all non-ASR datasets.
-    def _get_query_prompt(self, question_str: str, context: str) -> str:
+    def _get_query_prompt(self, question_str: str, context: str) -> Optional[str]:
         """
         Creates a random prompt for a QA sample with a passage and question.
 
@@ -556,6 +556,10 @@ class QAVoiceDatasetMixin(VoiceDataset):
             Question: {question}
             {optional-prompt-suffix}
         """
+        if len(context) > self._args.max_context_length:
+            # Skip samples with long context
+            return None
+
         if self._args.prompt:
             prompt = self._args.prompt
         else:
@@ -603,15 +607,14 @@ class BoolQWithExtendedAnswerDataset(BoolQDataset, QAVoiceDatasetMixin):
             <|assistant|> {short_explanation}
             Answer: {answer}
         """
-        if len(row["passage"]) > self._args.max_context_length:
-            # Skip samples with long context
-            return None
-
         answer = "True" if row["answer"] else "False"
         answer_prompt = self._choice(self.ANSWER_PREFIX)
         user_message = self._get_query_prompt(
             question_str=row["question"], context=row["passage"]
         )
+        if user_message is None:
+            # Skips samples with long context
+            return None
 
         messages = _get_messages(
             user_message, f"{row['explanation']}\n{answer_prompt}{answer}"
@@ -648,13 +651,14 @@ class HeySQuADHumanDataset(QAVoiceDatasetMixin):
         if row["is_impossible"] or not row["answers"]:
             # Skip samples with no answer
             return None
-        if len(row["context"]) > self._args.max_context_length:
-            # Skip samples with long context
-            return None
 
         prompt = self._get_query_prompt(
             question_str=row["question"], context=row["context"]
         )
+        if prompt is None:
+            # Skips samples with long context
+            return None
+
         messages = _get_messages(prompt, row["answers"][0]["text"])
         return self._make_sample(
             messages, self._get_audio(row), audio_transcript=row["question"]
@@ -692,13 +696,13 @@ class SlueSQA5Dataset(QAVoiceDatasetMixin):
             Question: {question}
             <|assistant|> {answer}
         """
-        if len(row["raw_document_text"]) > self._args.max_context_length:
-            # Skip samples with long context
-            return None
-
         prompt = self._get_query_prompt(
             question_str=row["raw_question_text"], context=row["raw_document_text"]
         )
+        if prompt is None:
+            # Skips samples with long context
+            return None
+
         messages = _get_messages(prompt, row["answer_spans"]["answer"][0])
         return self._make_sample(
             messages,
