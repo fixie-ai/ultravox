@@ -189,7 +189,7 @@ def main(args: DatasetToolArgs):
         raise ValueError("Cannot upload multiple splits to a single split")
 
     hub_args: Dict[str, Any] = {
-        "config_name": args.upload_subset if args.upload_subset else "default",
+        "config_name": args.upload_subset or "default",
         "token": args.token or os.environ.get("HF_TOKEN"),
         "revision": args.upload_branch,
         "private": args.private,
