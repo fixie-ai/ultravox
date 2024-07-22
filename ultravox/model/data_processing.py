@@ -74,7 +74,7 @@ class UltravoxDataproc(datasets.Dataproc):
             # One reason is that there's very little randomness in the prompt, so the model would be forced to memorize it.
             #
             # Example (-100 is the ignore index):
-            #   Tokens: <user> Transcribe <|audio|> </s> <assistant> Brown fox jumps over the lazy dog </s>
+            #   Tokens: <user> Transcribe\n<|audio|> </s> <assistant> Brown fox jumps over the lazy dog </s>
             #   Labels:  -100    -100       -100    -100 <assistant> Brown fox jumps over the lazy dog </s>
             #
             # Note: The above might look weird because I'm mixing token IDs and text, but that's just for illustration.

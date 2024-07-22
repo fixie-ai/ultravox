@@ -29,7 +29,7 @@ from ultravox.training import config_base
 from ultravox.training import ddp_utils
 from ultravox.training import evaluation
 
-INPUT_EXAMPLE = {"text": "Transcribe <|audio|>", "audio": b"\x00\x00" * 16000}
+INPUT_EXAMPLE = {"text": "Transcribe\n<|audio|>", "audio": b"\x00\x00" * 16000}
 OUTPUT_EXAMPLE = {"text": "Hello, world!"}
 
 
