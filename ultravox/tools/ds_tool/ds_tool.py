@@ -10,7 +10,7 @@ import simple_parsing
 from jinja2 import StrictUndefined
 from jinja2 import TemplateError
 
-from ultravox.data.text_proc import format_asr_text
+from ultravox.data import text_proc
 from ultravox.tools.ds_tool import caching
 from ultravox.tools.ds_tool import tts
 
@@ -49,7 +49,7 @@ class TtsTask:
 
     def _map_sample(self, sample):
         for field in self.format_fields:
-            sample[field] = format_asr_text(sample[field])
+            sample[field] = text_proc.format_asr_text(sample[field])
         # using a Jinja template for some added flexibility
         # The {{ var }} syntax is how Jinja denotes variables
         text = jinja2.Template("{{" + self.column_name + "}}").render(**sample)
@@ -103,7 +103,7 @@ class TextGenerationTask:
 
     def _map_sample(self, sample):
         for field in self.format_fields:
-            sample[field] = format_asr_text(sample[field])
+            sample[field] = text_proc.format_asr_text(sample[field])
 
         try:
             rendered = jinja2.Template(self.template, undefined=StrictUndefined).render(
