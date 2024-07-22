@@ -218,7 +218,7 @@ class VoiceDatasetArgs:
 
 
 def _get_messages(
-    *turns: List[str], sys_prompt: Optional[str] = None, assistant_last: bool = True
+    *turns: str, sys_prompt: Optional[str] = None, assistant_last: bool = True
 ) -> List[Dict[str, str]]:
     """
     Convert a list of strings into a list of messages, alternating between user and assistant.
