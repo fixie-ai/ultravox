@@ -7,6 +7,8 @@ import datasets
 import jinja2
 import openai
 import simple_parsing
+from jinja2 import StrictUndefined
+from jinja2 import TemplateError
 
 from ultravox.data.text_proc import format_asr_text
 from ultravox.tools.ds_tool import caching
@@ -51,6 +53,17 @@ class TtsTask:
         # using a Jinja template for some added flexibility
         # The {{ var }} syntax is how Jinja denotes variables
         text = jinja2.Template("{{" + self.column_name + "}}").render(**sample)
+
+        try:
+            text = jinja2.Template("{{" + self.column_name + "}}").render(**sample)
+        except TemplateError as e:
+            print(f"Error rendering template: {e}")
+            print(f"column_name: {self.column_name}")
+            print(f"sample keys: {list(sample.keys())}")
+            raise ValueError(
+                f"Template rendering failed. Make sure column_name exists in the sample."
+            ) from e
+
         text = text["text"] if isinstance(text, dict) else text
         sample[self.audio_column_name] = tts_client.tts(text, self.voice)
         return sample
@@ -91,7 +104,18 @@ class TextGenerationTask:
     def _map_sample(self, sample):
         for field in self.format_fields:
             sample[field] = format_asr_text(sample[field])
-        rendered = jinja2.Template(self.template).render(**sample, json_dump=json.dumps)
+
+        try:
+            rendered = jinja2.Template(self.template, undefined=StrictUndefined).render(
+                **sample, json_dump=json.dumps
+            )
+        except TemplateError as e:
+            print(f"Error rendering template: {e}")
+            print(f"template: {self.template}")
+            print(f"sample keys: {list(sample.keys())}")
+            raise ValueError(
+                f"Template rendering failed. Make sure all keys in the template exist in the sample."
+            ) from e
 
         if self.json_mode:
             turns = json.loads(rendered)
