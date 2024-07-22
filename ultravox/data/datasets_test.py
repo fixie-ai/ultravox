@@ -126,11 +126,11 @@ def test_num_prompts():
     )
     assert (
         samples[2].messages[0]["content"]
-        == "Transcribe exactly what is said here <|audio|>"
+        == "Transcribe exactly what is said here\n<|audio|>"
     )
     assert (
         samples[3].messages[0]["content"]
-        == "Transcribe exactly what is said here <|audio|>"
+        == "Transcribe exactly what is said here\n<|audio|>"
     )
 
 
