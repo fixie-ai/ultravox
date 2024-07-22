@@ -162,10 +162,13 @@ def main() -> None:
     # Prepare dataset, subsetting if needed
     train_dataset: data.IterableDataset
     val_datasets: Dict[str, data.IterableDataset]
+    # We use multiple validation sets here so that the results are comparable even when training set changes
+    # To make sure we can compare training and validation loss (e.g. for fine-tuning), we keep a special set
+    # called "matchtrain" that uses the same data as the training set.
     val_sets = dict(
         [("matchtrain", args.data_sets)]
         + [(x, [x]) for x in args.val_sets]
-        + [(f"text_{x}", [x]) for x in args.val_sets]  # TODO: include ASR datasets?
+        + [(f"text_{x}", [x]) for x in args.val_sets]
     )
     if is_master:
         train_dataset = prepare_dataset(
