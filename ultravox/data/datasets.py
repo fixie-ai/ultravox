@@ -29,8 +29,8 @@ ANSWER_TASK = "answer"
 
 TRANSCRIBE_PROMPTS = [
     # from Gazelle
-    "Transcribe <|audio|>",
-    "Transcribe exactly what is said here <|audio|>",
+    "Transcribe\n<|audio|>",
+    "Transcribe exactly what is said here\n<|audio|>",
     "Repeat exactly what is written here: <|audio|>",
     "Write exactly what was said: <|audio|>",
     "First listen to the clip. Then, transcribe exactly what is said. <|audio|>",
@@ -217,6 +217,30 @@ class VoiceDatasetArgs:
             self.split = DatasetSplit(self.split.lower())
 
 
+def _get_messages(
+    *turns: List[str], sys_prompt: Optional[str] = None, assistant_last: bool = True
+) -> List[Dict[str, str]]:
+    """
+    Convert a list of strings into a list of messages, alternating between user and assistant.
+    If `sys_prompt` is set, it is prepended as a system message.
+    If `assistant_last` is True, the assistant's message is the last one.
+    """
+    messages = []
+
+    if sys_prompt:
+        messages.append({"role": "system", "content": sys_prompt})
+
+    roles = ["user", "assistant"]
+
+    # Make sure the last turn is the assistant's iff assistant_last is True.
+    if (len(turns) + assistant_last) % 2 == 0:
+        roles = roles[::-1]
+
+    messages += [{"role": roles[i % 2], "content": c} for i, c in enumerate(turns)]
+
+    return messages
+
+
 class VoiceDataset(abc.ABC, data.IterableDataset):
     """
     Base class for streaming voice datasets.
@@ -312,19 +336,13 @@ class VoiceDataset(abc.ABC, data.IterableDataset):
     ) -> List[Dict[str, str]]:
         prompt = self._get_answer_prompt() if self._args.include_audio else question
         user_content = f"{context}\n\n{prompt}" if context else prompt
-        return [
-            {"role": "user", "content": user_content},
-            {"role": "assistant", "content": answer},
-        ]
+        return _get_messages(user_content, answer)
 
     def _get_transcribe_messages(self, text: str) -> List[Dict[str, str]]:
         prompt = self._get_transcribe_prompt()
         if not self._args.include_audio:
             prompt = prompt.replace("<|audio|>", text)
-        return [
-            {"role": "user", "content": prompt},
-            {"role": "assistant", "content": text},
-        ]
+        return _get_messages(prompt, text)
 
     def _get_audio(
         self, row: transformers.BatchFeature, column_name: str = "audio"
@@ -527,6 +545,8 @@ class QAVoiceDatasetMixin(VoiceDataset):
     # In most cases there is no extra prompt-suffix needed
     PROMPT_SUFFIXES = [""]
 
+    # TODO: combine `_get_query_prompt` and `_get_answer_messages` into a single method
+    # and use this mixin for all non-ASR datasets.
     def _get_query_prompt(self, question_str: str, context: str) -> str:
         """
         Creates a random prompt for a QA sample with a passage and question.
@@ -592,13 +612,10 @@ class BoolQWithExtendedAnswerDataset(BoolQDataset, QAVoiceDatasetMixin):
         user_message = self._get_query_prompt(
             question_str=row["question"], context=row["passage"]
         )
-        messages = [
-            {"role": "user", "content": user_message},
-            {
-                "role": "assistant",
-                "content": f"{row['explanation']}\n{answer_prompt}{answer}",
-            },
-        ]
+
+        messages = _get_messages(
+            user_message, f"{row['explanation']}\n{answer_prompt}{answer}"
+        )
 
         return self._make_sample(
             messages, self._get_audio(row), audio_transcript=row["question"]
@@ -638,10 +655,7 @@ class HeySQuADHumanDataset(QAVoiceDatasetMixin):
         prompt = self._get_query_prompt(
             question_str=row["question"], context=row["context"]
         )
-        messages = [
-            {"role": "user", "content": prompt},
-            {"role": "assistant", "content": row["answers"][0]["text"]},
-        ]
+        messages = _get_messages(prompt, row["answers"][0]["text"])
         return self._make_sample(
             messages, self._get_audio(row), audio_transcript=row["question"]
         )
@@ -682,15 +696,10 @@ class SlueSQA5Dataset(QAVoiceDatasetMixin):
             # Skip samples with long context
             return None
 
-        print(row["question_id"], f"len spans: {len(row['answer_spans']['answer'])}")
-
         prompt = self._get_query_prompt(
             question_str=row["raw_question_text"], context=row["raw_document_text"]
         )
-        messages = [
-            {"role": "user", "content": prompt},
-            {"role": "assistant", "content": row["answer_spans"]["answer"][0]},
-        ]
+        messages = _get_messages(prompt, row["answer_spans"]["answer"][0])
         return self._make_sample(
             messages,
             self._get_audio(row, "question_audio"),
@@ -842,10 +851,8 @@ class SodaDataset(VoiceDataset):
 
         sys_prompt = self._choice(self.SYS_PROMPTS)
 
-        messages = [{"role": "system", "content": sys_prompt}]
-        messages += [
-            {"role": roles[i % 2], "content": turn} for i, turn in enumerate(turns)
-        ]
+        messages = _get_messages(*turns[:-1], sys_prompt=sys_prompt)
+
         messages[-1]["content"] = row["alt_last_turn"]
         if self._args.include_audio:
             messages[-2]["content"] = "<|audio|>"
