@@ -26,7 +26,6 @@ class TtsTask:
     audio_column_name: Optional[str] = simple_parsing.field(default=None, alias="-a")
     voice: Optional[str] = simple_parsing.field(default=None, alias="-V")
     sample_rate: int = simple_parsing.field(default=16000, alias="-r")
-    write_batch_size: int = 1000
     format_fields: List[str] = simple_parsing.field(default_factory=list)
 
     def __post_init__(self):
@@ -39,10 +38,12 @@ class TtsTask:
             provider=self.implementation,
         )
 
-    def map_split(self, ds_split: datasets.Dataset, num_proc: int) -> datasets.Dataset:
+    def map_split(
+        self, ds_split: datasets.Dataset, num_proc: int, writer_batch_size: int
+    ) -> datasets.Dataset:
         print(f'TTS mapping "{self.column_name}" to "{self.audio_column_name}"...')
         return ds_split.map(
-            self._map_sample, num_proc=num_proc, writer_batch_size=self.write_batch_size
+            self._map_sample, num_proc=num_proc, writer_batch_size=writer_batch_size
         ).cast_column(
             self.audio_column_name, datasets.Audio(sampling_rate=self.sample_rate)
         )
@@ -80,7 +81,6 @@ class TextGenerationTask:
     api_key: Optional[str] = simple_parsing.field(default=None, alias="-k")
     max_tokens: int = 128
     temperature: float = 0
-    write_batch_size: int = 1000
     format_fields: List[str] = simple_parsing.field(default_factory=list)
 
     def __post_init__(self):
@@ -95,10 +95,12 @@ class TextGenerationTask:
             with open(self.template[1:], "r") as template_file:
                 self.template = template_file.read()
 
-    def map_split(self, ds_split: datasets.Dataset, num_proc: int) -> datasets.Dataset:
+    def map_split(
+        self, ds_split: datasets.Dataset, num_proc: int, writer_batch_size: int
+    ) -> datasets.Dataset:
         print(f'Generating "{self.new_column_name}" with template:\n{self.template}')
         return ds_split.map(
-            self._map_sample, num_proc=num_proc, writer_batch_size=self.write_batch_size
+            self._map_sample, num_proc=num_proc, writer_batch_size=writer_batch_size
         )
 
     def _map_sample(self, sample):
@@ -142,7 +144,7 @@ class TextGenerationTask:
 #   just ds_tool textgen --new_column_name continuation --dataset_name openslr/librispeech_asr --dataset_subset clean --dataset_split train.360 \
 #        --shuffle --format_fields text --upload_name fixie-ai/librispeech_asr --private --base_url https://api.fireworks.ai/inference/v1 \
 #        --api_key $FIREWORKS_API_KEY --token $HF_TOKEN --language_model accounts/fireworks/models/llama-v3-8b-instruct \
-#        --template @ultravox/tools/ds_tool/continuation.jinja --max_tokens 64 --num_workers 30 --write_batch_size 30
+#        --template @ultravox/tools/ds_tool/continuation.jinja --max_tokens 64 --num_workers 30 --writer_batch_size 30
 @dataclasses.dataclass
 class DatasetToolArgs:
     # HF source dataset parameters
@@ -155,6 +157,7 @@ class DatasetToolArgs:
     shuffle_seed: int = simple_parsing.field(default=42)
     num_samples: Optional[int] = simple_parsing.field(default=None, alias="-n")
     num_workers: int = simple_parsing.field(default=16, alias="-w")
+    writer_batch_size: int = simple_parsing.field(default=1000)
 
     # HF destination dataset parameters
     upload_name: Optional[str] = simple_parsing.field(default=None, alias="-u")
@@ -210,7 +213,9 @@ def main(args: DatasetToolArgs):
             ds_split = ds_split.shuffle(seed=args.shuffle_seed)
         if args.num_samples:
             ds_split = ds_split.select(range(args.num_samples))
-        ds_split = args.task.map_split(ds_split, args.num_workers)
+        ds_split = args.task.map_split(
+            ds_split, args.num_workers, args.writer_batch_size
+        )
 
         upload_split = args.upload_split or split
 
