@@ -176,7 +176,6 @@ class DatasetToolArgs:
     )
 
     def __post_init__(self):
-        assert self.dataset_subset, "dataset_subset must be specified"
         if not self.upload_subset:
             self.upload_subset = self.dataset_subset
         if self.dataset_split and not self.upload_split:
@@ -197,7 +196,7 @@ def main(args: DatasetToolArgs):
         raise ValueError("Cannot upload multiple splits to a single split")
 
     hub_args: Dict[str, Any] = {
-        "config_name": args.upload_subset,
+        "config_name": args.upload_subset if args.upload_subset else "default",
         "token": args.token or os.environ.get("HF_TOKEN"),
         "revision": args.upload_branch,
         "private": args.private,
