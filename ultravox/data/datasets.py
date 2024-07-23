@@ -877,13 +877,10 @@ class CoVoST2Dataset(VoiceDataset):
         if not self._args.include_audio:
             prompt.replace("<|audio|>", transcript)
 
-        messages = [
-            {"role": "user", "content": prompt},
-            {"role": "assistant", "content": translation},
-        ]
-
         return self._make_sample(
-            messages, self._get_audio(row), audio_transcript=transcript
+            _get_messages(prompt, translation),
+            self._get_audio(row),
+            audio_transcript=transcript,
         )
 
 

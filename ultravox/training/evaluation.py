@@ -54,13 +54,14 @@ class EvalScenario:
     metric: str
     include_audio: bool = True
     include_context: bool = True
+    # do_transcribe: bool = False
     new_tokens: Optional[int] = None
 
 
 EVAL_SCENARIOS = [
-    EvalScenario("covost2_en_fr__comet", "covost2:en_fr", "comet"),
+    EvalScenario("covost2_en_fa__comet", "covost2:en_fa", "comet"),
     EvalScenario(
-        "covost2_en_fr__comet__text_only", "covost2:en_fr", "comet", include_audio=False
+        "covost2_en_fa__comet__text_only", "covost2:en_fa", "comet", include_audio=False
     ),
     EvalScenario("anyinstruct__instruct_follow", "anyinstruct", "instruct"),
     EvalScenario(

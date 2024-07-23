@@ -1,16 +1,21 @@
 import contextlib
-from typing import List, TypeVar
+from typing import List, TypeVar, Optional
 
 import torch.distributed
 from torch.utils import data
 
 
 @contextlib.contextmanager
-def run_on_master_first(is_master: bool):
+def run_on_master_first(is_master: Optional[bool] = None):
     """
     If using DDP, allows the master process to run the enclosed code first.
     This is useful when only one process should download a model or other resources first to avoid race conditions.
     """
+    if is_master is None:
+        is_master = (
+            not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0
+        )
+
     if is_master:
         yield
         if torch.distributed.is_initialized():
