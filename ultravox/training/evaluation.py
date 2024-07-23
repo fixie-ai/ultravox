@@ -74,7 +74,7 @@ EVAL_SCENARIOS = [
         include_audio=False,
     ),
     EvalScenario(
-        "covost2_es_en__bleu__text_only", "covost2:es_en", "bleu", unclude_audio=False
+        "covost2_es_en__bleu__text_only", "covost2:es_en", "bleu", include_audio=False
     ),
     # SQA scenarios
     EvalScenario("anyinstruct__instruct_follow", "anyinstruct", "instruct"),
