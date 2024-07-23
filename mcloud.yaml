@@ -10,8 +10,7 @@ integrations:
     git_branch: $UV_BRANCH
     pip_install: poetry==1.7.1
 command: >-
-  cd ultravox && poetry install --no-dev && poetry run torchrun --nproc_per_node=8 -m ultravox.training.train --config_path ultravox/training/configs/$UV_CONFIG
+  cd ultravox && poetry install --no-dev && poetry run torchrun --nproc_per_node=8 -m ultravox.training.train --config_path ultravox/training/configs/llama3_whisper.yaml
 env_variables:
   MLFLOW_TRACKING_URI: databricks
   UV_BRANCH: main
-  UV_CONFIG: asr_llama.yaml
