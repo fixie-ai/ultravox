@@ -58,33 +58,37 @@ class EvalScenario:
 
 
 EVAL_SCENARIOS = [
-    EvalScenario("anyinstruct__instruct_follow", "anyinstruct", "instruct"),
+    EvalScenario("covost2_en_fa__bleu", "covost2:en_fa", "bleu"),
     EvalScenario(
-        "boolq__binary", "boolq_extended", "exact_match_last_word", new_tokens=128
+        "covost2_en_fa__bleu__text_only", "covost2:en_fa", "bleu", include_audio=False
     ),
-    EvalScenario("boolq__wer", "boolq_in", "asr"),
-    EvalScenario("soda__sensible_generation", "soda", "conversation", new_tokens=64),
-    # Text-only scenarios: tests for catastrophic forgetting.
-    EvalScenario(
-        "anyinstruct__instruct_follow__text_only",
-        "anyinstruct",
-        "instruct",
-        include_audio=False,
-    ),
-    EvalScenario(
-        "boolq__binary__text_only",
-        "boolq_extended",
-        "exact_match_last_word",
-        new_tokens=128,
-        include_audio=False,
-    ),
-    EvalScenario(
-        "soda__sensible_generation__text_only",
-        "soda",
-        "conversation",
-        new_tokens=64,
-        include_audio=False,
-    ),
+    # EvalScenario("anyinstruct__instruct_follow", "anyinstruct", "instruct"),
+    # EvalScenario(
+    #     "boolq__binary", "boolq_extended", "exact_match_last_word", new_tokens=128
+    # ),
+    # EvalScenario("boolq__wer", "boolq_in", "asr"),
+    # EvalScenario("soda__sensible_generation", "soda", "conversation", new_tokens=64),
+    # # Text-only scenarios: tests for catastrophic forgetting.
+    # EvalScenario(
+    #     "anyinstruct__instruct_follow__text_only",
+    #     "anyinstruct",
+    #     "instruct",
+    #     include_audio=False,
+    # ),
+    # EvalScenario(
+    #     "boolq__binary__text_only",
+    #     "boolq_extended",
+    #     "exact_match_last_word",
+    #     new_tokens=128,
+    #     include_audio=False,
+    # ),
+    # EvalScenario(
+    #     "soda__sensible_generation__text_only",
+    #     "soda",
+    #     "conversation",
+    #     new_tokens=64,
+    #     include_audio=False,
+    # ),
 ]
 
 
