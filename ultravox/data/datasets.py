@@ -875,7 +875,7 @@ class CoVoST2Dataset(VoiceDataset):
         transcript = row["sentence"]
         translation = row["translation"]
         if not self._args.include_audio:
-            prompt.replace("<|audio|>", transcript)
+            prompt = prompt.replace("<|audio|>", transcript)
 
         return self._make_sample(
             _get_messages(prompt, translation),
