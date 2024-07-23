@@ -203,11 +203,7 @@ def main() -> None:
                 train_on_inputs=args.train_on_inputs,
                 repeat_data=args.repeat_data,
                 processor=processor,
-                num_samples=(
-                    args.val_num_samples
-                    if k == "matchtrain"
-                    else args.val_num_samples // 2
-                ),
+                num_samples=args.val_num_samples,
                 data_args=val_ds_args_text if k.startswith("text_") else val_ds_args,
             )
             for k in val_sets
