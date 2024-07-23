@@ -16,7 +16,7 @@ class DemoConfig:
     #    runs/llama2_asr_gigaspeech/checkpoint-1000/
     #    wandb://fixie/ultravox/model-llama2_asr_gigaspeech:v0
     model_path: str = "fixie-ai/ultravox"
-    default_prompt: str = "Transcribe <|audio|>"
+    default_prompt: str = "Transcribe\n<|audio|>"
 
 
 def main():
@@ -32,7 +32,7 @@ def main():
         gr.Audio(label="Audio", show_download_button=True),
     ]
     outputs = [gr.Textbox(label="Output")]
-    examples = [["Transcribe <|audio|>", "examples/test16.wav"]]
+    examples = [["Transcribe\n<|audio|>", "examples/test16.wav"]]
 
     gr.Interface(fn=wrapper, inputs=inputs, outputs=outputs, examples=examples).launch(
         share=True

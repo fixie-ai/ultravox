@@ -108,7 +108,7 @@ def test_transcribe_dataset():
     sample = next(iter(ds))
     assert isinstance(sample, datasets.VoiceSample)
     assert sample.messages == [
-        {"role": "user", "content": "Transcribe <|audio|>"},
+        {"role": "user", "content": "Transcribe\n<|audio|>"},
         {"role": "assistant", "content": "0"},
     ]
     assert np.array_equal(sample.audio, np.zeros(256))
@@ -119,18 +119,18 @@ def test_transcribe_dataset():
 def test_num_prompts():
     ds = FakeTranscribeDataset(5, datasets.VoiceDatasetArgs(num_prompts=3))
     samples = list(ds)
-    assert samples[0].messages[0]["content"] == "Transcribe <|audio|>"
+    assert samples[0].messages[0]["content"] == "Transcribe\n<|audio|>"
     assert (
         samples[1].messages[0]["content"]
         == "Repeat exactly what is written here: <|audio|>"
     )
     assert (
         samples[2].messages[0]["content"]
-        == "Transcribe exactly what is said here <|audio|>"
+        == "Transcribe exactly what is said here\n<|audio|>"
     )
     assert (
         samples[3].messages[0]["content"]
-        == "Transcribe exactly what is said here <|audio|>"
+        == "Transcribe exactly what is said here\n<|audio|>"
     )
 
 
@@ -168,14 +168,14 @@ def _create_and_validate_sample(target_dtype: str = "float32"):
     # kHz, with an amplitude of 0.1, and the specified dtype.
     array = _create_sine_wave(target_dtype=target_dtype)
     sample = datasets.VoiceSample.from_prompt_and_raw(
-        "Transcribe <|audio|>", array, 16000
+        "Transcribe\n<|audio|>", array, 16000
     )
     assert sample.sample_rate == 16000
     assert sample.audio is not None, "sample.audio should not be None"
     assert len(sample.audio) == 16000
     assert sample.audio.dtype == np.float32
     assert sample.messages == [
-        {"role": "user", "content": "Transcribe <|audio|>"},
+        {"role": "user", "content": "Transcribe\n<|audio|>"},
     ]
     # Serialize and deserialize the sample.
     json = sample.to_json()
@@ -208,5 +208,29 @@ def test_create_sample__raises_on_unsupported_dtype():
     with pytest.raises(AssertionError):
         array = np.ndarray(shape=(16000,), dtype=np.uint8)
         sample = datasets.VoiceSample.from_prompt_and_raw(
-            "Transcribe <|audio|>", array, 16000
+            "Transcribe\n<|audio|>", array, 16000
         )
+
+
+def test_get_messages():
+    messages = datasets._get_messages("Yo!", "Hi!")
+    assert messages == [
+        {"role": "user", "content": "Yo!"},
+        {"role": "assistant", "content": "Hi!"},
+    ]
+
+    messages = datasets._get_messages(
+        "Yo!", "Hi!", assistant_last=False, sys_prompt="Be nice!"
+    )
+    assert messages == [
+        {"role": "system", "content": "Be nice!"},
+        {"role": "assistant", "content": "Yo!"},
+        {"role": "user", "content": "Hi!"},
+    ]
+
+    messages = datasets._get_messages("A", "B", "C")
+    assert messages == [
+        {"role": "assistant", "content": "A"},
+        {"role": "user", "content": "B"},
+        {"role": "assistant", "content": "C"},
+    ]

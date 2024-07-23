@@ -152,7 +152,7 @@ class UltravoxProcessor(transformers.ProcessorMixin):
                 data["audio_token_start_idx"] = [start_idx]
 
                 # Replace the audio placeholder with the audio token.
-                #   e.g. "Transcribe <|audio|>" -> "Transcribe </s></s></s></s></s></s></s></s>"
+                #   e.g. "Transcribe\n<|audio|>" -> "Transcribe </s></s></s></s></s></s></s></s>"
                 #        where the number of </s> is the number of audio frames.
                 text = text.replace(
                     self.audio_placeholder,

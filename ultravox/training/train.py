@@ -1,3 +1,4 @@
+import copy
 import dataclasses
 import glob
 import logging
@@ -5,7 +6,7 @@ import os
 import re
 import sys
 from datetime import datetime
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import datasets as hf_datasets
 import safetensors.torch
@@ -28,7 +29,7 @@ from ultravox.training import config_base
 from ultravox.training import ddp_utils
 from ultravox.training import evaluation
 
-INPUT_EXAMPLE = {"text": "Transcribe <|audio|>", "audio": b"\x00\x00" * 16000}
+INPUT_EXAMPLE = {"text": "Transcribe\n<|audio|>", "audio": b"\x00\x00" * 16000}
 OUTPUT_EXAMPLE = {"text": "Hello, world!"}
 
 
@@ -160,11 +161,18 @@ def main() -> None:
         f"Using dtype and device (world_size): {dtype}, {device} ({world_size})"
     )
     model.to(device=device, dtype=dtype)
-    # TODO: check if the whole model can now be moved to dtype instead
 
     # Prepare dataset, subsetting if needed
     train_dataset: data.IterableDataset
-    val_dataset: data.IterableDataset
+    val_datasets: Dict[str, data.IterableDataset]
+    # We use multiple validation sets here so that the results are comparable even when training set changes
+    # To make sure we can compare training and validation loss (e.g. for fine-tuning), we keep a special set
+    # called "matchtrain" that uses the same data as the training set.
+    val_sets = dict(
+        [("matchtrain", args.data_sets)]
+        + [(x, [x]) for x in args.val_sets]
+        + [(f"text_{x}", [x]) for x in args.val_sets]
+    )
     if is_master:
         train_dataset = prepare_dataset(
             dataset_names=args.data_sets,
@@ -182,21 +190,27 @@ def main() -> None:
                 mds_batch_size=args.batch_size,
             ),
         )
-        val_dataset = prepare_dataset(
-            dataset_names=args.data_sets,
-            train_on_inputs=args.train_on_inputs,
-            repeat_data=args.repeat_data,
-            processor=processor,
-            num_samples=args.val_num_samples,
-            data_args=datasets.VoiceDatasetArgs(
-                num_prompts=1,
-                data_dir=args.data_dir,
-                shuffle=False,
-                max_audio_duration_secs=16,
-                use_mds=args.mds,
-                mds_batch_size=args.batch_size,
-            ),
+        val_ds_args = datasets.VoiceDatasetArgs(
+            num_prompts=1,
+            data_dir=args.data_dir,
+            shuffle=False,
+            max_audio_duration_secs=16,
+            use_mds=args.mds,
+            mds_batch_size=args.batch_size,
         )
+        val_ds_args_text = copy.copy(val_ds_args)
+        val_ds_args_text.include_audio = False
+        val_datasets = {
+            k: prepare_dataset(
+                dataset_names=val_sets[k],
+                train_on_inputs=args.train_on_inputs,
+                repeat_data=args.repeat_data,
+                processor=processor,
+                num_samples=args.val_num_samples,
+                data_args=val_ds_args_text if k.startswith("text_") else val_ds_args,
+            )
+            for k in val_sets
+        }
         logging.info(
             f"Loaded {args.data_sets} data sets, sample limit: {args.num_samples} (val sample limit: {args.val_num_samples})"
         )
@@ -204,7 +218,7 @@ def main() -> None:
         # When using DDP with split_batches=True, the primary process will distribute the batches to the workers
         # The point of this is to avoid unnecessary data processing/downloading in the workers.
         train_dataset = datasets.EmptyDataset()
-        val_dataset = datasets.EmptyDataset()
+        val_datasets = {k: datasets.EmptyDataset() for k in val_sets}
 
     # Set up the data loader
     data_collator = datasets.DataCollatorForSeq2SeqWithAudio(tokenizer=text_tokenizer)
@@ -214,7 +228,7 @@ def main() -> None:
     trainer = transformers.Seq2SeqTrainer(
         model,
         train_dataset=train_dataset,
-        eval_dataset=val_dataset,
+        eval_dataset=val_datasets,
         data_collator=data_collator,
         tokenizer=text_tokenizer,
         args=transformers.Seq2SeqTrainingArguments(
