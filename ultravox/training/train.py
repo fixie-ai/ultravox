@@ -192,6 +192,7 @@ def main() -> None:
         )
         val_ds_args = datasets.VoiceDatasetArgs(
             num_prompts=1,
+            split=datasets.DatasetSplit.VALIDATION,
             data_dir=args.data_dir,
             shuffle=False,
             max_audio_duration_secs=16,
