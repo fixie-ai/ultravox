@@ -61,7 +61,7 @@ def main() -> None:
     # multiple processes are forked when using multiple datasets.
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
     # Log model checkpoints to W&B: we can reduce to model if storage is an issue
-    os.environ["WANDB_LOG_MODEL"] = "checkpoint"
+    os.environ["WANDB_LOG_MODEL"] = "model"
     os.environ["WANDB_PROJECT"] = "ultravox"
 
     args = simple_parsing.parse(
@@ -169,8 +169,8 @@ def main() -> None:
     # To make sure we can compare training and validation loss (e.g. for fine-tuning), we keep a special set
     # called "matchtrain" that uses the same data as the training set.
     val_sets = dict(
-        [("matchtrain", args.data_sets)]
-        + [(x, [x]) for x in args.val_sets]
+        # [("matchtrain", args.data_sets)]
+        [(x, [x]) for x in args.val_sets]
         + [(f"text_{x}", [x]) for x in args.val_sets]
     )
     if is_master:
