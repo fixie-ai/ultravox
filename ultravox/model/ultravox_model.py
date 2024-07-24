@@ -16,10 +16,7 @@ from .ultravox_config import UltravoxConfig
 from .whisper_model_modified import WhisperEncoder as ModifiedWhisperEncoder
 
 
-class UltravoxModel(
-    transformers.LlamaPreTrainedModel,
-    transformers.GenerationMixin,
-):
+class UltravoxModel(transformers.LlamaPreTrainedModel):
     """
     The Ultravox model which consists of an audio encoder and a language model.
 
@@ -101,7 +98,7 @@ class UltravoxModel(
         attention_mask: Optional[torch.Tensor] = None,
         audio_token_start_idx: Optional[torch.Tensor] = None,
         audio_token_len: Optional[torch.Tensor] = None,
-        past_key_values: Optional[Tuple] = None,
+        past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
         **kwargs,
     ) -> Union[Tuple, transformers.modeling_outputs.CausalLMOutputWithPast]:
         """
@@ -166,7 +163,7 @@ class UltravoxModel(
         audio_values: Optional[torch.FloatTensor] = None,
         audio_token_start_idx: Optional[torch.Tensor] = None,
         audio_token_len: Optional[torch.Tensor] = None,
-        past_key_values: Optional[Tuple] = None,
+        past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
         attention_mask: Optional[torch.Tensor] = None,
         inputs_embeds: Optional[torch.Tensor] = None,
         **kwargs,
@@ -179,7 +176,7 @@ class UltravoxModel(
             **kwargs,
         )
 
-        if past_key_values is None and audio_values is not None:
+        if is_cache_empty(past_key_values) and audio_values is not None:
             # We only want to use audio features in the 1st generation step
             model_input["audio_values"] = audio_values
             model_input["audio_token_start_idx"] = audio_token_start_idx
@@ -318,6 +315,19 @@ class UltravoxModel(
             f" || Audio Encoder: {100 * audio_trainable_params / audio_all_params:.1f}%"
             f" || Projector: {100 * projector_trainable_params / projector_all_params:.1f}%"
         )
+
+
+def is_cache_empty(
+    past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]]
+) -> bool:
+    """
+    Check if the cache is empty.
+    """
+    if past_key_values is None:
+        return True
+    if isinstance(past_key_values, tuple):
+        return all(len(c) == 0 for c in past_key_values)
+    return past_key_values.get_seq_length() == 0
 
 
 def apply_lora(model: torch.nn.Module, lora_config: dict) -> torch.nn.Module:

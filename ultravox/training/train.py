@@ -61,7 +61,7 @@ def main() -> None:
     # multiple processes are forked when using multiple datasets.
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
     # Log model checkpoints to W&B: we can reduce to model if storage is an issue
-    os.environ["WANDB_LOG_MODEL"] = "model"
+    os.environ["WANDB_LOG_MODEL"] = "end"
     os.environ["WANDB_PROJECT"] = "ultravox"
 
     args = simple_parsing.parse(
