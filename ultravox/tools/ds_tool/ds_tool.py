@@ -60,7 +60,6 @@ class TtsTask:
                 f"Template rendering failed. Make sure column_name exists in the sample."
             ) from e
 
-        text = text["text"] if isinstance(text, dict) else text
         sample[self.audio_column_name] = tts_client.tts(text, self.voice)
         return sample
 
