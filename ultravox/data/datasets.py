@@ -805,6 +805,85 @@ class CommonVoiceDataset(VoiceDataset):
         return self._get_transcribe_sample(row, tcol="sentence")
 
 
+class CoVoST2Dataset(VoiceDataset):
+    """
+    CoVoST 2 is a large-scale multilingual speech translation corpus covering translations from 21 languages into English
+    and from English into 15 languages. The dataset is created using Mozilla's open-source Common Voice 4 database of
+    crowdsourced voice recordings. There are 2,900 hours of speech represented in the corpus.
+
+    The original Hugging Face dataset link: https://huggingface.co/datasets/facebook/covost2
+    Since this dataset requires audio files to be downloaded separately, a new dataset is created with the audio files:
+    https://huggingface.co/datasets/fixie-ai/covost2
+
+    Due to the scale of the dataset and the audio files being repeated, only a portion of the dataset was converted.
+    See [this issue](https://github.com/fixie-ai/ultravox/issues/50) for more information.
+
+    Supported subsets (En -> X):
+        'en_de', 'en_tr', 'en_fa', 'en_sv-SE', 'en_mn', 'en_zh-CN', 'en_cy',
+        'en_ca', 'en_sl', 'en_et', 'en_id', 'en_ar', 'en_ta', 'en_lv', 'en_ja'
+    Supported subsets (X -> En):
+        'fr_en', 'zh-CN_en', 'es_en'
+    """
+
+    CODE_TO_LANG = {
+        "en": "English",
+        "de": "German",
+        "tr": "Turkish",
+        "fa": "Persian",
+        "sv-SE": "Swedish",
+        "mn": "Mongolian",
+        "zh-CN": "Chinese",
+        "cy": "Welsh",
+        "ca": "Catalan",
+        "sl": "Slovenian",
+        "et": "Estonian",
+        "id": "Indonesian",
+        "ar": "Arabic",
+        "ta": "Tamil",
+        "lv": "Latvian",
+        "ja": "Japanese",
+        "fr": "French",
+        "es": "Spanish",
+    }
+
+    # We currently don't use this dataset for training, so mainly the first prompt it ever used.
+    TRANSLATE_PROMPTS = [
+        "Translate the following into {target}: <|audio|>",
+        "Translate the following into {target} language: <|audio|>",
+        "Please convert the following into {target}.\n<|audio|>",
+        "Could you translate this to {target} language?\n<|audio|>",
+        "Translate the text below to {target}.\n<|audio|>",
+        "Translate the subsequent text into {target} language. <|audio|>",
+        "Can you translate this into the {target} language?\n<|audio|>",
+        "Transform the following to {target}: <|audio|>",
+    ]
+
+    def __init__(self, args: VoiceDatasetArgs, subset: str) -> None:
+        super().__init__(args)
+        dataset = self._load_audio_dataset(
+            "fixie-ai/covost2", subset, split=args.split.value
+        )
+        langs = subset.split("_")
+        assert len(langs) == 2, f"Invalid subset: {subset}"
+        self.source_lang = self.CODE_TO_LANG[langs[0]]
+        self.target_lang = self.CODE_TO_LANG[langs[1]]
+        self._init_dataset(dataset)
+
+    def _get_sample(self, row) -> VoiceSample:
+        prompt = self._choice(self.TRANSLATE_PROMPTS).format(target=self.target_lang)
+
+        transcript = row["sentence"]
+        translation = row["translation"]
+        if not self._args.include_audio:
+            prompt = prompt.replace("<|audio|>", transcript)
+
+        return self._make_sample(
+            _get_messages(prompt, translation),
+            self._get_audio(row),
+            audio_transcript=transcript,
+        )
+
+
 class PeopleSpeechDataset(VoiceDataset):
     """
     The People's Speech Dataset is among the world's largest English speech
@@ -882,6 +961,7 @@ def create_dataset(name: str, args: VoiceDatasetArgs) -> data.IterableDataset:
         "librispeech": LibriSpeechDataset,
         "voxpopuli": VoxPopuliDataset,
         "commonvoice": CommonVoiceDataset,
+        "covost2": CoVoST2Dataset,
         "peoplespeech": PeopleSpeechDataset,
         "soda": SodaDataset,
         "dummy": LibriSpeechDummyDataset,
