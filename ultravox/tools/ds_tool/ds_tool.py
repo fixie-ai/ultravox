@@ -169,7 +169,7 @@ class DatasetToolArgs:
     )
 
     def __post_init__(self):
-        if not self.upload_subset:
+        if not self.upload_subset and self.dataset_subset:
             self.upload_subset = self.dataset_subset
         if self.dataset_split and not self.upload_split:
             self.upload_split = self.dataset_split
