@@ -169,7 +169,7 @@ def main() -> None:
     # To make sure we can compare training and validation loss (e.g. for fine-tuning), we keep a special set
     # called "matchtrain" that uses the same data as the training set.
     val_sets = dict(
-        # [("matchtrain", args.data_sets)]
+        # [("matchtrain", args.data_sets)]  # FIXME: see issue https://github.com/fixie-ai/ultravox/issues/58
         [(x, [x]) for x in args.val_sets]
         + [(f"text_{x}", [x]) for x in args.val_sets]
     )
