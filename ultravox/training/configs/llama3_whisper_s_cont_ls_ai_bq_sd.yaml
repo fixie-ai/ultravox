@@ -18,7 +18,7 @@ data_sets: ["anyinstruct", "boolq_extended", "soda"]
 
 device: "cuda"
 
-do_train: False
+# do_train: False
 
 batch_size: 2
 grad_accum_steps: 2
