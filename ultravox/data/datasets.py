@@ -955,16 +955,16 @@ class GenericVoiceDataset(VoiceDataset):
 
         dataset = datasets.concatenate_datasets(
             [
-                self._load_audio_dataset(config.path, name=config.name, split=s, streaming=config.streaming)
+                self._load_audio_dataset(config.path, name=config.name, split=s, streaming=config.streaming, shuffle=False)
                 for s in config.splits
             ]
         )
-
-        if config.num_samples:
-            dataset = dataset.select(range(config.num_samples))
         
         if self._args.shuffle:
             dataset = dataset.shuffle(seed=self._args.shuffle_seed)
+
+        if config.num_samples:
+            dataset = dataset.select(range(config.num_samples))
         
         self.user_template = config.user_template
         self.assistant_template = config.assistant_template
