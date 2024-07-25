@@ -169,8 +169,8 @@ def main() -> None:
     # To make sure we can compare training and validation loss (e.g. for fine-tuning), we keep a special set
     # called "matchtrain" that uses the same data as the training set.
     val_sets = dict(
-        [("matchtrain", args.data_sets)]
-        + [(x, [x]) for x in args.val_sets]
+        # [("matchtrain", args.data_sets)]  # FIXME: see issue https://github.com/fixie-ai/ultravox/issues/58
+        [(x, [x]) for x in args.val_sets]
         + [(f"text_{x}", [x]) for x in args.val_sets]
     )
     if is_master:
@@ -192,6 +192,7 @@ def main() -> None:
         )
         val_ds_args = datasets.VoiceDatasetArgs(
             num_prompts=1,
+            split=datasets.DatasetSplit.VALIDATION,
             data_dir=args.data_dir,
             shuffle=False,
             max_audio_duration_secs=16,

@@ -39,8 +39,8 @@ def main(args: argparse.Namespace):
         print(f"--- Sample {i} ---")
         messages = sample.messages
         assert len(messages) >= 2, f"Bad sample (messages) {len(messages)}"
-        assert messages[-1]["role"] == "user", f"Bad sample (Q role): {messages}"
-        assert messages[-2]["role"] == "assistant", f"Bad sample (A role): {messages}"
+        assert messages[-2]["role"] == "user", f"Bad sample (Q role): {messages}"
+        assert messages[-1]["role"] == "assistant", f"Bad sample (A role): {messages}"
         answer = messages[-2]["content"].replace("\n", "\\n")
         print(f"Q: {messages[-1]['content']} [\"{sample.audio_transcript}\"]")
         print(f"A: {answer}")

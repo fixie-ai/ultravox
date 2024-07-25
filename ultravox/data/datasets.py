@@ -637,7 +637,7 @@ class HeySQuADHumanDataset(QAVoiceDatasetMixin):
     def __init__(self, args: VoiceDatasetArgs) -> None:
         super().__init__(args)
         dataset = self._load_audio_dataset(
-            "yijingwu/HeySQuAD_human", split=args.split.value
+            "fixie-ai/HeySQuAD_human", split=args.split.value
         )
         self._init_dataset(dataset)
 
