@@ -1,6 +1,4 @@
-# exp_name: "llama3_whisper_s_cont_ls_ai_bq_sd"
-exp_name: "llama3_whisper_cont_librispeech_960"
-model_load_dir: "wandb://fixie/ultravox/model-llama3_whisper_s_cont_librispeech_960:v0"
+exp_name: "llama3_whisper_s_cont_librispeech_960"
 
 # Make sure to accept the license agreement on huggingface hub
 text_model: "meta-llama/Meta-Llama-3-8B-Instruct"
