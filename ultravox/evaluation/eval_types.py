@@ -35,4 +35,14 @@ class ExactMatchResult:
     reason: str
 
 
+@dataclasses.dataclass
+class BleuResult:
+    """
+    Score is the BLEU score for the generated answer.
+    Note: BLEU is supposed to be computed on a corpus level, not on a single sample.
+    """
+
+    score: float
+
+
 Result = Union[InstructResult, WerResult, ExactMatchResult]

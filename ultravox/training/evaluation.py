@@ -58,13 +58,29 @@ class EvalScenario:
 
 
 EVAL_SCENARIOS = [
+    # automatic speech recognition scenarios
+    EvalScenario("boolq__wer", "boolq_in", "asr"),
+    # automatic speech translation scenarios
+    EvalScenario("covost2_en_de__bleu", "covost2:en_de", "bleu"),
+    EvalScenario("covost2_en_zh-CN__bleu", "covost2:en_zh-CN", "bleu"),
+    EvalScenario("covost2_es_en__bleu", "covost2:es_en", "bleu"),
+    EvalScenario(
+        "covost2_en_de__bleu__text_only", "covost2:en_de", "bleu", include_audio=False
+    ),
+    EvalScenario(
+        "covost2_en_zh-CN__bleu__text_only",
+        "covost2:en_zh-CN",
+        "bleu",
+        include_audio=False,
+    ),
+    EvalScenario(
+        "covost2_es_en__bleu__text_only", "covost2:es_en", "bleu", include_audio=False
+    ),
+    # SQA scenarios
     EvalScenario("anyinstruct__instruct_follow", "anyinstruct", "instruct"),
     EvalScenario(
         "boolq__binary", "boolq_extended", "exact_match_last_word", new_tokens=128
     ),
-    EvalScenario("boolq__wer", "boolq_in", "asr"),
-    EvalScenario("soda__sensible_generation", "soda", "conversation", new_tokens=64),
-    # Text-only scenarios: tests for catastrophic forgetting.
     EvalScenario(
         "anyinstruct__instruct_follow__text_only",
         "anyinstruct",
@@ -78,6 +94,8 @@ EVAL_SCENARIOS = [
         new_tokens=128,
         include_audio=False,
     ),
+    # Conversation dialogue scenarios
+    EvalScenario("soda__sensible_generation", "soda", "conversation", new_tokens=64),
     EvalScenario(
         "soda__sensible_generation__text_only",
         "soda",
