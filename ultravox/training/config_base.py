@@ -14,7 +14,9 @@ from ultravox.model import ultravox_config
 
 class DataDictConfig(BaseModel):
     path: str  # Path to the dataset, or huggingface dataset id
-    name: str = None  # Name of the dataset, or huggingface dataset config/subset
+    name: Optional[str] = (
+        None  # Name of the dataset, or huggingface dataset config/subset
+    )
     splits: List[str] = dataclasses.field(default_factory=list)
     num_samples: Optional[int] = None
     streaming: bool = True
@@ -43,7 +45,7 @@ class TrainConfig:
     # we first parse the data_dicts as a list of dictionaries. After parsing,
     # we convert these dictionaries to DataDictConfig objects using Pydantic
     # to enforce type constraints and validation, in the __post_init__ method.
-    data_dicts: List[Dict[str, Any]] = None
+    data_dicts: Optional[List[Dict[str, Any]]] = None
 
     # In InterleaveDataset, if one dataset runs out, should we repeat it to keep
     # the ratio of samples from each dataset fixed?
