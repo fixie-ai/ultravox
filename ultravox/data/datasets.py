@@ -17,9 +17,11 @@ import streaming as mds
 import torch
 import torch.nn.functional as F
 import transformers
+import jinja2
 from torch.utils import data
 
 from ultravox.data import text_proc
+from ultravox.training import config_base
 
 SAMPLE_RATE = 16000
 
@@ -947,6 +949,52 @@ class SodaDataset(VoiceDataset):
         )
 
 
+class GenericVoiceDataset(VoiceDataset):
+    def __init__(self, args: VoiceDatasetArgs, config: config_base.DataDictConfig) -> None:
+        super().__init__(args)
+
+        dataset = datasets.concatenate_datasets(
+            [
+                self._load_audio_dataset(config.path, name=config.name, split=s, streaming=config.streaming)
+                for s in config.splits
+            ]
+        )
+
+        if config.num_samples:
+            dataset = dataset.select(range(config.num_samples))
+        
+        if self._args.shuffle:
+            dataset = dataset.shuffle(seed=self._args.shuffle_seed)
+        
+        self.user_template = config.user_template
+        self.assistant_template = config.assistant_template
+        self.transcript_template = config.transcript_template
+
+        self._init_dataset(dataset)
+
+    def _get_sample(self, row) -> VoiceSample:
+        try:
+            user_content = jinja2.Template(self.user_template, undefined=jinja2.StrictUndefined).render(**row, text_proc=text_proc)
+            assistant_content = jinja2.Template(self.assistant_template, undefined=jinja2.StrictUndefined).render(**row, text_proc=text_proc)
+            transcript = jinja2.Template(self.transcript_template, undefined=jinja2.StrictUndefined).render(**row, text_proc=text_proc)
+        except jinja2.TemplateError as e:
+            print(f"Error rendering template: {e}")
+            print(f"user_template: {self.user_template}")
+            print(f"assistant_template: {self.assistant_template}")
+            print(f"transcript_template: {self.transcript_template}")
+            print(f"sample keys: {list(row.keys())}")
+            raise ValueError(
+                f"Template rendering failed. Make sure all keys in the template exist in the sample."
+            ) from e
+
+        self._make_sample(
+            _get_messages(user_content, assistant_content),
+            self._get_audio(row),
+            audio_transcript=transcript
+        )
+
+        return self._get_transcribe_sample(row)
+
 def create_dataset(name: str, args: VoiceDatasetArgs) -> data.IterableDataset:
     DATASET_MAP: Dict[str, Any] = {
         "anyinstruct": AnyInstructAnswerDataset,
@@ -966,8 +1014,11 @@ def create_dataset(name: str, args: VoiceDatasetArgs) -> data.IterableDataset:
         "soda": SodaDataset,
         "dummy": LibriSpeechDummyDataset,
     }
-    name, *ext = name.split(":")
-    return DATASET_MAP[name](args, *ext)
+    if isinstance(name, config_base.DataDictConfig):
+        return GenericVoiceDataset(args, name)
+    else:
+        name, *ext = name.split(":")
+        return DATASET_MAP[name](args, *ext)
 
 
 class InterleaveDataset(data.IterableDataset):

@@ -1,0 +1,51 @@
+# exp_name: "llama3_whisper_s_cont_ls_ai_bq_sd"
+exp_name: "llama3_whisper_cont_librispeech_960"
+model_load_dir: "wandb://fixie/ultravox/model-llama3_whisper_s_cont_librispeech_960:v0"
+
+# Make sure to accept the license agreement on huggingface hub
+text_model: "meta-llama/Meta-Llama-3-8B-Instruct"
+audio_model: "openai/whisper-small"
+
+# max_steps: 148 # 28539 / 24 / 8
+
+# train on librispeech_960
+max_steps: 8788  # 281241 / 4 / 8
+# max_steps: 15589 # 498854 / 4 / 8 
+
+# lr_warmup_steps: 10
+# anyinstruct_out: 108_186
+# boolq: 9427
+# soda: 100_000
+# data_sets: ["anyinstruct_out", "boolq", "soda"]
+data_sets: []
+
+device: "cuda"
+
+do_train: False
+
+batch_size: 2
+grad_accum_steps: 2
+
+# num_samples: 1000
+
+report_logs_to: ["tensorboard", "wandb"]
+
+data_dicts:
+  - path: "fixie-ai/librispeech_asr"
+    name: "clean"
+    splits:
+      - "train.100"
+      - "train.360"
+      #  - train.100: 28539
+      #  - train.360: 104014
+    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
+    assistant_template: "{{ continuation }}"
+    transcript_template: "{{ text }}"
+  - path: "fixie-ai/librispeech_asr"
+    name: "other"
+    splits:
+      - "train.500"
+      #  - train.500: 148688
+    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
+    assistant_template: "{{ continuation }}"
+    transcript_template: "{{ text }}"
