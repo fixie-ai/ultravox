@@ -33,6 +33,14 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
     config_class = UltravoxConfig
     config: UltravoxConfig  # for type hinting
     _no_split_modules = ["Wav2Vec2Model", "WhisperEncoder", "LlamaDecoderLayer"]
+    # We minimize the weights in state_dict in order to reduce the size of the checkpoint
+    # The issue is that load_pretrained() uses state_dict() keys to know what keys are expected
+    # As such we have to tell is to ignore some keys that are not always in the model
+    _keys_to_ignore_on_load_unexpected = ["audio_tower.*", "language_model.*"]
+    # Usually we load encoder weights from a pretrained model, so we don't want to load the decoder weights
+    # Technically we never hit this issue because these keys are already removed from state_dict() however,
+    # but there's no harm in keeping it here for when we change that behavior.
+    _keys_to_ignore_on_load_missing = ["audio_tower.*"]
 
     def __init__(self, config: UltravoxConfig):
         super().__init__(config)
@@ -201,7 +209,12 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             if "whisper" in config.audio_config._name_or_path:
                 audio_tower = ModifiedWhisperEncoder(config.audio_config)
             else:
-                audio_tower = transformers.AutoModel.from_config(config.audio_config)
+                with transformers.modeling_utils.no_init_weights():
+                    # we only ever use from_config if the weights are retrained, hence initializing is not
+                    # required. This makes the model quite creation faster since init on CPU is quite slow.
+                    audio_tower = transformers.AutoModel.from_config(
+                        config.audio_config
+                    )
 
         if isinstance(
             audio_tower,
@@ -224,9 +237,12 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
                 config.text_model_id, attn_implementation=config._attn_implementation
             )
         else:
-            language_model = transformers.AutoModelForCausalLM.from_config(
-                config.text_config, attn_implementation=config._attn_implementation
-            )
+            with transformers.modeling_utils.no_init_weights():
+                # we only ever use from_config if the weights are retrained, hence initializing is not
+                # required. This makes the model quite creation faster since init on CPU is quite slow.
+                language_model = transformers.AutoModelForCausalLM.from_config(
+                    config.text_config, attn_implementation=config._attn_implementation
+                )
 
         language_model = apply_lora(language_model, config.text_model_lora_config)
         return language_model
