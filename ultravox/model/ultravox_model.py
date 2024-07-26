@@ -203,7 +203,12 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             if "whisper" in config.audio_config._name_or_path:
                 audio_tower = ModifiedWhisperEncoder(config.audio_config)
             else:
-                audio_tower = transformers.AutoModel.from_config(config.audio_config)
+                with transformers.modeling_utils.no_init_weights():
+                    # we only ever use from_config if the weights are retrained, hence initializing is not
+                    # required. This makes the model quite creation faster since init on CPU is quite slow.
+                    audio_tower = transformers.AutoModel.from_config(
+                        config.audio_config
+                    )
 
         if isinstance(
             audio_tower,
@@ -226,9 +231,12 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
                 config.text_model_id, attn_implementation=config._attn_implementation
             )
         else:
-            language_model = transformers.AutoModelForCausalLM.from_config(
-                config.text_config, attn_implementation=config._attn_implementation
-            )
+            with transformers.modeling_utils.no_init_weights():
+                # we only ever use from_config if the weights are retrained, hence initializing is not
+                # required. This makes the model quite creation faster since init on CPU is quite slow.
+                language_model = transformers.AutoModelForCausalLM.from_config(
+                    config.text_config, attn_implementation=config._attn_implementation
+                )
 
         language_model = apply_lora(language_model, config.text_model_lora_config)
         return language_model
