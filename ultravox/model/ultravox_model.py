@@ -33,6 +33,8 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
     config_class = UltravoxConfig
     config: UltravoxConfig  # for type hinting
     _no_split_modules = ["Wav2Vec2Model", "WhisperEncoder", "LlamaDecoderLayer"]
+    _keys_to_ignore_on_load_missing = ["audio_tower.*"]
+    _keys_to_ignore_on_load_unexpected = ["audio_tower.*", "language_model.*"]
 
     def __init__(self, config: UltravoxConfig):
         super().__init__(config)
