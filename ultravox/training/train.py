@@ -304,7 +304,7 @@ def main() -> None:
             num_procs=args.eval_num_procs,
             num_samples=args.eval_num_samples,
             max_new_tokens=args.eval_max_new_tokens,
-            log_dir=wandb.run.dir if wandb.run is not None else str(args.logs_dir),
+            log_dir=wandb.run.dir if wandb.run else str(args.logs_dir),
         )
         if is_master:
             trainer.log(metrics)

@@ -2,6 +2,7 @@ import concurrent.futures
 import dataclasses
 import functools
 import os
+import json
 from typing import List, Optional
 
 import numpy as np
@@ -170,13 +171,16 @@ def evaluate(
         print(agg_score_str)
 
         if log_dir:
+            eval_details = {
+                "score": average,
+                "confidence_interval": std,
+                "task_info": dataclasses.asdict(task),
+                "samples": [
+                    {**dataclasses.asdict(sample), "score": score}
+                    for sample, score in zip(output_samples, scores)
+                ],
+            }
             with open(os.path.join(log_dir, f"{task.name}.json"), "w") as f:
-                f.write(f"Task info: {str(task)}\n")
-                f.write(agg_score_str + "\n")
-                for sample, score in zip(output_samples, scores):
-                    f.write("-" * 20 + "\n")
-                    f.write(f"Q: {sample.question}\n")
-                    f.write(f"A: {sample.generated_answer}\n")
-                    f.write(f"X: {sample.expected_answer} [score: {score:.2f}]\n")
+                json.dump(eval_details, f, indent=1)
 
     return metrics
