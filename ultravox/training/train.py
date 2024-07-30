@@ -14,10 +14,11 @@ import simple_parsing
 import torch
 import torch.distributed
 import transformers
-import wandb
+import wandb.sdk
 from torch.distributed.elastic.multiprocessing.errors import record
 from torch.utils import data
 
+import wandb
 from ultravox.data import datasets
 from ultravox.inference import infer
 from ultravox.model import data_processing
@@ -131,6 +132,7 @@ def main() -> None:
             name=args.exp_name,
             dir="runs",
             tags=args.run_tags,
+            save_code=True,
         )
 
     if args.model_load_dir:
@@ -302,7 +304,7 @@ def main() -> None:
             num_procs=args.eval_num_procs,
             num_samples=args.eval_num_samples,
             max_new_tokens=args.eval_max_new_tokens,
-            verbose=True,
+            log_dir=wandb.run.dir if wandb.run is not None else str(args.logs_dir),
         )
         if is_master:
             trainer.log(metrics)

@@ -113,12 +113,16 @@ def evaluate(
     num_procs: int = 8,
     max_new_tokens: Optional[int] = None,
     temperature: Optional[float] = None,
-    verbose: bool = False,
+    log_dir: Optional[str] = None,
 ):
     metrics = {}
 
     world_size = int(os.environ.get("WORLD_SIZE", 1))
     local_rank = int(os.environ.get("LOCAL_RANK", 0))
+
+    if log_dir:
+        log_dir = os.path.join(log_dir, "evals")
+        os.makedirs(log_dir, exist_ok=True)
 
     for task in EVAL_SCENARIOS:
         ds_args = datasets.VoiceDatasetArgs(
@@ -156,21 +160,23 @@ def evaluate(
 
         scores = [x for x in possibly_non_scores if x is not None]
 
-        if verbose:
-            print(f"Eval for {task.dataset}:")
-            for sample, score in zip(output_samples, scores):
-                print("-" * 20)
-                print(f"Q: {sample.question}")
-                print(f"A: {sample.generated_answer}")
-                print(f"X: {sample.expected_answer} [score: {score:.2f}]")
-
         average = np.mean(scores)
         std = np.std(scores) / np.sqrt(len(scores))
         metrics[f"eval_{task.name}"] = average
         metrics[f"eval_{task.name}_std"] = std
 
-        print(
-            f"Aggregate {task.metric} score for {task.dataset}: {average:.2f} ± {std:.2f}"
-        )
+        has_audio_str = "with" if task.include_audio else "without"
+        agg_score_str = f"Aggregate {task.metric} score for {task.dataset} ({has_audio_str} audio): {average:.2f} ± {std:.2f}"
+        print(agg_score_str)
+
+        if log_dir:
+            with open(os.path.join(log_dir, f"{task.name}.json"), "w") as f:
+                f.write(f"Task info: {str(task)}\n")
+                f.write(agg_score_str + "\n")
+                for sample, score in zip(output_samples, scores):
+                    f.write("-" * 20 + "\n")
+                    f.write(f"Q: {sample.question}\n")
+                    f.write(f"A: {sample.generated_answer}\n")
+                    f.write(f"X: {sample.expected_answer} [score: {score:.2f}]\n")
 
     return metrics
