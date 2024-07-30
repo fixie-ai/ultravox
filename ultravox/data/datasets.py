@@ -847,6 +847,8 @@ class CoVoST2Dataset(VoiceDataset):
     }
 
     # We currently don't use this dataset for training, so mainly the first prompt it ever used.
+    # The "no explanation" part is important, specially for evaluations, but it's not repeated
+    # in all prompts to avoid being too repetitive in training.
     TRANSLATE_PROMPTS = [
         "Translate the following into {target}, without any explanation: <|audio|>",
         "Translate the following into {target} language, no explanation needed: <|audio|>",
