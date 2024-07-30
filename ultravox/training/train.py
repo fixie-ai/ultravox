@@ -14,11 +14,11 @@ import simple_parsing
 import torch
 import torch.distributed
 import transformers
+import wandb
 import wandb.sdk
 from torch.distributed.elastic.multiprocessing.errors import record
 from torch.utils import data
 
-import wandb
 from ultravox.data import datasets
 from ultravox.inference import infer
 from ultravox.model import data_processing
