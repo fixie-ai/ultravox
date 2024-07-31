@@ -184,7 +184,7 @@ class DatasetToolArgs:
 def main(args: DatasetToolArgs):
     ds_name = args.dataset_name
     print(f'Loading dataset "{ds_name}" for task {args.task}')
-    ds: datasets.DatasetDict = datasets.load_dataset(
+    data_dict: datasets.DatasetDict = datasets.load_dataset(
         ds_name, args.dataset_subset, split=args.dataset_split
     )
 
@@ -230,7 +230,7 @@ def main(args: DatasetToolArgs):
         for split in data_dict.keys():
             output_name = f"{split}-00000-of-00001.parquet"
             data_dict[split].to_parquet(output_name)
-            print(f"Sample {0} of {args.upload_subset}: {ds[0]}")
+            print(f"Sample {0} of {args.upload_subset}: {data_dict[0]}")
 
 
 if __name__ == "__main__":
