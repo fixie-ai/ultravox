@@ -29,7 +29,7 @@ class UltravoxDataproc(datasets.Dataproc):
             inference_mode: If True, only the input message is included in input_ids and labels, and the assistant
                 message is removed from the sample. This is used for inference (e.g. testing) since the model should
                 generate the assistant message. For training and validation, this should be False.
-            include_alt_input: If True, the alt_input_ids, alt_attention_mask, and alt_labels are included in the output, 
+            include_alt_input: If True, the alt_input_ids, alt_attention_mask, and alt_labels are included in the output,
                 computed with <|audio|> replaced by the audio transcript.
         """
         super().__init__(dataset)
@@ -81,13 +81,12 @@ class UltravoxDataproc(datasets.Dataproc):
             alt_input_ids = alt_inputs["input_ids"].squeeze_(0)
             alt_inputs["attention_mask"].squeeze_(0)
 
-
         # No need to shift the labels as the model does it internally
         labels = input_ids.clone()
 
         if self.include_alt_input:
             alt_labels = alt_input_ids.clone()
-        
+
         if not self.train_on_inputs:
             # Mask the prompt tokens and only compute loss on the assistant message, not the prompt.
             # The idea is that the model should only be able to predict the assistant message given the user message.
@@ -112,11 +111,15 @@ class UltravoxDataproc(datasets.Dataproc):
             labels[:input_text_len] = -100
 
             if self.include_alt_input:
-                alt_input_text = input_text.replace("<|audio|>", sample.audio_transcript or "")
+                alt_input_text = input_text.replace(
+                    "<|audio|>", sample.audio_transcript or ""
+                )
                 alt_input_text_len = self.processor(
                     text=alt_input_text,
                     audio=None,
-                )["input_ids"].shape[-1]
+                )[
+                    "input_ids"
+                ].shape[-1]
                 alt_labels[:alt_input_text_len] = -100
 
                 true_labels_len = len(labels) - input_text_len

@@ -1,6 +1,6 @@
 import dataclasses
-from typing import Any, Dict, List, Optional
 from enum import Enum
+from typing import Any, Dict, List, Optional
 
 import transformers
 
@@ -27,7 +27,7 @@ class LossFunction(str, Enum):
 
 
 @dataclasses.dataclass
-class LossConfig():
+class LossConfig:
     loss_function: LossFunction = LossFunction.CrossEntropy
     kl_temperature: float = 2.0
 

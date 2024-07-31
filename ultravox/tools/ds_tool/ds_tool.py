@@ -1,7 +1,7 @@
 import dataclasses
 import json
 import os
-from typing import Any, Dict, Optional, Union, List
+from typing import Any, Dict, List, Optional, Union
 
 import datasets
 import jinja2
@@ -9,10 +9,9 @@ import openai
 import simple_parsing
 
 from ultravox.data import text_proc
+from ultravox.data.text_proc import format_asr_text
 from ultravox.tools.ds_tool import caching
 from ultravox.tools.ds_tool import tts
-
-from ultravox.data.text_proc import format_asr_text
 
 tts_client: caching.CachingTtsWrapper
 chat_client: caching.CachingChatWrapper
@@ -229,9 +228,9 @@ def main(args: DatasetToolArgs):
 
         # If the push fails or upload_name is not specified, save the data locally.
         for split in data_dict.keys():
-             output_name = f"{split}-00000-of-00001.parquet"
-             data_dict[split].to_parquet(output_name)
-             print(f"Sample {0} of {args.upload_subset}: {ds[0]}")
+            output_name = f"{split}-00000-of-00001.parquet"
+            data_dict[split].to_parquet(output_name)
+            print(f"Sample {0} of {args.upload_subset}: {ds[0]}")
 
 
 if __name__ == "__main__":

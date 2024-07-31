@@ -50,7 +50,10 @@ def prepare_dataset(
     data_sets = [datasets.create_dataset(ds, data_args) for ds in dataset_names]
     interleave = datasets.InterleaveDataset(data_sets)
     ds_with_proc = data_processing.UltravoxDataproc(
-        interleave, processor=processor, train_on_inputs=train_on_inputs, include_alt_input=include_alt_input
+        interleave,
+        processor=processor,
+        train_on_inputs=train_on_inputs,
+        include_alt_input=include_alt_input,
     )
     limited_ds = datasets.Range(ds_with_proc, num_samples=num_samples)
     return limited_ds
@@ -192,7 +195,7 @@ def main() -> None:
                 use_mds=args.mds,
                 mds_batch_size=args.batch_size,
             ),
-            include_alt_input=model.loss_config.require_alt_input()
+            include_alt_input=model.loss_config.require_alt_input(),
         )
         val_ds_args = datasets.VoiceDatasetArgs(
             num_prompts=1,
@@ -213,7 +216,7 @@ def main() -> None:
                 processor=processor,
                 num_samples=args.val_num_samples,
                 data_args=val_ds_args_text if k.startswith("text_") else val_ds_args,
-                include_alt_input=model.loss_config.require_alt_input()
+                include_alt_input=model.loss_config.require_alt_input(),
             )
             for k in val_sets
         }
@@ -227,7 +230,10 @@ def main() -> None:
         val_datasets = {k: datasets.EmptyDataset() for k in val_sets}
 
     # Set up the data loader
-    data_collator = datasets.DataCollatorForSeq2SeqWithAudio(tokenizer=text_tokenizer, include_alt_input=model.loss_config.require_alt_input())
+    data_collator = datasets.DataCollatorForSeq2SeqWithAudio(
+        tokenizer=text_tokenizer,
+        include_alt_input=model.loss_config.require_alt_input(),
+    )
 
     logging.info(f"Config Params: {args}")
     trainer = transformers.Seq2SeqTrainer(

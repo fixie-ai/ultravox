@@ -9,14 +9,12 @@ import transformers
 import transformers.activations
 import transformers.modeling_outputs
 import transformers.models
-import pydantic
-
-import torch.nn.functional as F
 
 # We must use relative import in this directory to allow uploading to HF Hub
 # Even "from . import X" pattern doesn't work (undocumented and unclear why)
+from .ultravox_config import LossConfig
+from .ultravox_config import LossFunction
 from .ultravox_config import UltravoxConfig
-from .ultravox_config import LossConfig, LossFunction
 from .whisper_model_modified import WhisperEncoder as ModifiedWhisperEncoder
 
 
@@ -182,13 +180,23 @@ class UltravoxModel(
                     **kwargs,
                 )
                 kl_loss = F.kl_div(
-                    F.log_softmax(lm_output.logits[labels != -100] / self.loss_config.kl_temperature, dim=-1),
-                    F.softmax(alt_lm_output.logits[alt_labels != -100] / self.loss_config.kl_temperature, dim=-1),
+                    F.log_softmax(
+                        lm_output.logits[labels != -100]
+                        / self.loss_config.kl_temperature,
+                        dim=-1,
+                    ),
+                    F.softmax(
+                        alt_lm_output.logits[alt_labels != -100]
+                        / self.loss_config.kl_temperature,
+                        dim=-1,
+                    ),
                     reduction="batchmean",
                 )
                 return {"loss": kl_loss}
             else:
-                raise ValueError(f"Unsupported loss function: {self.loss_config.loss_function}")
+                raise ValueError(
+                    f"Unsupported loss function: {self.loss_config.loss_function}"
+                )
         else:
             return lm_output
 

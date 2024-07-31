@@ -6,6 +6,7 @@ import io
 import logging
 import os
 import tempfile
+from itertools import cycle
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
 import datasets
@@ -19,12 +20,9 @@ import torch
 import torch.nn.functional as F
 import transformers
 from torch.utils import data
-from itertools import cycle
 
 from ultravox.data import text_proc
 from ultravox.training import config_base
-
-import random
 
 SAMPLE_RATE = 16000
 
@@ -75,6 +73,7 @@ logging.getLogger("streaming.base.dataset").setLevel(logging.ERROR)
 @dataclasses.dataclass
 class DataCollatorForSeq2SeqWithAudio(transformers.DataCollatorForSeq2Seq):
     include_alt_input: bool = False
+
     def __call__(self, features, *args, **kwargs):
         audio_values = [f.pop("audio_values", None) for f in features]
         if self.include_alt_input:
@@ -90,9 +89,9 @@ class DataCollatorForSeq2SeqWithAudio(transformers.DataCollatorForSeq2Seq):
         batch = super().__call__(features, *args, **kwargs)
         if self.include_alt_input:
             alt_batch = super().__call__(alt_features, *args, **kwargs)
-            batch['alt_input_ids'] = alt_batch['input_ids']
-            batch['alt_attention_mask'] = alt_batch['attention_mask']
-            batch['alt_labels'] = alt_batch['labels']
+            batch["alt_input_ids"] = alt_batch["input_ids"]
+            batch["alt_attention_mask"] = alt_batch["attention_mask"]
+            batch["alt_labels"] = alt_batch["labels"]
 
         # Pad the last dimension of all audio_values to the same length, with 0s on the right.
         if audio_values and audio_values[0] is not None:
@@ -275,7 +274,7 @@ class VoiceDataset(abc.ABC, data.IterableDataset):
         self._args = args
         self._session: Optional[requests.Session] = None
         self._rng = np.random.default_rng(self._args.shuffle_seed)
-        self._weight = 1.0 # the default weight for the dataset
+        self._weight = 1.0  # the default weight for the dataset
 
     def _init_dataset(self, dataset: data.Dataset) -> None:
         self._dataset = dataset
@@ -734,6 +733,7 @@ class SlueSQA5Dataset(QAVoiceDatasetMixin):
             audio_transcript=row["raw_question_text"],
         )
 
+
 # TODO: this dataset can be replaced with GenericVoiceDataset and will be removed/updated in the future.
 class LibriSpeechDataset(VoiceDataset):
     """
@@ -911,6 +911,7 @@ class CoVoST2Dataset(VoiceDataset):
             audio_transcript=transcript,
         )
 
+
 # TODO: this dataset can be replaced with GenericVoiceDataset and will be removed/updated in the future.
 class PeopleSpeechDataset(VoiceDataset):
     """
@@ -1002,7 +1003,7 @@ class GenericVoiceDataset(VoiceDataset):
             dataset = Range(dataset, config.num_samples)
 
         self._weight = config.weight
-        
+
         self.user_template = config.user_template
         self.assistant_template = config.assistant_template
         self.transcript_template = config.transcript_template
@@ -1071,7 +1072,7 @@ class InterleaveDataset(data.IterableDataset):
         datasets: Sequence[data.IterableDataset],
         seed: Optional[int] = None,
         stop_first_exhausted: bool = False,
-        static_mode: bool = False
+        static_mode: bool = False,
     ) -> None:
         """
         Args:
@@ -1088,7 +1089,7 @@ class InterleaveDataset(data.IterableDataset):
         self._stop_first_exhausted = stop_first_exhausted
         self._static_mode = static_mode
 
-        weights = [getattr(ds, 'get_weight', lambda: 1)() for ds in datasets]
+        weights = [getattr(ds, "get_weight", lambda: 1)() for ds in datasets]
         total_weight = sum(weights)
         self._normalized_probs = [w / total_weight for w in weights]
 
@@ -1101,7 +1102,7 @@ class InterleaveDataset(data.IterableDataset):
         for i, prob in enumerate(self._normalized_probs):
             num_samples = int(round(prob * total_samples))
             indices.extend([i] * num_samples)
-        
+
         # Shuffle the indices
         self._rng.shuffle(indices)
         return indices
@@ -1109,7 +1110,7 @@ class InterleaveDataset(data.IterableDataset):
     def __iter__(self):
         iters = [iter(ds) for ds in self._datasets]
         exhausted = [False] * len(iters)
-        
+
         if self._static_mode:
             static_iter = cycle(self._static_indices)
 
