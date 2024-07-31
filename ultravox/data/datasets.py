@@ -72,6 +72,7 @@ logging.getLogger("streaming.base.dataset").setLevel(logging.ERROR)
 
 @dataclasses.dataclass
 class DataCollatorForSeq2SeqWithAudio(transformers.DataCollatorForSeq2Seq):
+    # when enabled, the alt_input_ids, alt_attention_mask, and alt_labels fields are used for computing the KL loss in UltravoxModel
     include_alt_input: bool = False
 
     def __call__(self, features, *args, **kwargs):

@@ -73,7 +73,7 @@ class UltravoxModel(
     def tie_weights(self):
         return self.language_model.tie_weights()
 
-    def set_loss_config(self, loss_config: LossConfig):
+    def set_loss_config(self, loss_config: Optional[LossConfig] = None):
         if loss_config:
             self.loss_config = loss_config
 
@@ -109,6 +109,7 @@ class UltravoxModel(
         audio_token_start_idx: Optional[torch.Tensor] = None,
         audio_token_len: Optional[torch.Tensor] = None,
         past_key_values: Optional[Tuple] = None,
+        # the alt_* fields are needed for KL divergence loss
         alt_input_ids: Optional[torch.Tensor] = None,
         alt_attention_mask: Optional[torch.Tensor] = None,
         alt_labels: Optional[torch.Tensor] = None,
@@ -171,6 +172,7 @@ class UltravoxModel(
             if self.loss_config.loss_function == LossFunction.CrossEntropy:
                 return lm_output
             elif self.loss_config.loss_function == LossFunction.KL_Divergence:
+                # compute the teacher (text-only) model's distribution
                 alt_inputs_embeds = self.get_input_embeddings().forward(alt_input_ids)
                 alt_lm_output = self.language_model.forward(
                     inputs_embeds=alt_inputs_embeds,
@@ -179,6 +181,7 @@ class UltravoxModel(
                     past_key_values=past_key_values,
                     **kwargs,
                 )
+                # compute the KL divergence loss between the two models
                 kl_loss = F.kl_div(
                     F.log_softmax(
                         lm_output.logits[labels != -100]
