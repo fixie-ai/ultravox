@@ -1,5 +1,6 @@
 import dataclasses
 from typing import Any, Dict, List, Optional
+from enum import Enum
 
 import transformers
 
@@ -18,6 +19,20 @@ class LoraConfigSimplified:
     target_modules: Optional[List[str]] = dataclasses.field(
         default_factory=lambda: ["k_proj", "q_proj", "linear_k", "linear_q"]
     )
+
+
+class LossFunction(str, Enum):
+    CrossEntropy = "ce"
+    KL_Divergence = "kl"
+
+
+@dataclasses.dataclass
+class LossConfig():
+    loss_function: LossFunction = LossFunction.CrossEntropy
+    kl_temperature: float = 2.0
+
+    def require_alt_input(self):
+        return self.loss_function == LossFunction.KL_Divergence
 
 
 class UltravoxConfig(transformers.PretrainedConfig):

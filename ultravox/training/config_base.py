@@ -13,16 +13,17 @@ from ultravox.model import ultravox_config
 
 
 class DataDictConfig(BaseModel):
-    path: str  # Path to the dataset, or huggingface dataset id
-    name: Optional[str] = (
-        None  # Name of the dataset, or huggingface dataset config/subset
-    )
+    # Path to the dataset, or huggingface dataset id
+    path: str
+    # Name of the dataset, or huggingface dataset config/subset
+    name: Optional[str] = None
     splits: List[str] = dataclasses.field(default_factory=list)
     num_samples: Optional[int] = None
     streaming: bool = True
     user_template: str = "<|audio|>"
     assistant_template: str = "{{text}}"
     transcript_template: str = "{{text}}"
+    weight: float = 1.0
 
     def __post_init__(self):
         if not self.splits:
@@ -99,6 +100,9 @@ class TrainConfig:
     report_logs_to: List[str] = simple_parsing.list_field("tensorboard")
     # A list of tags for filtering runs. Only used for wandb.
     run_tags: List[str] = simple_parsing.list_field()
+
+    # loss function to use
+    loss_config: Optional[ultravox_config.LossConfig] = None
 
     def __post_init__(self):
         if self.data_dicts:

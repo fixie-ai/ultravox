@@ -1,0 +1,24 @@
+# test config for kd training, only 100 steps
+
+text_model: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+exp_name: "tinyllama_kd"
+
+max_steps: 100
+lr_warmup_steps: 10
+
+loss_config:
+  # choose from ["KL_Divergence", "CrossEntropy"]
+  loss_function: "KL_Divergence"
+
+# use GenericVoiceDataset for loading continuation training data.
+data_sets: []
+data_dicts:
+  - path: "fixie-ai/librispeech_asr"
+    name: "clean"
+    splits:
+      - "train.100"
+      - "train.360"
+    num_samples: 10000
+    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
+    assistant_template: "{{ continuation }}"
+    transcript_template: "{{ text }}"

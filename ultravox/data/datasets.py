@@ -19,9 +19,12 @@ import torch
 import torch.nn.functional as F
 import transformers
 from torch.utils import data
+from itertools import cycle
 
 from ultravox.data import text_proc
 from ultravox.training import config_base
+
+import random
 
 SAMPLE_RATE = 16000
 
@@ -71,9 +74,25 @@ logging.getLogger("streaming.base.dataset").setLevel(logging.ERROR)
 
 @dataclasses.dataclass
 class DataCollatorForSeq2SeqWithAudio(transformers.DataCollatorForSeq2Seq):
+    include_alt_input: bool = False
     def __call__(self, features, *args, **kwargs):
         audio_values = [f.pop("audio_values", None) for f in features]
+        if self.include_alt_input:
+            # these fields are hard-coded in the transformer data collator, so they need special handling before calling the super method
+            alt_features = [
+                {
+                    "input_ids": f.pop("alt_input_ids"),
+                    "attention_mask": f.pop("alt_attention_mask"),
+                    "labels": f.pop("alt_labels"),
+                }
+                for f in features
+            ]
         batch = super().__call__(features, *args, **kwargs)
+        if self.include_alt_input:
+            alt_batch = super().__call__(alt_features, *args, **kwargs)
+            batch['alt_input_ids'] = alt_batch['input_ids']
+            batch['alt_attention_mask'] = alt_batch['attention_mask']
+            batch['alt_labels'] = alt_batch['labels']
 
         # Pad the last dimension of all audio_values to the same length, with 0s on the right.
         if audio_values and audio_values[0] is not None:
@@ -256,9 +275,13 @@ class VoiceDataset(abc.ABC, data.IterableDataset):
         self._args = args
         self._session: Optional[requests.Session] = None
         self._rng = np.random.default_rng(self._args.shuffle_seed)
+        self._weight = 1.0 # the default weight for the dataset
 
     def _init_dataset(self, dataset: data.Dataset) -> None:
         self._dataset = dataset
+
+    def get_weight(self) -> float:
+        return self._weight
 
     def _load_audio_dataset(
         self,
@@ -435,8 +458,7 @@ class AnyInstructDataset(VoiceDataset):
 
     def __init__(self, args: VoiceDatasetArgs) -> None:
         # TODO(juberti): convert to MDS
-        # The last 7 samples are missing audio files, so we exclude them.
-        NUM_SAMPLES = 108193 - 7
+        NUM_SAMPLES = 106772
         super().__init__(args)
         dataset = datasets.load_dataset(
             "json",
@@ -639,7 +661,7 @@ class HeySQuADHumanDataset(QAVoiceDatasetMixin):
     def __init__(self, args: VoiceDatasetArgs) -> None:
         super().__init__(args)
         dataset = self._load_audio_dataset(
-            "yijingwu/HeySQuAD_human", split=args.split.value
+            "fixie-ai/HeySQuAD_human", split=args.split.value
         )
         self._init_dataset(dataset)
 
@@ -712,7 +734,7 @@ class SlueSQA5Dataset(QAVoiceDatasetMixin):
             audio_transcript=row["raw_question_text"],
         )
 
-
+# TODO: this dataset can be replaced with GenericVoiceDataset and will be removed/updated in the future.
 class LibriSpeechDataset(VoiceDataset):
     """
     LibriSpeech is a corpus of approximately 1000 hours of 16kHz read
@@ -747,6 +769,7 @@ class LibriSpeechDataset(VoiceDataset):
         return self._get_transcribe_sample(row, tproc=text_proc.format_asr_text)
 
 
+# TODO: this dataset can be replaced with GenericVoiceDataset and will be removed/updated in the future.
 class GigaSpeechDataset(VoiceDataset):
     """
     GigaSpeech is an evolving, multi-domain English speech recognition corpus
@@ -766,6 +789,7 @@ class GigaSpeechDataset(VoiceDataset):
         return self._get_transcribe_sample(row, tproc=text_proc.format_asr_text)
 
 
+# TODO: this dataset can be replaced with GenericVoiceDataset and will be removed/updated in the future.
 class VoxPopuliDataset(VoiceDataset):
     """
     VoxPopuli is a large-scale multilingual speech corpus for representation learning,
@@ -785,6 +809,7 @@ class VoxPopuliDataset(VoiceDataset):
         return self._get_transcribe_sample(row, tcol="raw_text")
 
 
+# TODO: this dataset can be replaced with GenericVoiceDataset and will be removed/updated in the future.
 class CommonVoiceDataset(VoiceDataset):
     """
     The Common Voice dataset consists of a unique MP3 and corresponding text file
@@ -807,6 +832,7 @@ class CommonVoiceDataset(VoiceDataset):
         return self._get_transcribe_sample(row, tcol="sentence")
 
 
+# TODO: this dataset can be replaced with GenericVoiceDataset and will be removed/updated in the future.
 class CoVoST2Dataset(VoiceDataset):
     """
     CoVoST 2 is a large-scale multilingual speech translation corpus covering translations from 21 languages into English
@@ -850,7 +876,7 @@ class CoVoST2Dataset(VoiceDataset):
 
     # We currently don't use this dataset for training, so mainly the first prompt it ever used.
     TRANSLATE_PROMPTS = [
-        "Translate the following into {target}: <|audio|>",
+        "Translate the following into {target}, without any explanation: <|audio|>",
         "Translate the following into {target} language: <|audio|>",
         "Please convert the following into {target}.\n<|audio|>",
         "Could you translate this to {target} language?\n<|audio|>",
@@ -885,7 +911,7 @@ class CoVoST2Dataset(VoiceDataset):
             audio_transcript=transcript,
         )
 
-
+# TODO: this dataset can be replaced with GenericVoiceDataset and will be removed/updated in the future.
 class PeopleSpeechDataset(VoiceDataset):
     """
     The People's Speech Dataset is among the world's largest English speech
@@ -968,12 +994,15 @@ class GenericVoiceDataset(VoiceDataset):
             ]
         )
 
+        # shuffling is only supported on huggingface datasets for now, not MDS
         if self._args.shuffle:
             dataset = dataset.shuffle(seed=self._args.shuffle_seed)
 
         if config.num_samples:
-            dataset = dataset.select(range(config.num_samples))
+            dataset = Range(dataset, config.num_samples)
 
+        self._weight = config.weight
+        
         self.user_template = config.user_template
         self.assistant_template = config.assistant_template
         self.transcript_template = config.transcript_template
@@ -984,13 +1013,13 @@ class GenericVoiceDataset(VoiceDataset):
         try:
             user_content = jinja2.Template(
                 self.user_template, undefined=jinja2.StrictUndefined
-            ).render(**row, text_proc=text_proc)
+            ).render(**row, text_proc=text_proc, dataset=self)
             assistant_content = jinja2.Template(
                 self.assistant_template, undefined=jinja2.StrictUndefined
-            ).render(**row, text_proc=text_proc)
+            ).render(**row, text_proc=text_proc, dataset=self)
             transcript = jinja2.Template(
                 self.transcript_template, undefined=jinja2.StrictUndefined
-            ).render(**row, text_proc=text_proc)
+            ).render(**row, text_proc=text_proc, dataset=self)
         except jinja2.TemplateError as e:
             print(f"Error rendering template: {e}")
             print(f"user_template: {self.user_template}")
@@ -1001,13 +1030,11 @@ class GenericVoiceDataset(VoiceDataset):
                 f"Template rendering failed. Make sure all keys in the template exist in the sample."
             ) from e
 
-        self._make_sample(
+        return self._make_sample(
             _get_messages(user_content, assistant_content),
             self._get_audio(row),
             audio_transcript=transcript,
         )
-
-        return self._get_transcribe_sample(row)
 
 
 def create_dataset(name: str, args: VoiceDatasetArgs) -> data.IterableDataset:
@@ -1037,43 +1064,72 @@ def create_dataset(name: str, args: VoiceDatasetArgs) -> data.IterableDataset:
 
 
 class InterleaveDataset(data.IterableDataset):
-    """Interleaves multiple IterableDataset objects."""
+    """Interleaves multiple IterableDataset objects based on normalized weights."""
 
     def __init__(
-        self, datasets: Sequence[data.IterableDataset], repeat: bool = False
+        self,
+        datasets: Sequence[data.IterableDataset],
+        seed: Optional[int] = None,
+        stop_first_exhausted: bool = False,
+        static_mode: bool = False
     ) -> None:
         """
         Args:
-            datasets: a list of IterableDataset objects
-            repeat: whether to repeat the datasets indefinitely.
-                This matters most when the datasets have different lengths.
-                Let's say you have two datasets, A and B which have 5 and 3 samples respectively.
-
-                `repeat=False`: [A0, B0, A1, B1, A2, B2, A3, A4]
-                `repeat=True` : [A0, B0, A1, B1, A2, B2, A3, B0, A4, B1, A0, ...]
-
-                NOTE: with `repeat=True`, `__iter__` never stops.
+            datasets: A list of IterableDataset objects.
+            seed: Optional seed for reproducibility.
+            stop_first_exhausted: If True, stop when the first dataset is exhausted.
+                                  If False, stop when all datasets are exhausted.
+            static_mode: If True, iterate through datasets sequentially statically based on distribution.
+                         If False, use random sampling based on distribution
         """
         super().__init__()
         self._datasets = datasets
-        self._repeat = repeat
+        self._rng = np.random.default_rng(seed)
+        self._stop_first_exhausted = stop_first_exhausted
+        self._static_mode = static_mode
+
+        weights = [getattr(ds, 'get_weight', lambda: 1)() for ds in datasets]
+        total_weight = sum(weights)
+        self._normalized_probs = [w / total_weight for w in weights]
+
+        if self._static_mode:
+            self._static_indices = self._compute_static_indices()
+
+    def _compute_static_indices(self, total_samples: int = 10000) -> List[int]:
+        # Compute the number of samples for each class based on the original probabilities
+        indices = []
+        for i, prob in enumerate(self._normalized_probs):
+            num_samples = int(round(prob * total_samples))
+            indices.extend([i] * num_samples)
+        
+        # Shuffle the indices
+        self._rng.shuffle(indices)
+        return indices
 
     def __iter__(self):
         iters = [iter(ds) for ds in self._datasets]
-        iter_index = 0
+        exhausted = [False] * len(iters)
+        
+        if self._static_mode:
+            static_iter = cycle(self._static_indices)
 
-        while len(iters):
-            it = iters[iter_index]
+        while True:
+            if self._stop_first_exhausted and any(exhausted):
+                break
+            elif not self._stop_first_exhausted and all(exhausted):
+                break
+
+            if self._static_mode:
+                iter_index = next(static_iter)
+            else:
+                iter_index = self._rng.choice(len(iters), p=self._normalized_probs)
+
             try:
-                val = next(it)
-                iter_index = (iter_index + 1) % len(iters)
-                yield val
+                yield next(iters[iter_index])
             except StopIteration:
-                if not self._repeat:
-                    iters.pop(iter_index)
-                    iter_index %= max(1, len(iters))
-                else:
-                    iters[iter_index] = iter(self._datasets[iter_index])
+                # Reconstruct the iterator
+                iters[iter_index] = iter(self._datasets[iter_index])
+                exhausted[iter_index] = True
 
 
 class Dataproc(abc.ABC, data.IterableDataset):

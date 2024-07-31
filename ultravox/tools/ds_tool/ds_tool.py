@@ -1,7 +1,7 @@
 import dataclasses
 import json
 import os
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Union, List
 
 import datasets
 import jinja2
@@ -11,6 +11,8 @@ import simple_parsing
 from ultravox.data import text_proc
 from ultravox.tools.ds_tool import caching
 from ultravox.tools.ds_tool import tts
+
+from ultravox.data.text_proc import format_asr_text
 
 tts_client: caching.CachingTtsWrapper
 chat_client: caching.CachingChatWrapper
@@ -24,6 +26,8 @@ class TtsTask:
     audio_column_name: Optional[str] = simple_parsing.field(default=None, alias="-a")
     voice: Optional[str] = simple_parsing.field(default=None, alias="-V")
     sample_rate: int = simple_parsing.field(default=16000, alias="-r")
+    write_batch_size: int = 1000
+    format_fields: List[str] = simple_parsing.field(default_factory=list)
 
     def __post_init__(self):
         # The TTS client is separate from the task to avoid pickling issues when multiprocessing.
@@ -46,6 +50,8 @@ class TtsTask:
         )
 
     def _map_sample(self, sample):
+        for field in self.format_fields:
+            sample[field] = format_asr_text(sample[field])
         # using a Jinja template for some added flexibility
         # The {{ var }} syntax is how Jinja denotes variables
         try:
@@ -75,6 +81,8 @@ class TextGenerationTask:
     api_key: Optional[str] = simple_parsing.field(default=None, alias="-k")
     max_tokens: int = 128
     temperature: float = 0
+    write_batch_size: int = 1000
+    format_fields: List[str] = simple_parsing.field(default_factory=list)
 
     def __post_init__(self):
         # The OAI client is separate from the task to avoid pickling issues when multiprocessing.
@@ -177,7 +185,7 @@ class DatasetToolArgs:
 def main(args: DatasetToolArgs):
     ds_name = args.dataset_name
     print(f'Loading dataset "{ds_name}" for task {args.task}')
-    data_dict: datasets.DatasetDict = datasets.load_dataset(
+    ds: datasets.DatasetDict = datasets.load_dataset(
         ds_name, args.dataset_subset, split=args.dataset_split
     )
 
@@ -221,10 +229,9 @@ def main(args: DatasetToolArgs):
 
         # If the push fails or upload_name is not specified, save the data locally.
         for split in data_dict.keys():
-            output_name = f"{split}-00000-of-00001.parquet"
-            data_dict[split].to_parquet(output_name)
-            print(f"Saved to {output_name}")
-            print(f"Sample {0} of {split}: {data_dict[split][0]}")
+             output_name = f"{split}-00000-of-00001.parquet"
+             data_dict[split].to_parquet(output_name)
+             print(f"Sample {0} of {args.upload_subset}: {ds[0]}")
 
 
 if __name__ == "__main__":
