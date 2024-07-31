@@ -7,6 +7,7 @@ import datasets
 import jinja2
 import openai
 import simple_parsing
+import yaml
 
 from ultravox.data import text_proc
 from ultravox.tools.ds_tool import caching
@@ -20,7 +21,8 @@ chat_client: caching.CachingChatWrapper
 class TtsTask:
     implementation: str = simple_parsing.field(default="azure", alias="-i")
     # Column name containing the text to convert to audio. It can be a Jinja variable expression.
-    column_name: str = simple_parsing.field(default="question", alias="-c")
+    template: str = simple_parsing.field(alias="-T")
+    json_mode: bool = simple_parsing.field(default=False, alias="-j")
     audio_column_name: Optional[str] = simple_parsing.field(default=None, alias="-a")
     voice: Optional[str] = simple_parsing.field(default=None, alias="-V")
     sample_rate: int = simple_parsing.field(default=16000, alias="-r")
@@ -35,32 +37,45 @@ class TtsTask:
             provider=self.implementation,
         )
 
+        if self.template.startswith("@"):
+            with open(self.template[1:], "r") as template_file:
+                self.template = template_file.read()
+
     def map_split(
         self, ds_split: datasets.Dataset, num_proc: int, writer_batch_size: int
     ) -> datasets.Dataset:
-        print(f'TTS mapping "{self.column_name}" to "{self.audio_column_name}"...')
-        return ds_split.map(
+        print(f'TTS mapping "{self.template}" to "{self.audio_column_name}"...')
+        ds_split = ds_split.map(
             self._map_sample, num_proc=num_proc, writer_batch_size=writer_batch_size
-        ).cast_column(
-            self.audio_column_name, datasets.Audio(sampling_rate=self.sample_rate)
         )
+        column_type = datasets.Audio(sampling_rate=self.sample_rate)
+        if self.json_mode and isinstance(
+            ds_split.features[self.audio_column_name], datasets.Sequence
+        ):
+            column_type = datasets.Sequence(column_type)
+        return ds_split.cast_column(self.audio_column_name, column_type)
 
     def _map_sample(self, sample):
-        # using a Jinja template for some added flexibility
-        # The {{ var }} syntax is how Jinja denotes variables
+        # using a Jinja template for some added flexibility, template can include variables and functions
+        # e.g., {{ text }} or {{ text_proc.format_asr_text(text) }}
         try:
-            text = jinja2.Template(
-                "{{" + self.column_name + "}}", undefined=jinja2.StrictUndefined
-            ).render(**sample)
+            text_or_texts = jinja2.Template(
+                self.template, undefined=jinja2.StrictUndefined
+            ).render(**sample, json_dump=json.dumps, text_proc=text_proc)
         except jinja2.TemplateError as e:
             print(f"Error rendering template: {e}")
-            print(f"column_name: {self.column_name}")
+            print(f"template: {self.template}")
             print(f"sample keys: {list(sample.keys())}")
             raise ValueError(
                 f"Template rendering failed. Make sure column_name exists in the sample."
             ) from e
 
-        sample[self.audio_column_name] = tts_client.tts(text, self.voice)
+        if self.json_mode:
+            text_or_texts = yaml.safe_load(text_or_texts)
+            assert isinstance(text_or_texts, list)
+            assert all(isinstance(turn, str) for turn in text_or_texts)
+
+        sample[self.audio_column_name] = tts_client.tts(text_or_texts, self.voice)
         return sample
 
 
@@ -112,7 +127,7 @@ class TextGenerationTask:
             ) from e
 
         if self.json_mode:
-            turns = json.loads(rendered)
+            turns = yaml.safe_load(rendered)
             assert isinstance(turns, list)
             assert all(isinstance(turn, dict) for turn in turns)
             assert len(turns) > 0
@@ -130,9 +145,9 @@ class TextGenerationTask:
 
 
 # This script is used to either generate audio samples from text using a TTS model, or to generate text samples using a text generation model.
-#   just ds_tool tts -d google/boolq -u fixie-ai/boolq-audio -c question -a audio --token $HF_WRITE_TOKEN
-#   just ds_tool textgen -d fixie-ai/boolq-audio -u fixie-ai/bar -c explanation -b https://api.fireworks.ai/inference/v1 -k $FIREWORKS_API_KEY -m accounts/fireworks/models/llama-v3-8b-instruct
-#   just ds_tool textgen -d ylacombe/expresso -u fixie-ai/expresso -c continuation -T @expresso_template.txt
+#   just ds_tool tts -d google/boolq -u fixie-ai/boolq-audio -T {{question}} -a audio --token $HF_WRITE_TOKEN
+#   just ds_tool textgen -d fixie-ai/boolq-audio -u fixie-ai/bar -T {{explanation}} -b https://api.fireworks.ai/inference/v1 -k $FIREWORKS_API_KEY -m accounts/fireworks/models/llama-v3-8b-instruct
+#   just ds_tool textgen -d ylacombe/expresso -u fixie-ai/expresso -T {{continuation}} -T @expresso_template.txt
 #   just ds_tool textgen --new_column_name continuation --dataset_name openslr/librispeech_asr --dataset_subset clean --dataset_split train.360 \
 #        --shuffle --upload_name fixie-ai/librispeech_asr --private --base_url https://api.fireworks.ai/inference/v1 \
 #        --api_key $FIREWORKS_API_KEY --token $HF_TOKEN --language_model accounts/fireworks/models/llama-v3-8b-instruct \

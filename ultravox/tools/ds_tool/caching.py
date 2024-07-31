@@ -1,7 +1,8 @@
 import hashlib
 import json
 import os
-from typing import Optional
+import random
+from typing import List, Optional, Union, overload
 
 import openai
 
@@ -42,9 +43,25 @@ class CachingTtsWrapper:
         self._client = client
         self._base_path = os.path.join(".cache/ds_tool/tts", provider)
 
-    def tts(self, text: str, voice: Optional[str] = None) -> bytes:
+    @overload
+    def tts(self, text: str, voice: Optional[str] = None) -> bytes: ...
+
+    @overload
+    def tts(self, text: List[str], voice: Optional[str] = None) -> List[bytes]: ...
+
+    def tts(
+        self, text: Union[str, List[str]], voice: Optional[str] = None
+    ) -> Union[bytes, List[bytes]]:
+        text_hash = hashlib.sha256(str(text).encode()).hexdigest()
+
+        if isinstance(text, list):
+            if voice == tts.RANDOM_VOICE_KEY and hasattr(self._client, "ALL_VOICES"):
+                voice = random.Random(int(text_hash, 16)).choice(
+                    self._client.ALL_VOICES
+                )
+            return [self.tts(t, voice) for t in text]
+
         path = os.path.join(self._base_path, voice or "default")
-        text_hash = hashlib.sha256(text.encode()).hexdigest()
         os.makedirs(path, exist_ok=True)
 
         cache_path = os.path.join(path, f"{text_hash}.wav")
