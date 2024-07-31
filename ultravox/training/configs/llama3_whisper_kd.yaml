@@ -1,9 +1,12 @@
-# test config for kd training, only 100 steps
+# SLM with ultravox & llama3, trained based on knowledge distillation.
+exp_name: "llama3-whisper-s"
 
-text_model: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
-exp_name: "tinyllama_kd"
+# Make sure to accept the license agreement on huggingface hub
+text_model: "meta-llama/Meta-Llama-3-8B-Instruct"
+audio_model: "openai/whisper-small"
 
-max_steps: 100
+batch_size: 16
+max_steps: 1000
 lr_warmup_steps: 10
 
 loss_config:
@@ -18,7 +21,6 @@ data_dicts:
     splits:
       - "train.100"
       - "train.360"
-    num_samples: 10000
     user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
     assistant_template: "{{ continuation }}"
     transcript_template: "{{ text }}"
