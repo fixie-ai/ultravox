@@ -14,6 +14,7 @@ loss_config:
   loss_function: "KL_Divergence"
 
 # use GenericVoiceDataset for loading continuation training data.
+val_sets: []
 data_sets: []
 data_dicts:
   - path: "fixie-ai/librispeech_asr"
