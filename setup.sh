@@ -1,7 +1,7 @@
 cd $HOME
 mkdir workspace
 cd workspace
-git clone git@github.com:fixie-ai/ultravox.git -b main
+git clone git@github.com:fixie-ai/ultravox.git -b zhuang/add-generic-dataset-pr
 
 cd ultravox
 mkdir -p ~/.local/bin
