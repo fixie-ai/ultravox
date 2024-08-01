@@ -11,7 +11,8 @@ lr_warmup_steps: 10
 
 loss_config:
   # choose from ["KL_Divergence", "CrossEntropy"]
-  loss_function: "KL_Divergence"
+  # loss_function: "KL_Divergence"
+  loss_function: "CrossEntropy"
 
 # use GenericVoiceDataset for loading continuation training data.
 val_sets: []
