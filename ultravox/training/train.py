@@ -214,7 +214,7 @@ def main() -> None:
             k: prepare_dataset(
                 dataset_names=val_sets[k],
                 train_on_inputs=args.train_on_inputs,
-                stop_strategy=args.stop_strategy,
+                repeat_data=args.repeat_data,
                 processor=processor,
                 num_samples=args.val_num_samples,
                 data_args=val_ds_args_text if k.startswith("text_") else val_ds_args,
