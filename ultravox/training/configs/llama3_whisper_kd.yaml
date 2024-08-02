@@ -6,18 +6,21 @@ exp_name: "llama3-whisper-s"
 text_model: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
 audio_model: "openai/whisper-small"
 
-batch_size: 4
-max_steps: 100
-lr_warmup_steps: 10
 
 loss_config:
   # choose from ["KL_Divergence", "CrossEntropy"]
   loss_function: "KL_Divergence"
-  # loss_function: "CrossEntropy"
 
-# use GenericVoiceDataset for loading continuation training data.
-# val_sets: []
+# temporarily remove heysquad_human from val_sets as it causes the training to fail.
 val_sets: ["anyinstruct", "soda", "peoplespeech"]
+
+# Load continuation training data using GenericVoiceDataset.
+# Select 100,000 samples from both clean and other subsets.
+# Mix clean and other subsets in a 2:1 ratio for batch creation.
+# Total training steps: 4000, with each step 4x8=32 samples.
+batch_size: 4
+max_steps: 4000
+
 data_sets: []
 data_dicts:
   - path: "fixie-ai/librispeech_asr"
@@ -28,3 +31,14 @@ data_dicts:
     user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
     assistant_template: "{{ continuation }}"
     transcript_template: "{{ text }}"
+    weight: 2
+    num_samples: 100_000
+  - path: "fixie-ai/librispeech_asr"
+    name: "other"
+    splits:
+      - "train.500"
+    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
+    assistant_template: "{{ continuation }}"
+    transcript_template: "{{ text }}"
+    weight: 1
+    num_samples: 100_000

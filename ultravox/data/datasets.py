@@ -1072,22 +1072,21 @@ class InterleaveDataset(data.IterableDataset):
         self,
         datasets: Sequence[data.IterableDataset],
         seed: Optional[int] = None,
-        stop_first_exhausted: bool = False,
+        stop_strategy: str = "never_exhausted",  # Default strategy
         static_mode: bool = False,
     ) -> None:
         """
         Args:
-            datasets: A list of IterableDataset objects.
+            datasets: A list of data.IterableDataset objects.
             seed: Optional seed for reproducibility.
-            stop_first_exhausted: If True, stop when the first dataset is exhausted.
-                                  If False, stop when all datasets are exhausted.
+            stop_strategy: Strategy for stopping iteration. Choose from 'first_exhausted', 'last_exhausted', 'never_exhausted'.
             static_mode: If True, iterate through datasets sequentially statically based on distribution.
-                         If False, use random sampling based on distribution
+                         If False, use random sampling based on distribution.
         """
         super().__init__()
         self._datasets = datasets
         self._rng = np.random.default_rng(seed)
-        self._stop_first_exhausted = stop_first_exhausted
+        self._stop_strategy = stop_strategy
         self._static_mode = static_mode
 
         weights = [getattr(ds, "get_weight", lambda: 1)() for ds in datasets]
@@ -1116,10 +1115,12 @@ class InterleaveDataset(data.IterableDataset):
             static_iter = cycle(self._static_indices)
 
         while True:
-            if self._stop_first_exhausted and any(exhausted):
+            if self._stop_strategy == "first_exhausted" and any(exhausted):
                 break
-            elif not self._stop_first_exhausted and all(exhausted):
+            elif self._stop_strategy == "last_exhausted" and all(exhausted):
                 break
+            elif self._stop_strategy == "never_stop":
+                pass  # Continue indefinitely
 
             if self._static_mode:
                 iter_index = next(static_iter)
