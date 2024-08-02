@@ -95,8 +95,9 @@ def run_tui(
     if index >= 0:
         print(f"--- Sample {index} ---")
     messages = sample.messages
+    question_message = messages[-2] if len(messages) > 1 else messages[-1]
     transcript = f' ["{sample.audio_transcript}"]' if sample.audio_transcript else ""
-    print(f"Q: {messages[-2]['content']}{transcript}")
+    print(f"Q: {question_message['content']}{transcript}")
     print(f"A: ", end="")
     start_time = time.time()
     first_token_time = None
@@ -139,7 +140,7 @@ def run_tui(
             assert args.data_sets
             ds_name = args.data_sets[0]
             eval_sample = eval_types.Sample(
-                sample.audio_transcript or sample.messages[-2]["content"],
+                sample.audio_transcript or question_message["content"],
                 expected_answer=expected_response,
                 generated_answer=text,
             )

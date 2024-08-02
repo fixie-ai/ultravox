@@ -5,7 +5,7 @@
 </p>
 
 <h3 align="center">
-An open, fast, and extensible multimodal LLM
+A fast multimodal LLM for real-time voice
 </h3>
 
 # About
