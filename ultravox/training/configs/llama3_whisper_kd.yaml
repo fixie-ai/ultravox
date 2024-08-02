@@ -1,4 +1,4 @@
-git c# SLM with ultravox & llama3, trained based on knowledge distillation.
+# SLM with ultravox & llama3, trained wtih knowledge distillation.
 exp_name: "llama3_whisper_s"
 
 # Make sure to accept the license agreement on huggingface hub
