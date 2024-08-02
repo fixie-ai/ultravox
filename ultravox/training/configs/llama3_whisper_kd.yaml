@@ -1,5 +1,5 @@
 # SLM with ultravox & llama3, trained based on knowledge distillation.
-exp_name: "llama3-whisper-s"
+exp_name: "llama3_whisper_s"
 
 # Make sure to accept the license agreement on huggingface hub
 text_model: "meta-llama/Meta-Llama-3-8B-Instruct"
