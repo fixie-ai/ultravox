@@ -109,6 +109,3 @@ class TrainConfig:
                 "LayerDrop cannot be used in DDP when encoder is not frozen. Disabling LayerDrop."
             )
             self.disable_layerdrop = True
-
-        if self.loss_config is None:
-            self.loss_config = ultravox_config.LossConfig()

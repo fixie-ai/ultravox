@@ -105,12 +105,12 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
 
     def _compute_kl_loss(
         self,
-        lm_output: Union[Tuple, transformers.modeling_outputs.CausalLMOutputWithPast],
-        labels: torch.Tensor,
-        alt_input_ids: torch.Tensor,
-        alt_attention_mask: torch.Tensor,
-        alt_labels: torch.Tensor,
-        past_key_values: Union[Tuple, transformers.cache_utils.Cache],
+        lm_output: transformers.modeling_outputs.CausalLMOutputWithPast,
+        labels: Optional[torch.Tensor] = None,
+        past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
+        alt_input_ids: Optional[torch.Tensor] = None,
+        alt_attention_mask: Optional[torch.Tensor] = None,
+        alt_labels: Optional[torch.Tensor] = None,
         **kwargs,
     ):
         # compute the teacher (text-only) model's distribution
@@ -213,6 +213,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
                 return self._compute_kl_loss(
                     lm_output=lm_output,
                     labels=labels,
+                    past_key_values=past_key_values,
                     alt_input_ids=alt_input_ids,
                     alt_attention_mask=alt_attention_mask,
                     alt_labels=alt_labels,

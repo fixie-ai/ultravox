@@ -126,7 +126,8 @@ def main() -> None:
         model.audio_tower.config.layerdrop = 0.0
 
     # loss_config needs to be passed separately just for model training
-    model.set_loss_config(args.loss_config)
+    if args.loss_config is not None:
+        model.set_loss_config(args.loss_config)
 
     logging.info("Model and processor instantiated.")
 
