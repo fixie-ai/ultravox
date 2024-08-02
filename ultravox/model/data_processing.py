@@ -97,7 +97,8 @@ class UltravoxDataproc(datasets.Dataproc):
 
         # If include_alt_fields is True, also include alt_input_ids, alt_attention_mask, and alt_labels
         if self.include_alt_fields:
-            alt_text = text.replace("<|audio|>", sample.audio_transcript)
+            # sample.audio_transcript should never be None but currently not gauranteed, need to be investigated.
+            alt_text = text.replace("<|audio|>", sample.audio_transcript or "")
 
             alt_inputs = self.processor(
                 text=alt_text,

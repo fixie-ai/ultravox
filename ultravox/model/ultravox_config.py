@@ -31,6 +31,7 @@ class LossConfig:
     loss_function: LossFunction = LossFunction.KL_Divergence
     kl_temperature: float = 2.0
 
+    @property
     def require_alt_input(self):
         return self.loss_function == LossFunction.KL_Divergence
 
