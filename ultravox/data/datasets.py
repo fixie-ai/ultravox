@@ -452,7 +452,7 @@ class AnyInstructDataset(VoiceDataset):
     def __init__(self, args: VoiceDatasetArgs) -> None:
         # TODO(juberti): convert to MDS
         # The last 7 samples are missing audio files, so we exclude them.
-        NUM_SAMPLES = 108193 - 7
+        NUM_SAMPLES = 106773
         super().__init__(args)
         dataset = datasets.load_dataset(
             "json",
