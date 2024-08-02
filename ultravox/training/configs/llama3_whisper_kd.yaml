@@ -18,6 +18,6 @@ val_sets: ["anyinstruct", "soda", "peoplespeech"]
 # Mix clean and other subsets in a 2:1 ratio for batch creation.
 # Total training steps: 4000, with each step 4x8=32 samples.
 batch_size: 4
-max_steps: 4000
+max_steps: 1000
 
 data_sets: ["gigaspeech", "anyinstruct", "soda"]
