@@ -17,6 +17,7 @@ loss_config:
 
 # use GenericVoiceDataset for loading continuation training data.
 # val_sets: []
+val_sets: ["anyinstruct", "soda", "peoplespeech"]
 data_sets: []
 data_dicts:
   - path: "fixie-ai/librispeech_asr"
