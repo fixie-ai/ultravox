@@ -6,7 +6,7 @@ exp_name: "llama3-whisper-s"
 text_model: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
 audio_model: "openai/whisper-small"
 
-batch_size: 16
+batch_size: 4
 max_steps: 100
 lr_warmup_steps: 10
 
