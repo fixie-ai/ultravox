@@ -12,6 +12,8 @@ import transformers.models
 
 # We must use relative import in this directory to allow uploading to HF Hub
 # Even "from . import X" pattern doesn't work (undocumented and unclear why)
+from .ultravox_config import LossConfig
+from .ultravox_config import LossFunction
 from .ultravox_config import UltravoxConfig
 from .whisper_model_modified import WhisperEncoder as ModifiedWhisperEncoder
 
@@ -52,6 +54,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         self.multi_modal_projector = UltravoxProjector(config)
         self.language_model = self._create_language_model(config)
 
+        self.loss_config = LossConfig()
         self.post_init()
 
     def get_input_embeddings(self):
@@ -74,6 +77,10 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
 
     def tie_weights(self):
         return self.language_model.tie_weights()
+
+    def set_loss_config(self, loss_config: Optional[LossConfig] = None):
+        if loss_config:
+            self.loss_config = loss_config
 
     def _setup_cache(
         self, cache_cls, max_batch_size: int, max_cache_len: Optional[int] = None
@@ -107,6 +114,10 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         audio_token_start_idx: Optional[torch.Tensor] = None,
         audio_token_len: Optional[torch.Tensor] = None,
         past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
+        # the alt_* fields are needed for KL divergence loss
+        alt_input_ids: Optional[torch.Tensor] = None,
+        alt_attention_mask: Optional[torch.Tensor] = None,
+        alt_labels: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> Union[Tuple, transformers.modeling_outputs.CausalLMOutputWithPast]:
         """
@@ -162,8 +173,40 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             past_key_values=past_key_values,
             **kwargs,
         )
-
-        return lm_output
+        if self.training:
+            if self.loss_config.loss_function == LossFunction.CrossEntropy:
+                return lm_output
+            elif self.loss_config.loss_function == LossFunction.KL_Divergence:
+                # compute the teacher (text-only) model's distribution
+                alt_inputs_embeds = self.get_input_embeddings().forward(alt_input_ids)
+                alt_lm_output = self.language_model.forward(
+                    inputs_embeds=alt_inputs_embeds,
+                    labels=alt_labels,
+                    attention_mask=alt_attention_mask,
+                    past_key_values=past_key_values,
+                    **kwargs,
+                )
+                # compute the KL divergence loss between the two models
+                kl_loss = F.kl_div(
+                    F.log_softmax(
+                        lm_output.logits[labels != -100]
+                        / self.loss_config.kl_temperature,
+                        dim=-1,
+                    ),
+                    F.softmax(
+                        alt_lm_output.logits[alt_labels != -100]
+                        / self.loss_config.kl_temperature,
+                        dim=-1,
+                    ),
+                    reduction="batchmean",
+                )
+                return {"loss": kl_loss}
+            else:
+                raise ValueError(
+                    f"Unsupported loss function: {self.loss_config.loss_function}"
+                )
+        else:
+            return lm_output
 
     def prepare_inputs_for_generation(
         self,

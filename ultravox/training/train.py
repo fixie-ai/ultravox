@@ -45,12 +45,16 @@ def prepare_dataset(
     train_on_inputs: bool,
     repeat_data: bool,
     num_samples: Optional[int] = None,
+    include_alt_input: bool = False,  # whether to generate tensors for text-only input (e.g., used for KD training)
 ) -> data.IterableDataset:
 
     data_sets = [datasets.create_dataset(ds, data_args) for ds in dataset_names]
     interleave = datasets.InterleaveDataset(data_sets, repeat=repeat_data)
     ds_with_proc = data_processing.UltravoxDataproc(
-        interleave, processor=processor, train_on_inputs=train_on_inputs
+        interleave,
+        processor=processor,
+        train_on_inputs=train_on_inputs,
+        include_alt_input=include_alt_input,
     )
     limited_ds = datasets.Range(ds_with_proc, num_samples=num_samples)
     return limited_ds
@@ -155,6 +159,8 @@ def main() -> None:
                 )
 
     model.print_trainable_parameters()
+    # loss_config needs to be passed separately just for model training
+    model.set_loss_config(args.loss_config)
 
     # Move the model to GPU and enable bfloat16
     dtype = getattr(torch, args.data_type)
@@ -191,6 +197,7 @@ def main() -> None:
                 use_mds=args.mds,
                 mds_batch_size=args.batch_size,
             ),
+            include_alt_input=model.loss_config.require_alt_input(),
         )
         val_ds_args = datasets.VoiceDatasetArgs(
             num_prompts=1,
@@ -207,10 +214,11 @@ def main() -> None:
             k: prepare_dataset(
                 dataset_names=val_sets[k],
                 train_on_inputs=args.train_on_inputs,
-                repeat_data=args.repeat_data,
+                stop_strategy=args.stop_strategy,
                 processor=processor,
                 num_samples=args.val_num_samples,
                 data_args=val_ds_args_text if k.startswith("text_") else val_ds_args,
+                include_alt_input=model.loss_config.require_alt_input(),
             )
             for k in val_sets
         }
@@ -224,10 +232,12 @@ def main() -> None:
         val_datasets = {k: datasets.EmptyDataset() for k in val_sets}
 
     # Set up the data loader
-    data_collator = datasets.DataCollatorForSeq2SeqWithAudio(tokenizer=text_tokenizer)
+    data_collator = datasets.DataCollatorForSeq2SeqWithAudio(
+        tokenizer=text_tokenizer,
+        include_alt_input=model.loss_config.require_alt_input(),
+    )
 
     logging.info(f"Config Params: {args}")
-
     trainer = transformers.Seq2SeqTrainer(
         model,
         train_dataset=train_dataset,
