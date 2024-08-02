@@ -2,8 +2,7 @@
 exp_name: "llama3-whisper-s"
 
 # Make sure to accept the license agreement on huggingface hub
-# text_model: "meta-llama/Meta-Llama-3-8B-Instruct"
-text_model: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+text_model: "meta-llama/Meta-Llama-3-8B-Instruct"
 audio_model: "openai/whisper-small"
 
 

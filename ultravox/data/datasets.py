@@ -1071,22 +1071,28 @@ class InterleaveDataset(data.IterableDataset):
     def __init__(
         self,
         datasets: Sequence[data.IterableDataset],
+        stop_strategy: str = "last_exhausted",
         seed: Optional[int] = None,
-        stop_strategy: str = "never_exhausted",  # Default strategy
-        static_mode: bool = False,
+        static_mode: bool = False, 
     ) -> None:
         """
         Args:
             datasets: A list of data.IterableDataset objects.
+            stop_strategy: Strategy for stopping iteration. Choose from 'first_exhausted', 'last_exhausted', 'never_stop'.
             seed: Optional seed for reproducibility.
-            stop_strategy: Strategy for stopping iteration. Choose from 'first_exhausted', 'last_exhausted', 'never_exhausted'.
             static_mode: If True, iterate through datasets sequentially statically based on distribution.
                          If False, use random sampling based on distribution.
         """
         super().__init__()
         self._datasets = datasets
         self._rng = np.random.default_rng(seed)
+        
+        if stop_strategy not in ["first_exhausted", "last_exhausted", "never_stop"]:
+            raise ValueError(
+                "Invalid stop_strategy. Choose from 'first_exhausted', 'last_exhausted', 'never_stop'."
+            )
         self._stop_strategy = stop_strategy
+        
         self._static_mode = static_mode
 
         weights = [getattr(ds, "get_weight", lambda: 1)() for ds in datasets]

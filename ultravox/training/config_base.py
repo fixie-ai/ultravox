@@ -48,9 +48,8 @@ class TrainConfig:
     # to enforce type constraints and validation, in the __post_init__ method.
     data_dicts: Optional[List[Dict[str, Any]]] = None
 
-    # In InterleaveDataset, if one dataset runs out, should we repeat it to keep
-    # the ratio of samples from each dataset fixed?
-    repeat_data: bool = False
+    # In InterleaveDataset, when to stop interleave: choose from last_exhausted (default), first_exhausted, or never_stop
+    stop_strategy: str = "last_exhausted"
     data_dir: Optional[str] = None
     mds: bool = False
     num_samples: Optional[int] = None

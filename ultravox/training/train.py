@@ -42,13 +42,13 @@ def prepare_dataset(
     data_args: datasets.VoiceDatasetArgs,
     processor: ultravox_processing.UltravoxProcessor,
     train_on_inputs: bool,
-    repeat_data: bool,
+    stop_strategy: str,
     num_samples: Optional[int] = None,
     include_alt_input: bool = False,  # whether to generate tensors for text-only input (e.g., used for KD training)
 ) -> data.IterableDataset:
 
     data_sets = [datasets.create_dataset(ds, data_args) for ds in dataset_names]
-    interleave = datasets.InterleaveDataset(data_sets)
+    interleave = datasets.InterleaveDataset(data_sets, stop_strategy=stop_strategy)
     ds_with_proc = data_processing.UltravoxDataproc(
         interleave,
         processor=processor,
@@ -183,7 +183,7 @@ def main() -> None:
         train_dataset = prepare_dataset(
             dataset_names=args.data_sets,
             train_on_inputs=args.train_on_inputs,
-            repeat_data=args.repeat_data,
+            stop_strategy=args.stop_strategy,
             processor=processor,
             num_samples=args.num_samples,
             data_args=datasets.VoiceDatasetArgs(
@@ -212,7 +212,7 @@ def main() -> None:
             k: prepare_dataset(
                 dataset_names=val_sets[k],
                 train_on_inputs=args.train_on_inputs,
-                repeat_data=args.repeat_data,
+                stop_strategy=args.stop_strategy,
                 processor=processor,
                 num_samples=args.val_num_samples,
                 data_args=val_ds_args_text if k.startswith("text_") else val_ds_args,
