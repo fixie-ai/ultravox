@@ -78,9 +78,8 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
     def tie_weights(self):
         return self.language_model.tie_weights()
 
-    def set_loss_config(self, loss_config: Optional[LossConfig] = None):
-        if loss_config:
-            self.loss_config = loss_config
+    def set_loss_config(self, loss_config: LossConfig):
+        self.loss_config = loss_config
 
     def _setup_cache(
         self, cache_cls, max_batch_size: int, max_cache_len: Optional[int] = None
@@ -103,6 +102,40 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         self.config.vocab_size = model_embeds.num_embeddings
         self.vocab_size = model_embeds.num_embeddings
         return model_embeds
+
+    def _compute_kl_loss(
+        self,
+        lm_output: Union[Tuple, transformers.modeling_outputs.CausalLMOutputWithPast],
+        labels: torch.Tensor,
+        alt_input_ids: torch.Tensor,
+        alt_attention_mask: torch.Tensor,
+        alt_labels: torch.Tensor,
+        past_key_values: Union[Tuple, transformers.cache_utils.Cache],
+        **kwargs,
+    ):
+        # compute the teacher (text-only) model's distribution
+        alt_inputs_embeds = self.get_input_embeddings().forward(alt_input_ids)
+        alt_lm_output = self.language_model.forward(
+            inputs_embeds=alt_inputs_embeds,
+            labels=alt_labels,
+            attention_mask=alt_attention_mask,
+            past_key_values=past_key_values,
+            **kwargs,
+        )
+        # compute the KL divergence loss between the two models
+        kl_loss = F.kl_div(
+            F.log_softmax(
+                lm_output.logits[labels != -100] / self.loss_config.kl_temperature,
+                dim=-1,
+            ),
+            F.softmax(
+                alt_lm_output.logits[alt_labels != -100]
+                / self.loss_config.kl_temperature,
+                dim=-1,
+            ),
+            reduction="batchmean",
+        )
+        return {"loss": kl_loss}
 
     def forward(
         self,
@@ -177,30 +210,14 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             if self.loss_config.loss_function == LossFunction.CrossEntropy:
                 return lm_output
             elif self.loss_config.loss_function == LossFunction.KL_Divergence:
-                # compute the teacher (text-only) model's distribution
-                alt_inputs_embeds = self.get_input_embeddings().forward(alt_input_ids)
-                alt_lm_output = self.language_model.forward(
-                    inputs_embeds=alt_inputs_embeds,
-                    labels=alt_labels,
-                    attention_mask=alt_attention_mask,
-                    past_key_values=past_key_values,
+                return self._compute_kl_loss(
+                    lm_output=lm_output,
+                    labels=labels,
+                    alt_input_ids=alt_input_ids,
+                    alt_attention_mask=alt_attention_mask,
+                    alt_labels=alt_labels,
                     **kwargs,
                 )
-                # compute the KL divergence loss between the two models
-                kl_loss = F.kl_div(
-                    F.log_softmax(
-                        lm_output.logits[labels != -100]
-                        / self.loss_config.kl_temperature,
-                        dim=-1,
-                    ),
-                    F.softmax(
-                        alt_lm_output.logits[alt_labels != -100]
-                        / self.loss_config.kl_temperature,
-                        dim=-1,
-                    ),
-                    reduction="batchmean",
-                )
-                return {"loss": kl_loss}
             else:
                 raise ValueError(
                     f"Unsupported loss function: {self.loss_config.loss_function}"
