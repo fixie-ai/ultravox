@@ -38,15 +38,21 @@ class TrainConfig:
     # audio encoder model to use
     audio_model: str
 
-    do_train: bool = True
-    do_eval: bool = True
-
+    # The data_dicts field complements data_sets, allowing for the inclusion of
+    # new datasets in the config.
+    #
     # Due to simple_parsing's lack of support for containers of dataclass types,
     # we first parse the data_dicts as a list of dictionaries. After parsing,
     # we convert these dictionaries to DataDictConfig objects using Pydantic
     # to enforce type constraints and validation, in the __post_init__ method.
     data_dicts: Optional[List[Dict[str, Any]]] = None
 
+    do_train: bool = True
+    do_eval: bool = True
+
+    # In InterleaveDataset, if one dataset runs out, should we repeat it to keep
+    # the ratio of samples from each dataset fixed?
+    repeat_data: bool = False
     data_dir: Optional[str] = None
     mds: bool = False
     num_samples: Optional[int] = None
