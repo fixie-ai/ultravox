@@ -14,5 +14,5 @@ command: >-
 env_variables:
   MLFLOW_TRACKING_URI: databricks
   # temperary for training verfication
-  UV_BRANCH: main
+  UV_BRANCH: zhuang/add-generic-dataset
   TRAIN_ARGS: --config_path ultravox/training/configs/llama3_whisper_kd.yaml

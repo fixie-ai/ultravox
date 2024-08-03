@@ -3,12 +3,30 @@ import datetime
 import logging
 import os
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 import simple_parsing
 import torch
+from pydantic import BaseModel
 
 from ultravox.model import ultravox_config
+
+
+class DataDictConfig(BaseModel):
+    # Path to the dataset, or huggingface dataset id
+    path: str
+    # Name of the dataset, or huggingface dataset config/subset
+    name: Optional[str] = None
+    splits: List[str] = dataclasses.field(default_factory=list)
+    num_samples: Optional[int] = None
+    streaming: bool = True
+    user_template: str = "<|audio|>"
+    assistant_template: str = "{{text}}"
+    transcript_template: str = "{{text}}"
+
+    def __post_init__(self):
+        if not self.splits:
+            raise ValueError("At least one split must be provided")
 
 
 @dataclasses.dataclass
@@ -23,9 +41,12 @@ class TrainConfig:
     do_train: bool = True
     do_eval: bool = True
 
-    # In InterleaveDataset, if one dataset runs out, should we repeat it to keep
-    # the ratio of samples from each dataset fixed?
-    repeat_data: bool = False
+    # Due to simple_parsing's lack of support for containers of dataclass types,
+    # we first parse the data_dicts as a list of dictionaries. After parsing,
+    # we convert these dictionaries to DataDictConfig objects using Pydantic
+    # to enforce type constraints and validation, in the __post_init__ method.
+    data_dicts: Optional[List[Dict[str, Any]]] = None
+
     data_dir: Optional[str] = None
     mds: bool = False
     num_samples: Optional[int] = None
@@ -80,6 +101,16 @@ class TrainConfig:
     loss_config: Optional[ultravox_config.LossConfig] = None
 
     def __post_init__(self):
+        if self.data_dicts:
+            self.data_dicts = [
+                DataDictConfig(**data_dict) for data_dict in self.data_dicts
+            ]
+            if self.data_sets:
+                self.data_sets.extend(self.data_dicts)
+            else:
+                self.data_sets = self.data_dicts
+            del self.data_dicts
+
         assert self.data_type in ["bfloat16", "float16", "float32"]
         if self.device == "cuda" and not torch.cuda.is_available():
             self.device = "mps" if torch.backends.mps.is_available() else "cpu"

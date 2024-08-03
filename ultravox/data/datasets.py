@@ -9,6 +9,7 @@ import tempfile
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
 import datasets
+import jinja2
 import librosa
 import numpy as np
 import requests
@@ -20,6 +21,7 @@ import transformers
 from torch.utils import data
 
 from ultravox.data import text_proc
+from ultravox.training import config_base
 
 SAMPLE_RATE = 16000
 
@@ -727,6 +729,7 @@ class SlueSQA5Dataset(QAVoiceDatasetMixin):
         )
 
 
+# TODO: this dataset can be replaced with GenericVoiceDataset and will be removed/updated in the future.
 class LibriSpeechDataset(VoiceDataset):
     """
     LibriSpeech is a corpus of approximately 1000 hours of 16kHz read
@@ -761,6 +764,7 @@ class LibriSpeechDataset(VoiceDataset):
         return self._get_transcribe_sample(row, tproc=text_proc.format_asr_text)
 
 
+# TODO: this dataset can be replaced with GenericVoiceDataset and will be removed/updated in the future.
 class GigaSpeechDataset(VoiceDataset):
     """
     GigaSpeech is an evolving, multi-domain English speech recognition corpus
@@ -780,6 +784,7 @@ class GigaSpeechDataset(VoiceDataset):
         return self._get_transcribe_sample(row, tproc=text_proc.format_asr_text)
 
 
+# TODO: this dataset can be replaced with GenericVoiceDataset and will be removed/updated in the future.
 class VoxPopuliDataset(VoiceDataset):
     """
     VoxPopuli is a large-scale multilingual speech corpus for representation learning,
@@ -799,6 +804,7 @@ class VoxPopuliDataset(VoiceDataset):
         return self._get_transcribe_sample(row, tcol="raw_text")
 
 
+# TODO: this dataset can be replaced with GenericVoiceDataset and will be removed/updated in the future.
 class CommonVoiceDataset(VoiceDataset):
     """
     The Common Voice dataset consists of a unique MP3 and corresponding text file
@@ -821,6 +827,7 @@ class CommonVoiceDataset(VoiceDataset):
         return self._get_transcribe_sample(row, tcol="sentence")
 
 
+# TODO: this dataset can be replaced with GenericVoiceDataset and will be removed/updated in the future.
 class CoVoST2Dataset(VoiceDataset):
     """
     CoVoST 2 is a large-scale multilingual speech translation corpus covering translations from 21 languages into English
@@ -902,6 +909,7 @@ class CoVoST2Dataset(VoiceDataset):
         )
 
 
+# TODO: this dataset can be replaced with GenericVoiceDataset and will be removed/updated in the future.
 class PeopleSpeechDataset(VoiceDataset):
     """
     The People's Speech Dataset is among the world's largest English speech
@@ -965,6 +973,66 @@ class SodaDataset(VoiceDataset):
         )
 
 
+class GenericVoiceDataset(VoiceDataset):
+    def __init__(
+        self, args: VoiceDatasetArgs, config: config_base.DataDictConfig
+    ) -> None:
+        super().__init__(args)
+
+        dataset = datasets.concatenate_datasets(
+            [
+                self._load_audio_dataset(
+                    config.path,
+                    name=config.name,
+                    split=s,
+                    streaming=config.streaming,
+                    shuffle=False,
+                )
+                for s in config.splits
+            ]
+        )
+
+        # shuffling is only supported on huggingface datasets for now, not MDS
+        if self._args.shuffle:
+            dataset = dataset.shuffle(seed=self._args.shuffle_seed)
+
+        if config.num_samples:
+            dataset = Range(dataset, config.num_samples)
+
+        self.user_template = config.user_template
+        self.assistant_template = config.assistant_template
+        self.transcript_template = config.transcript_template
+
+        self._init_dataset(dataset)
+
+    def _get_sample(self, row) -> VoiceSample:
+        try:
+            user_content = jinja2.Template(
+                self.user_template, undefined=jinja2.StrictUndefined
+            ).render(**row, text_proc=text_proc, dataset=self)
+            assistant_content = jinja2.Template(
+                self.assistant_template, undefined=jinja2.StrictUndefined
+            ).render(**row, text_proc=text_proc, dataset=self)
+            transcript = jinja2.Template(
+                self.transcript_template, undefined=jinja2.StrictUndefined
+            ).render(**row, text_proc=text_proc, dataset=self)
+        except jinja2.TemplateError as e:
+            print(f"Error rendering template: {e}")
+            print(f"user_template: {self.user_template}")
+            print(f"assistant_template: {self.assistant_template}")
+            print(f"transcript_template: {self.transcript_template}")
+            print(f"sample keys: {list(row.keys())}")
+            raise ValueError(
+                f"Template rendering failed. Make sure all keys in the template exist in the sample."
+            ) from e
+
+        return self._make_sample(
+            _get_messages(user_content, assistant_content),
+            self._get_audio(row),
+            audio_transcript=transcript,
+        )
+
+
 def create_dataset(name: str, args: VoiceDatasetArgs) -> data.IterableDataset:
     DATASET_MAP: Dict[str, Any] = {
         "anyinstruct": AnyInstructAnswerDataset,
@@ -984,8 +1052,11 @@ def create_dataset(name: str, args: VoiceDatasetArgs) -> data.IterableDataset:
         "soda": SodaDataset,
         "dummy": LibriSpeechDummyDataset,
     }
-    name, *ext = name.split(":")
-    return DATASET_MAP[name](args, *ext)
+    if isinstance(name, config_base.DataDictConfig):
+        return GenericVoiceDataset(args, name)
+    else:
+        name, *ext = name.split(":")
+        return DATASET_MAP[name](args, *ext)
 
 
 class InterleaveDataset(data.IterableDataset):
