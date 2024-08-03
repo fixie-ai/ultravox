@@ -13,6 +13,5 @@ command: >-
   cd ultravox && poetry install --no-dev && poetry run torchrun --nproc_per_node=8 -m ultravox.training.train $TRAIN_ARGS
 env_variables:
   MLFLOW_TRACKING_URI: databricks
-  # temperary for training verfication
-  UV_BRANCH: zhuang/add-generic-dataset
+  UV_BRANCH: main
   TRAIN_ARGS: --config_path ultravox/training/configs/llama3_whisper_kd.yaml
