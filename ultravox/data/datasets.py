@@ -20,8 +20,8 @@ import torch.nn.functional as F
 import transformers
 from torch.utils import data
 
+from ultravox.data import dataset_config
 from ultravox.data import text_proc
-from ultravox.training import config_base
 
 SAMPLE_RATE = 16000
 
@@ -975,7 +975,7 @@ class SodaDataset(VoiceDataset):
 
 class GenericVoiceDataset(VoiceDataset):
     def __init__(
-        self, args: VoiceDatasetArgs, config: config_base.DataDictConfig
+        self, args: VoiceDatasetArgs, config: dataset_config.DataDictConfig
     ) -> None:
         super().__init__(args)
 
@@ -1052,7 +1052,7 @@ def create_dataset(name: str, args: VoiceDatasetArgs) -> data.IterableDataset:
         "soda": SodaDataset,
         "dummy": LibriSpeechDummyDataset,
     }
-    if isinstance(name, config_base.DataDictConfig):
+    if isinstance(name, dataset_config.DataDictConfig):
         return GenericVoiceDataset(args, name)
     else:
         name, *ext = name.split(":")

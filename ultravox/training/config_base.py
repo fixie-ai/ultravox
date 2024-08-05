@@ -7,26 +7,9 @@ from typing import Any, Dict, List, Optional
 
 import simple_parsing
 import torch
-from pydantic import BaseModel
 
+from ultravox.data import dataset_config
 from ultravox.model import ultravox_config
-
-
-class DataDictConfig(BaseModel):
-    # Path to the dataset, or huggingface dataset id
-    path: str
-    # Name of the dataset, or huggingface dataset config/subset
-    name: Optional[str] = None
-    splits: List[str] = dataclasses.field(default_factory=list)
-    num_samples: Optional[int] = None
-    streaming: bool = True
-    user_template: str = "<|audio|>"
-    assistant_template: str = "{{text}}"
-    transcript_template: str = "{{text}}"
-
-    def __post_init__(self):
-        if not self.splits:
-            raise ValueError("At least one split must be provided")
 
 
 @dataclasses.dataclass
@@ -109,13 +92,13 @@ class TrainConfig:
     def __post_init__(self):
         if self.data_dicts:
             self.data_dicts = [
-                DataDictConfig(**data_dict) for data_dict in self.data_dicts
+                dataset_config.DataDictConfig(**data_dict)
+                for data_dict in self.data_dicts
             ]
-            if self.data_sets:
-                self.data_sets.extend(self.data_dicts)
-            else:
-                self.data_sets = self.data_dicts
-            del self.data_dicts
+            # For now, self.data_dicts is a hack to allow for the inclusion of new datasets using the
+            # GenericVoiceDataset class, without changing how existing datasets are specified in
+            # self.data_sets. In the future, all datasets will be updated to use the DataDictConfig class.
+            self.data_sets.extend(self.data_dicts)
 
         assert self.data_type in ["bfloat16", "float16", "float32"]
         if self.device == "cuda" and not torch.cuda.is_available():
