@@ -13,10 +13,6 @@ loss_config:
 # Temporarily remove heysquad_human from val_sets as it causes the training to fail.
 val_sets: ["anyinstruct", "soda", "peoplespeech"]
 
-# Load continuation training data using GenericVoiceDataset.
-# Select 100,000 samples from both clean and other subsets.
-# Mix clean and other subsets in a 2:1 ratio for batch creation.
-# Total training steps: 4000, with each step 4x8=32 samples.
 batch_size: 4
 max_steps: 1000
 
