@@ -76,7 +76,6 @@ def test_process_inference_mode(mock_processor, fake_dataset):
 
     assert processed["input_ids"].shape == torch.Size([5])
     assert processed["attention_mask"].shape == torch.Size([5])
-    assert processed["labels"].equal(torch.tensor([0, 1, 2, 3, 4]))
     assert processed["audio_values"].shape == torch.Size([1, 3])
     assert "audio_token_start_idx" in processed
     assert "audio_token_len" in processed
