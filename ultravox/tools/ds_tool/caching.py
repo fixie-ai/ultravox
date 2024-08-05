@@ -53,15 +53,12 @@ class CachingTtsWrapper:
         self, text: Union[str, List[str]], voice: Optional[str] = None
     ) -> Union[bytes, List[bytes]]:
         text_hash = hashlib.sha256(str(text).encode()).hexdigest()
+        voice = self._client.resolve_voice(voice)
 
         if isinstance(text, list):
-            if voice == tts.RANDOM_VOICE_KEY and hasattr(self._client, "ALL_VOICES"):
-                voice = random.Random(int(text_hash, 16)).choice(
-                    self._client.ALL_VOICES
-                )
             return [self.tts(t, voice) for t in text]
 
-        path = os.path.join(self._base_path, voice or "default")
+        path = os.path.join(self._base_path, voice)
         os.makedirs(path, exist_ok=True)
 
         cache_path = os.path.join(path, f"{text_hash}.wav")
