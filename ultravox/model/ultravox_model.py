@@ -113,15 +113,17 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         alt_labels: Optional[torch.Tensor] = None,
         **kwargs,
     ):
-        # compute the teacher (text-only) model's distribution
-        alt_inputs_embeds = self.get_input_embeddings().forward(alt_input_ids)
-        alt_lm_output = self.language_model.forward(
-            inputs_embeds=alt_inputs_embeds,
-            labels=alt_labels,
-            attention_mask=alt_attention_mask,
-            past_key_values=past_key_values,
-            **kwargs,
-        )
+        # disable gradient computation for the teacher model
+        with torch.no_grad():
+            # compute the teacher (text-only) model's distribution
+            alt_inputs_embeds = self.get_input_embeddings().forward(alt_input_ids)
+            alt_lm_output = self.language_model.forward(
+                inputs_embeds=alt_inputs_embeds,
+                labels=alt_labels,
+                attention_mask=alt_attention_mask,
+                past_key_values=past_key_values,
+                **kwargs,
+            )
         # compute the KL divergence loss between the two models
         kl_loss = F.kl_div(
             F.log_softmax(

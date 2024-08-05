@@ -32,7 +32,7 @@ class LossConfig:
     kl_temperature: float = 2.0
 
     @property
-    def require_alt_fields(self):
+    def requires_alt_fields(self):
         return self.loss_function == LossFunction.KL_Divergence
 
 

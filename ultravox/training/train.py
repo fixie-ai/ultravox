@@ -199,7 +199,7 @@ def main() -> None:
                 use_mds=args.mds,
                 mds_batch_size=args.batch_size,
             ),
-            include_alt_fields=model.loss_config.require_alt_fields,
+            include_alt_fields=model.loss_config.requires_alt_fields,
         )
         val_ds_args = datasets.VoiceDatasetArgs(
             num_prompts=1,
@@ -220,7 +220,7 @@ def main() -> None:
                 processor=processor,
                 num_samples=args.val_num_samples,
                 data_args=val_ds_args_text if k.startswith("text_") else val_ds_args,
-                include_alt_fields=model.loss_config.require_alt_fields,
+                include_alt_fields=model.loss_config.requires_alt_fields,
             )
             for k in val_sets
         }
@@ -236,7 +236,7 @@ def main() -> None:
     # Set up the data loader
     data_collator = datasets.DataCollatorForSeq2SeqWithAudio(
         tokenizer=text_tokenizer,
-        include_alt_fields=model.loss_config.require_alt_fields,
+        include_alt_fields=model.loss_config.requires_alt_fields,
     )
 
     logging.info(f"Config Params: {args}")
