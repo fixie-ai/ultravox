@@ -34,7 +34,7 @@ class TtsTask:
             self.audio_column_name = f"{self.column_name}_audio"
         tts_client = caching.CachingTtsWrapper(
             tts.create_client(self.implementation, self.sample_rate),
-            provider=self.implementation,
+            implementation=self.implementation,
         )
 
         if self.template.startswith("@"):

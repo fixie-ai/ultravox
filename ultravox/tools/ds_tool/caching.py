@@ -38,10 +38,10 @@ class CachingChatWrapper:
 
 
 class CachingTtsWrapper:
-    def __init__(self, client: tts.Client, provider: str):
+    def __init__(self, client: tts.Client, implementation: str):
         super().__init__()
         self._client = client
-        self._base_path = os.path.join(".cache/ds_tool/tts", provider)
+        self._base_path = os.path.join(".cache/ds_tool/tts", implementation)
 
     @overload
     def tts(self, text: str, voice: Optional[str] = None) -> bytes: ...
