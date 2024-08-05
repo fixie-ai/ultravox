@@ -3,7 +3,7 @@ name: ultravox
 image: mosaicml/composer:latest
 compute:
   gpus: 8
-  cluster: r7z22p1
+  cluster: r14z3p1
 integrations:
   - integration_type: git_repo
     git_repo: fixie-ai/ultravox
@@ -14,4 +14,4 @@ command: >-
 env_variables:
   MLFLOW_TRACKING_URI: databricks
   UV_BRANCH: main
-  TRAIN_ARGS: --config_path ultravox/training/configs/llama3_whisper.yaml
+  TRAIN_ARGS: --config_path ultravox/training/configs/llama3_whisper_kd.yaml

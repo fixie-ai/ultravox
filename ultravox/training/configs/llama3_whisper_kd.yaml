@@ -1,0 +1,19 @@
+# SLM with ultravox & llama3, trained wtih knowledge distillation.
+exp_name: "llama3_whisper_s"
+
+# Make sure to accept the license agreement on huggingface hub
+text_model: "meta-llama/Meta-Llama-3-8B-Instruct"
+audio_model: "openai/whisper-small"
+
+
+loss_config:
+  # Choose from ["KL_Divergence", "CrossEntropy"], default is "KL_Divergence"
+  loss_function: "KL_Divergence"
+
+# Temporarily remove heysquad_human from val_sets as it causes the training to fail.
+val_sets: ["anyinstruct", "soda", "peoplespeech"]
+
+batch_size: 4
+max_steps: 1000
+
+data_sets: ["gigaspeech", "anyinstruct", "soda"]

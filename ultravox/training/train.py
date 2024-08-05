@@ -45,12 +45,16 @@ def prepare_dataset(
     train_on_inputs: bool,
     repeat_data: bool,
     num_samples: Optional[int] = None,
+    include_alt_fields: bool = False,  # whether to generate tensors for text-only input (e.g., used for KD training)
 ) -> data.IterableDataset:
 
     data_sets = [datasets.create_dataset(ds, data_args) for ds in dataset_names]
     interleave = datasets.InterleaveDataset(data_sets, repeat=repeat_data)
     ds_with_proc = data_processing.UltravoxDataproc(
-        interleave, processor=processor, train_on_inputs=train_on_inputs
+        interleave,
+        processor=processor,
+        train_on_inputs=train_on_inputs,
+        include_alt_fields=include_alt_fields,
     )
     limited_ds = datasets.Range(ds_with_proc, num_samples=num_samples)
     return limited_ds
@@ -120,6 +124,10 @@ def main() -> None:
         # layerdrop causes issues when training with DDP
         # https://github.com/huggingface/transformers/issues/17116#issuecomment-1121340890
         model.audio_tower.config.layerdrop = 0.0
+
+    # loss_config needs to be passed separately just for model training
+    if args.loss_config is not None:
+        model.set_loss_config(args.loss_config)
 
     logging.info("Model and processor instantiated.")
 
@@ -191,6 +199,7 @@ def main() -> None:
                 use_mds=args.mds,
                 mds_batch_size=args.batch_size,
             ),
+            include_alt_fields=model.loss_config.requires_alt_fields,
         )
         val_ds_args = datasets.VoiceDatasetArgs(
             num_prompts=1,
@@ -211,6 +220,7 @@ def main() -> None:
                 processor=processor,
                 num_samples=args.val_num_samples,
                 data_args=val_ds_args_text if k.startswith("text_") else val_ds_args,
+                include_alt_fields=model.loss_config.requires_alt_fields,
             )
             for k in val_sets
         }
@@ -224,10 +234,12 @@ def main() -> None:
         val_datasets = {k: datasets.EmptyDataset() for k in val_sets}
 
     # Set up the data loader
-    data_collator = datasets.DataCollatorForSeq2SeqWithAudio(tokenizer=text_tokenizer)
+    data_collator = datasets.DataCollatorForSeq2SeqWithAudio(
+        tokenizer=text_tokenizer,
+        include_alt_fields=model.loss_config.requires_alt_fields,
+    )
 
     logging.info(f"Config Params: {args}")
-
     trainer = transformers.Seq2SeqTrainer(
         model,
         train_dataset=train_dataset,

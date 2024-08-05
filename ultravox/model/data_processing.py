@@ -15,6 +15,7 @@ class UltravoxDataproc(datasets.Dataproc):
         processor: ultravox_processing.UltravoxProcessor,
         train_on_inputs: bool = False,
         inference_mode: bool = False,
+        include_alt_fields: bool = False,
     ) -> None:
         """
         Pre-processing for the Ultravox model: applies tokenization and audio processing using the UltravoxProcessor
@@ -28,6 +29,8 @@ class UltravoxDataproc(datasets.Dataproc):
             inference_mode: If True, only the input message is included in input_ids and labels, and the assistant
                 message is removed from the sample. This is used for inference (e.g. testing) since the model should
                 generate the assistant message. For training and validation, this should be False.
+            include_alt_fields: If True, the alt_input_ids, alt_attention_mask, and alt_labels are included in the output,
+                computed with <|audio|> replaced by the audio transcript.
         """
         super().__init__(dataset)
         self.processor = processor
@@ -35,6 +38,7 @@ class UltravoxDataproc(datasets.Dataproc):
         self.inference_mode = inference_mode
         if self.inference_mode:
             self.train_on_inputs = True
+        self.include_alt_fields = include_alt_fields
 
     def _process(self, sample: datasets.VoiceSample) -> Dict[str, Any]:
         if self.inference_mode:
@@ -84,15 +88,40 @@ class UltravoxDataproc(datasets.Dataproc):
 
             # TODO: this might be slow due to calling audio_processor twice. We can compute modified input_text_len directly too.
             # Revisit when using WhisperProcessor.
-            input_text_len = self.processor(
+            input_token_len = self.processor(
                 text=input_text,
                 audio=audio,
                 sampling_rate=sample.sample_rate,
             )["input_ids"].shape[-1]
-            labels[:input_text_len] = -100
+            labels[:input_token_len] = -100
+
+        # If include_alt_fields is True, also include alt_input_ids, alt_attention_mask, and alt_labels
+        if self.include_alt_fields:
+            # sample.audio_transcript should never be None but currently not gauranteed, need to be investigated.
+            alt_text = text.replace("<|audio|>", sample.audio_transcript or "")
+
+            alt_inputs = self.processor(
+                text=alt_text,
+                audio=None,
+                return_tensors="pt",
+            )
+            alt_input_ids = alt_inputs["input_ids"].squeeze_(0)
+            alt_inputs["attention_mask"].squeeze_(0)
+
+            alt_labels = alt_input_ids.clone()
+            if not self.train_on_inputs:
+                alt_input_token_len = (
+                    input_token_len + len(alt_input_ids) - len(input_ids)
+                )
+                alt_labels[:alt_input_token_len] = -100
+
+            inputs["alt_input_ids"] = alt_input_ids
+            inputs["alt_attention_mask"] = alt_inputs["attention_mask"]
+            inputs["alt_labels"] = alt_labels
 
         return {
-            **inputs,
             # input_ids, attention_mask, audio_values, audio_token_start_idx, audio_token_len
+            # if include_alt_fields is True, also include alt_input_ids, alt_attention_mask, alt_labels
+            **inputs,
             "labels": labels,
         }
