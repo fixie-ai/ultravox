@@ -9,7 +9,7 @@ from ultravox.model import data_processing
 
 TEST_USER_MESSAGE = {
     "role": "user",
-    "content": "Listen to <|audio| and respond.",
+    "content": "Listen to <|audio|> and respond.",
 }
 TEST_ASSISTANT_MESSAGE = {
     "role": "assistant",
