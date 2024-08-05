@@ -43,6 +43,7 @@ gradio-client = "~1.0.1"
 gradio = "~3.40.1"
 gpustat = "~1.1.1"
 types-requests = "~2.26.0"
+types-pyyaml = "^6.0.12.20240724"
 
 [build-system]
 requires = ["poetry-core"]

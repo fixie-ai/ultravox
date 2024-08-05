@@ -1,7 +1,7 @@
 import hashlib
 import json
 import os
-from typing import Optional
+from typing import List, Optional, Union, overload
 
 import openai
 
@@ -37,14 +37,27 @@ class CachingChatWrapper:
 
 
 class CachingTtsWrapper:
-    def __init__(self, client: tts.Client, provider: str):
+    def __init__(self, client: tts.Client, implementation: str):
         super().__init__()
         self._client = client
-        self._base_path = os.path.join(".cache/ds_tool/tts", provider)
+        self._base_path = os.path.join(".cache/ds_tool/tts", implementation)
 
-    def tts(self, text: str, voice: Optional[str] = None) -> bytes:
-        path = os.path.join(self._base_path, voice or "default")
-        text_hash = hashlib.sha256(text.encode()).hexdigest()
+    @overload
+    def tts(self, text: str, voice: Optional[str] = None) -> bytes: ...
+
+    @overload
+    def tts(self, text: List[str], voice: Optional[str] = None) -> List[bytes]: ...
+
+    def tts(
+        self, text: Union[str, List[str]], voice: Optional[str] = None
+    ) -> Union[bytes, List[bytes]]:
+        text_hash = hashlib.sha256(str(text).encode()).hexdigest()
+        voice = self._client.resolve_voice(voice)
+
+        if isinstance(text, list):
+            return [self.tts(t, voice) for t in text]
+
+        path = os.path.join(self._base_path, voice)
         os.makedirs(path, exist_ok=True)
 
         cache_path = os.path.join(path, f"{text_hash}.wav")

@@ -1,7 +1,7 @@
 import abc
 import io
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from xml.sax import saxutils
 
 import numpy as np
@@ -23,7 +23,15 @@ def _make_ssml(voice: str, text: str):
 
 
 class Client(abc.ABC):
+    DEFAULT_VOICE: str
+    ALL_VOICES: List[str]
+
     def __init__(self, sample_rate: int = 16000):
+        if not hasattr(self, "DEFAULT_VOICE"):
+            raise ValueError("DEFAULT_VOICE must be defined in subclasses.")
+        if not hasattr(self, "ALL_VOICES"):
+            raise ValueError("ALL_VOICES must be defined in subclasses.")
+
         self._session = requests.Session()
         retries = requests.adapters.Retry(total=NUM_RETRIES)
         self._session.mount(
@@ -47,6 +55,14 @@ class Client(abc.ABC):
         wav_bytes = io.BytesIO()
         sf.write(wav_bytes, pcm_array, self._sample_rate, format="wav")
         return wav_bytes.getvalue()
+
+    def resolve_voice(self, voice: Optional[str]) -> str:
+        voice = voice or self.DEFAULT_VOICE
+        if voice == RANDOM_VOICE_KEY:
+            # Every process has same random seed, so we mix in the PID here for more variation.
+            i = np.random.randint(len(self.ALL_VOICES)) + os.getpid()
+            voice = self.ALL_VOICES[i % len(self.ALL_VOICES)]
+        return voice
 
 
 class AzureTts(Client):
@@ -80,10 +96,7 @@ class AzureTts(Client):
     ]
 
     def tts(self, text: str, voice: Optional[str] = None):
-        voice = voice or self.DEFAULT_VOICE
-        if voice == RANDOM_VOICE_KEY:
-            voice = np.random.choice(self.ALL_VOICES)
-        assert voice
+        voice = self.resolve_voice(voice)
         region = "westus"
         api_key = os.environ.get("AZURE_TTS_API_KEY") or os.environ.get(
             "AZURE_WESTUS_TTS_API_KEY"
@@ -134,11 +147,7 @@ class ElevenTts(Client):
     ]
 
     def tts(self, text: str, voice: Optional[str] = None):
-        voice = voice or self.DEFAULT_VOICE
-        if voice == RANDOM_VOICE_KEY:
-            # Every process has same random seed, so we mix in the PID here for more variation.
-            i = np.random.randint(len(self.ALL_VOICES)) + os.getpid()
-            voice = self.ALL_VOICES[i % len(self.ALL_VOICES)]
+        voice = self.resolve_voice(voice)
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice}/stream?output_format=pcm_16000"
         headers = {"xi-api-key": os.environ["ELEVEN_API_KEY"]}
         body = {
