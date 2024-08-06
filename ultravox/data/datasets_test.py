@@ -73,7 +73,6 @@ def test_interleaved_first_exhausted():
     )
     # static=True disables random sampling of datasets, so the order is deterministic
     # stop_strategy=first_exhausted will stop interleave when the first dataset is exhausted
-    print(f"list(s): {list(s)}")
     assert list(s) == [0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3]
     s = datasets.InterleaveDataset([])
     assert list(s) == []
@@ -87,7 +86,6 @@ def test_interleaved_last_exhausted():
     )
     # static=False enables random sampling of datasets, so the order is not deterministic
     # stop_strategy=last_exhausted will stop interleave when the last dataset is exhausted
-    print(f"list(s): {list(s)}")
     assert list(itertools.islice(s, 9)) == [0, 10, 1, 11, 2, 10, 3, 11]
 
 
