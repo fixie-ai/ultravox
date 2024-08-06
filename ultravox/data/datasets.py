@@ -1091,7 +1091,7 @@ class InterleaveDataset(data.IterableDataset):
 
         self._stop_strategy = stop_strategy
 
-        weights = [ds.weight for ds in datasets]
+        weights = [getattr(ds, "weight", 1) for ds in datasets]
         total_weight = sum(weights)
         self._normalized_probs = [w / total_weight for w in weights]
 
