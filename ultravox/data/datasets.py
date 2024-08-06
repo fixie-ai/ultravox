@@ -3,10 +3,10 @@ import base64
 import dataclasses
 import enum
 import io
+import itertools
 import logging
 import os
 import tempfile
-from itertools import cycle
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
 import datasets
@@ -1073,7 +1073,7 @@ class InterleaveDataset(data.IterableDataset):
     def __init__(
         self,
         datasets: Sequence[data.IterableDataset],
-        stop_strategy: str = "last_exhausted",
+        stop_strategy: str = dataset_config.InterleaveStopStrategy.last_exhausted,
         seed: Optional[int] = 42,
         static: bool = False,
     ) -> None:
@@ -1089,13 +1089,9 @@ class InterleaveDataset(data.IterableDataset):
         self._rng = np.random.default_rng(seed)
         self._static = static
 
-        if stop_strategy not in ["first_exhausted", "last_exhausted", "never_stop"]:
-            raise ValueError(
-                "Invalid stop_strategy. Choose from 'first_exhausted', 'last_exhausted', 'never_stop'."
-            )
         self._stop_strategy = stop_strategy
 
-        weights = [getattr(ds, "get_weight", lambda: 1)() for ds in datasets]
+        weights = [ds.weight for ds in datasets]
         total_weight = sum(weights)
         self._normalized_probs = [w / total_weight for w in weights]
 
@@ -1108,7 +1104,7 @@ class InterleaveDataset(data.IterableDataset):
         exhausted = [False] * len(iters)
 
         if self._static:
-            static_iter = cycle(range(len(self._datasets)))
+            static_iter = itertools.cycle(range(len(self._datasets)))
 
         while True:
             if self._static:
@@ -1122,16 +1118,22 @@ class InterleaveDataset(data.IterableDataset):
                 # Reconstruct the iterator
                 iters[iter_index] = iter(self._datasets[iter_index])
                 exhausted[iter_index] = True
-                if self._static:
-                    static_iter = cycle(
-                        list(range(iter_index + 1, len(self._datasets)))
-                        + list(range(iter_index + 1))
-                    )
-                if self._stop_strategy == "first_exhausted" and any(exhausted):
+                if (
+                    self._stop_strategy
+                    == dataset_config.InterleaveStopStrategy.first_exhausted
+                    and any(exhausted)
+                ):
                     break
-                elif self._stop_strategy == "last_exhausted" and all(exhausted):
+                elif (
+                    self._stop_strategy
+                    == dataset_config.InterleaveStopStrategy.last_exhausted
+                    and all(exhausted)
+                ):
                     break
-                elif self._stop_strategy == "never_stop":
+                elif (
+                    self._stop_strategy
+                    == dataset_config.InterleaveStopStrategy.never_stop
+                ):
                     # Continue indefinitely
                     pass
                 yield next(iters[iter_index])

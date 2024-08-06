@@ -34,7 +34,9 @@ class TrainConfig:
     do_eval: bool = True
 
     # In InterleaveDataset, when to stop interleave: choose from last_exhausted (default), first_exhausted, or never_stop
-    stop_strategy: str = "last_exhausted"
+    stop_strategy: dataset_config.InterleaveStopStrategy = (
+        dataset_config.InterleaveStopStrategy.last_exhausted
+    )
     data_dir: Optional[str] = None
     mds: bool = False
     num_samples: Optional[int] = None
