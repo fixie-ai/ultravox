@@ -3,11 +3,12 @@ import datetime
 import logging
 import os
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 import simple_parsing
 import torch
 
+from ultravox.data import dataset_config
 from ultravox.model import ultravox_config
 
 
@@ -19,6 +20,15 @@ class TrainConfig:
     text_model: str
     # audio encoder model to use
     audio_model: str
+
+    # The data_dicts field complements data_sets, allowing for the inclusion of
+    # new datasets in the config.
+    #
+    # Due to simple_parsing's lack of support for containers of dataclass types,
+    # we first parse the data_dicts as a list of dictionaries. After parsing,
+    # we convert these dictionaries to DataDictConfig objects using Pydantic
+    # to enforce type constraints and validation, in the __post_init__ method.
+    data_dicts: Optional[List[Dict[str, Any]]] = None
 
     do_train: bool = True
     do_eval: bool = True
@@ -80,6 +90,16 @@ class TrainConfig:
     loss_config: Optional[ultravox_config.LossConfig] = None
 
     def __post_init__(self):
+        if self.data_dicts:
+            self.data_dicts = [
+                dataset_config.DataDictConfig(**data_dict)
+                for data_dict in self.data_dicts
+            ]
+            # For now, self.data_dicts is a hack to allow for the inclusion of new datasets using the
+            # GenericVoiceDataset class, without changing how existing datasets are specified in
+            # self.data_sets. In the future, all datasets will be updated to use the DataDictConfig class.
+            self.data_sets.extend(self.data_dicts)
+
         assert self.data_type in ["bfloat16", "float16", "float32"]
         if self.device == "cuda" and not torch.cuda.is_available():
             self.device = "mps" if torch.backends.mps.is_available() else "cpu"

@@ -16,4 +16,22 @@ val_sets: ["anyinstruct", "soda", "peoplespeech"]
 batch_size: 4
 max_steps: 1000
 
-data_sets: ["gigaspeech", "anyinstruct", "soda"]
+data_sets: []
+data_dicts:
+  - path: "fixie-ai/librispeech_asr"
+    name: "clean"
+    splits:
+      - "train.100"
+      - "train.360"
+    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
+    assistant_template: "{{ continuation }}"
+    transcript_template: "{{ text }}"
+    num_samples: 100_000
+  - path: "fixie-ai/librispeech_asr"
+    name: "other"
+    splits:
+      - "train.500"
+    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
+    assistant_template: "{{ continuation }}"
+    transcript_template: "{{ text }}"
+    num_samples: 100_000
