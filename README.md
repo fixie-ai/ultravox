@@ -42,7 +42,7 @@ where `data.json` contains the following request (using the OpenAI inference pro
 
 ```json
 { 
-  "model": "fixie-ai/ultravox-v0_2",
+  "model": "fixie-ai/ultravox-v0.2",
   "messages": [{ 
     "role": "user",
     "content": [{
