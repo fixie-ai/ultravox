@@ -1099,13 +1099,11 @@ class InterleaveDataset(data.IterableDataset):
         total_weight = sum(weights)
         self._normalized_probs = [w / total_weight for w in weights]
 
-
     def __iter__(self):
         iters = [iter(ds) for ds in self._datasets]
         exhausted = [False] * len(iters)
-        print(f"static_indices = {self._static_indices}")
 
-        if self._static > 0:
+        if self._static:
             static_iter = cycle(range(len(self._datasets)))
 
         while True:
@@ -1117,7 +1115,7 @@ class InterleaveDataset(data.IterableDataset):
                 # Continue indefinitely
                 pass
 
-            if self._static > 0:
+            if self._static:
                 iter_index = next(static_iter)
             else:
                 iter_index = self._rng.choice(len(iters), p=self._normalized_probs)
@@ -1128,6 +1126,11 @@ class InterleaveDataset(data.IterableDataset):
                 yield item
             except StopIteration:
                 # Reconstruct the iterator
+                if self._static:
+                    static_iter = cycle(
+                        list(range(iter_index, len(self._datasets)))
+                        + list(range(iter_index))
+                    )
                 iters[iter_index] = iter(self._datasets[iter_index])
                 exhausted[iter_index] = True
 

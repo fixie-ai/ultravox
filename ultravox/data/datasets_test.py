@@ -62,25 +62,33 @@ def test_dataproc():
     assert list(s) == [0, -1, -2, -3, -4]
 
 
-def test_interleaved():
-    # We put the smallest iterator last to test for that edge case.
+def test_interleaved_first_exhausted():
     ds1 = FakeIterableDataset(5)
     s = datasets.InterleaveDataset([ds1])
     assert list(s) == [0, 1, 2, 3, 4]
     ds2 = FakeIterableDataset(9)
     ds3 = FakeIterableDataset(3)
-    s = datasets.InterleaveDataset([ds1, ds2, ds3])
-    assert list(s) == [0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 4, 4, 5, 6, 7, 8]
+    s = datasets.InterleaveDataset(
+        [ds1, ds2, ds3], stop_strategy="first_exhausted", static=True
+    )
+    # static=True disables random sampling of datasets, so the order is deterministic
+    # stop_strategy=first_exhausted will stop interleave when the first dataset is exhausted
+    print(f"list(s): {list(s)}")
+    assert list(s) == [0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3]
     s = datasets.InterleaveDataset([])
     assert list(s) == []
 
 
-def test_interleaved_repeat():
+def test_interleaved_last_exhausted():
     ds1 = FakeIterableDataset(4)
     ds2 = FakeIterableDataset(2, start=10)
-    s = datasets.InterleaveDataset([ds1, ds2], repeat=True)
-    # repeat=True makes the dataset infinite, so we cannot safely use list()
-    assert list(itertools.islice(s, 9)) == [0, 10, 1, 11, 2, 10, 3, 11, 0]
+    s = datasets.InterleaveDataset(
+        [ds1, ds2], stop_strategy="last_exhausted", static=True
+    )
+    # static=False enables random sampling of datasets, so the order is not deterministic
+    # stop_strategy=last_exhausted will stop interleave when the last dataset is exhausted
+    print(f"list(s): {list(s)}")
+    assert list(itertools.islice(s, 9)) == [0, 10, 1, 11, 2, 10, 3, 11]
 
 
 def test_interleaved_with_multiprocessing():
