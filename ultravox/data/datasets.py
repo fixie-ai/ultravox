@@ -1100,6 +1100,10 @@ class InterleaveDataset(data.IterableDataset):
         self._normalized_probs = [w / total_weight for w in weights]
 
     def __iter__(self):
+        # If no datasets are provided, return an empty iterator
+        if not self._datasets:
+            return
+
         iters = [iter(ds) for ds in self._datasets]
         exhausted = [False] * len(iters)
 
@@ -1107,32 +1111,30 @@ class InterleaveDataset(data.IterableDataset):
             static_iter = cycle(range(len(self._datasets)))
 
         while True:
-            if self._stop_strategy == "first_exhausted" and any(exhausted):
-                break
-            elif self._stop_strategy == "last_exhausted" and all(exhausted):
-                break
-            elif self._stop_strategy == "never_stop":
-                # Continue indefinitely
-                pass
-
             if self._static:
                 iter_index = next(static_iter)
             else:
                 iter_index = self._rng.choice(len(iters), p=self._normalized_probs)
 
             try:
-                item = next(iters[iter_index])
-                print(f"item = {item}")
-                yield item
+                yield next(iters[iter_index])
             except StopIteration:
                 # Reconstruct the iterator
-                if self._static:
-                    static_iter = cycle(
-                        list(range(iter_index, len(self._datasets)))
-                        + list(range(iter_index))
-                    )
                 iters[iter_index] = iter(self._datasets[iter_index])
                 exhausted[iter_index] = True
+                if self._static:
+                    static_iter = cycle(
+                        list(range(iter_index + 1, len(self._datasets)))
+                        + list(range(iter_index + 1))
+                    )
+                if self._stop_strategy == "first_exhausted" and any(exhausted):
+                    break
+                elif self._stop_strategy == "last_exhausted" and all(exhausted):
+                    break
+                elif self._stop_strategy == "never_stop":
+                    # Continue indefinitely
+                    pass
+                yield next(iters[iter_index])
 
 
 class Dataproc(abc.ABC, data.IterableDataset):
