@@ -26,6 +26,7 @@ data_dicts:
     user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
     assistant_template: "{{ continuation }}"
     transcript_template: "{{ text }}"
+    weight: 2
     num_samples: 100_000
   - path: "fixie-ai/librispeech_asr"
     name: "other"
@@ -34,4 +35,5 @@ data_dicts:
     user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
     assistant_template: "{{ continuation }}"
     transcript_template: "{{ text }}"
+    weight: 1
     num_samples: 100_000
