@@ -13,8 +13,8 @@ from ultravox.inference import ultravox_infer
 @dataclass
 class DemoConfig:
     model_path: str = "wandb://fixie/ultravox/model-zhuang.2024-07-31-ultravox.blsp-kd-2-tinyllama:v5"
-    default_prompt: str = "Transcribe\n<|audio|>"
-    max_new_tokens: int = 64
+    default_prompt: str = ""
+    max_new_tokens: int = 256
 
 
 class History:
@@ -113,15 +113,16 @@ def main():
                     value=1.0,
                     step=0.1,
                     interactive=True,
-                    label="Temp",
+                    label="temperature",
                 )
             with gr.Column(scale=0.08, min_width=0):
-                clear = gr.Button("Restart")
+                clear = gr.Button("Reset")
             with gr.Column(scale=0.85):
                 prompt = gr.Textbox(
                     show_label=False,
-                    placeholder="Enter text and press enter",
-                    container=False)
+                    placeholder="Enter text (include <|audio|> to insert audio) and press enter",
+                    value=args.default_prompt,
+                    container=True)
             with gr.Column(scale=0.2, min_width=0):
                 audio = gr.Audio(
                     label="🎤",
