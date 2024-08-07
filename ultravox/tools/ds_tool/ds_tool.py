@@ -111,7 +111,7 @@ class TextGenerationTask:
     ) -> datasets.Dataset:
         print(f'Generating "{self.new_column_name}" with template:\n{self.template}')
         return ds_split.map(
-            lambda sample: self._map_sample(sample, exclude_fields),
+            lambda sample: self._map_sample(sample, set(exclude_fields)),
             num_proc=num_proc,
             writer_batch_size=writer_batch_size,
         )
@@ -131,7 +131,7 @@ class TextGenerationTask:
         except jinja2.TemplateError as e:
             print(f"Error rendering template: {e}")
             print(f"template: {self.template}")
-            print(f"sample keys: {list(sample.keys())}")
+            print(f"sample keys: {list(filtered_sample.keys())}")
             raise ValueError(
                 f"Template rendering failed. Make sure all keys in the template exist in the sample."
             ) from e
@@ -175,9 +175,7 @@ class DatasetToolArgs:
     num_samples: Optional[int] = simple_parsing.field(default=None, alias="-n")
     num_workers: int = simple_parsing.field(default=16, alias="-w")
     writer_batch_size: int = simple_parsing.field(default=1000)
-    exclude_fields: Optional[List[str]] = simple_parsing.field(
-        default_factory=lambda: ["audio"]
-    )
+    exclude_fields: List[str] = simple_parsing.field(default_factory=lambda: ["audio"])
 
     # HF destination dataset parameters
     upload_name: Optional[str] = simple_parsing.field(default=None, alias="-u")
