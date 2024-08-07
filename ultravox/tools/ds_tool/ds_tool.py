@@ -42,7 +42,11 @@ class TtsTask:
                 self.template = template_file.read()
 
     def map_split(
-        self, ds_split: datasets.Dataset, num_proc: int, writer_batch_size: int
+        self,
+        ds_split: datasets.Dataset,
+        num_proc: int,
+        writer_batch_size: int,
+        excluded_fields: List[str],
     ) -> datasets.Dataset:
         print(f'TTS mapping "{self.template}" to "{self.audio_column_name}"...')
         ds_split = ds_split.map(
