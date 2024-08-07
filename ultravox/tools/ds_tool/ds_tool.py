@@ -113,7 +113,9 @@ class TextGenerationTask:
     def _map_sample(self, sample):
         # e.g., {{ text }} or {{ text_proc.format_asr_text(text) }}
         try:
-            filtered_sample = {"sentence": sample["sentence"]}
+            # We need to filter out the audio before the sample is passed into the jinja template
+            # or it will get loaded into memory and spike usage.
+            filtered_sample = {k: v for k, v in sample.items() if k != "audio"}
             rendered = jinja2.Template(
                 self.template, undefined=jinja2.StrictUndefined
             ).render(**filtered_sample, json_dump=json.dumps, text_proc=text_proc)
