@@ -155,7 +155,7 @@ def main():
 
         clear.click(gradio_reset, [], [chatbot, prompt, audio], queue=False)
 
-    demo.launch(share=False)
+    demo.launch(share=True)
 
 
 if __name__ == "__main__":
