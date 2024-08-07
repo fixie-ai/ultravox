@@ -8,7 +8,6 @@ import torch
 from torch.utils import data
 from transformers.feature_extraction_utils import BatchFeature
 
-from ultravox.data import dataset_config
 from ultravox.data import datasets
 
 
@@ -76,7 +75,7 @@ def test_interleaved_first_exhausted():
     ds3 = FakeIterableDataset(3)
     s = datasets.InterleaveDataset(
         [ds1, ds2, ds3],
-        stop_strategy=dataset_config.InterleaveStopStrategy.first_exhausted,
+        stop_strategy=datasets.StopStrategy.FIRST_EXHAUSTED,
         static=True,
     )
     # static=True disables random sampling of datasets, so the order is deterministic
@@ -91,7 +90,7 @@ def test_interleaved_last_exhausted():
     ds2 = FakeIterableDataset(2, start=10)
     s = datasets.InterleaveDataset(
         [ds1, ds2],
-        stop_strategy=dataset_config.InterleaveStopStrategy.last_exhausted,
+        stop_strategy=datasets.StopStrategy.LAST_EXHAUSTED,
         static=True,
     )
     # static=True disables random sampling of datasets, so the order is deterministic
@@ -104,7 +103,7 @@ def test_interleaved_never_stop():
     ds2 = FakeIterableDataset(2, start=10)
     s = datasets.InterleaveDataset(
         [ds1, ds2],
-        stop_strategy=dataset_config.InterleaveStopStrategy.never_stop,
+        stop_strategy=datasets.StopStrategy.NEVER_STOP,
         static=True,
     )
     # static=True disables random sampling of datasets, so the order is deterministic
@@ -117,8 +116,6 @@ def test_interleaved_random():
     ds2 = FakeIterableDataset(2, start=10, weight=1)
     s = datasets.InterleaveDataset(
         [ds1, ds2],
-        stop_strategy=dataset_config.InterleaveStopStrategy.last_exhausted,
-        seed=42,
     )
     # stop_strategy=last_exhausted will stop interleaving when the last dataset is exhausted (attempted after exhaustion)
     assert list(s) == [
