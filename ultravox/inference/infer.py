@@ -1,5 +1,5 @@
 import threading
-from typing import Optional
+from typing import Optional, Union, Tuple
 
 import librosa
 import numpy as np
@@ -11,7 +11,7 @@ from ultravox.inference import base
 from ultravox.model import ultravox_processing
 
 SAMPLE_RATE = 16000
-MAX_TOKENS = 1024
+MAX_NEW_TOKENS = 1024
 # Without this penalty, the model tends to repeat itself.
 REPETITION_PENALTY = 1.1
 
@@ -33,22 +33,30 @@ class LocalInference(base.VoiceInference):
     def infer(
         self,
         sample: datasets.VoiceSample,
-        max_tokens: Optional[int] = None,
+        max_new_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
+        past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
+        num_beams: int = 1,
     ) -> base.VoiceOutput:
         inputs = self._dataproc(sample)
         input_len = inputs["input_ids"].shape[1]
-        output = self._generate(inputs, max_tokens, temperature)
-        output_tokens = output[0][input_len:]
+        output = self._generate(inputs, max_new_tokens, temperature, past_key_values, num_beams)
+        output_tokens = output.sequences[0][input_len:]
         output_text = self.tokenizer.decode(output_tokens, skip_special_tokens=True)
         output_len = len(output_tokens)
-        return base.VoiceOutput(output_text, input_len, output_len)
+        audio_token_len = 0
+        if 'audio_token_len' in inputs:
+            audio_token_len = inputs['audio_token_len'][0]
+        return base.VoiceOutput(output_text, input_len, output_len, audio_token_len, output.past_key_values)
+
 
     def infer_stream(
         self,
         sample: datasets.VoiceSample,
-        max_tokens: Optional[int] = None,
+        max_new_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
+        past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
+        num_beams: int = 1,
     ) -> base.InferenceGenerator:
         inputs = self._dataproc(sample)
         input_tokens = inputs["input_ids"].shape[1]
@@ -57,7 +65,7 @@ class LocalInference(base.VoiceInference):
             self.tokenizer, skip_prompt=True, decode_kwargs=decode_kwargs
         )
 
-        thread_args = (inputs, max_tokens, temperature, streamer)
+        thread_args = (inputs, max_new_tokens, temperature, past_key_values, num_beams, streamer)
         thread = threading.Thread(target=self._generate, args=thread_args)
         thread.start()
         output_tokens = 0
@@ -108,8 +116,10 @@ class LocalInference(base.VoiceInference):
     def _generate(
         self,
         inputs: torch.Tensor,
-        max_tokens: Optional[int] = None,
+        max_new_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
+        past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
+        num_beams: int = 1,
         streamer: Optional[transformers.TextStreamer] = None,
     ):
         temperature = temperature or None
@@ -122,10 +132,13 @@ class LocalInference(base.VoiceInference):
         return self.model.generate(
             **inputs,
             do_sample=do_sample,
-            max_new_tokens=max_tokens or MAX_TOKENS,
+            max_new_tokens=max_new_tokens or MAX_NEW_TOKENS,
             temperature=temperature,
             repetition_penalty=REPETITION_PENALTY,
             pad_token_id=self.tokenizer.eos_token_id,
             eos_token_id=terminators,
             streamer=streamer,
+            past_key_values=past_key_values,
+            num_beams=num_beams,
+            return_dict_in_generate=True,
         )

@@ -191,6 +191,9 @@ class VoiceSample:
             ), f"Unexpected audio dtype: {self.audio.dtype}"
             assert self.audio.ndim == 1, f"Unexpected audio shape: {self.audio.shape}"
 
+    def add_past_messages(self, past_messages: List[Dict[str, str]]):
+        self.messages = past_messages + self.messages
+
     messages: List[Dict[str, str]]
     """List of messages, each with a "role" and "content" field."""
     audio: Optional[np.typing.NDArray[np.float32]] = None

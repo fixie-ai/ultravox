@@ -34,7 +34,7 @@ def dataset_infer(
         history = sample.messages[:-2]
 
         output = inference.infer(
-            sample, max_tokens=max_new_tokens, temperature=temperature
+            sample, max_new_tokens=max_new_tokens, temperature=temperature
         )
         eval_sample = eval_types.Sample(
             question=question_text,

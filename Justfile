@@ -8,6 +8,7 @@ default: format check test
 
 install:
     pip install poetry==1.7.1
+    poetry config virtualenvs.in-project true
     poetry install
 
 format:
