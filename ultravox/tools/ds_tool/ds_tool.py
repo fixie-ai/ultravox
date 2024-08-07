@@ -19,8 +19,9 @@ chat_client: caching.CachingChatWrapper
 
 @dataclasses.dataclass
 class TtsTask:
+    # Jinja template for the text that needs to be converted to audio
+    template: str = simple_parsing.field(alias="-T")
     implementation: str = simple_parsing.field(default="azure", alias="-i")
-    template: str = simple_parsing.field(default=None, alias="-T")
     json_mode: bool = simple_parsing.field(default=False, alias="-j")
     audio_column_name: Optional[str] = simple_parsing.field(default=None, alias="-a")
     voice: Optional[str] = simple_parsing.field(default=None, alias="-V")
