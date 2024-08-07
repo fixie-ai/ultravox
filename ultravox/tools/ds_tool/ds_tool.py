@@ -111,12 +111,12 @@ class TextGenerationTask:
         )
 
     def _map_sample(self, sample):
-        # using a Jinja template for some added flexibility, template can include variables and functions
         # e.g., {{ text }} or {{ text_proc.format_asr_text(text) }}
         try:
+            filtered_sample = {"sentence": sample["sentence"]}
             rendered = jinja2.Template(
                 self.template, undefined=jinja2.StrictUndefined
-            ).render(**sample, json_dump=json.dumps, text_proc=text_proc)
+            ).render(**filtered_sample, json_dump=json.dumps, text_proc=text_proc)
         except jinja2.TemplateError as e:
             print(f"Error rendering template: {e}")
             print(f"template: {self.template}")
