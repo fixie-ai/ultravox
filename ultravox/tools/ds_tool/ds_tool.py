@@ -111,6 +111,7 @@ class TextGenerationTask:
         )
 
     def _map_sample(self, sample):
+        # using a Jinja template for some added flexibility, template can include variables and functions
         # e.g., {{ text }} or {{ text_proc.format_asr_text(text) }}
         try:
             # We need to filter out the audio before the sample is passed into the jinja template
