@@ -1,14 +1,7 @@
 import dataclasses
-from enum import Enum
 from typing import List, Optional
 
 from pydantic import BaseModel
-
-
-class InterleaveStopStrategy(str, Enum):
-    first_exhausted = "first_exhausted"
-    last_exhausted = "last_exhausted"
-    never_stop = "never_stop"
 
 
 class DataDictConfig(BaseModel):

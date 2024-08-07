@@ -43,7 +43,7 @@ def prepare_dataset(
     data_args: datasets.VoiceDatasetArgs,
     processor: ultravox_processing.UltravoxProcessor,
     train_on_inputs: bool,
-    stop_strategy: str,
+    stop_strategy: datasets.StopStrategy,
     num_samples: Optional[int] = None,
     include_alt_fields: bool = False,  # whether to generate tensors for text-only input (e.g., used for KD training)
 ) -> data.IterableDataset:

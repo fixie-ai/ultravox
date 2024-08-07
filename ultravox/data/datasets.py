@@ -7,6 +7,7 @@ import itertools
 import logging
 import os
 import tempfile
+from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
 import datasets
@@ -1067,20 +1068,26 @@ def create_dataset(name: str, args: VoiceDatasetArgs) -> data.IterableDataset:
         return DATASET_MAP[name](args, *ext)
 
 
+class StopStrategy(str, Enum):
+    FIRST_EXHAUSTED = "first_exhausted"
+    LAST_EXHAUSTED = "last_exhausted"
+    NEVER_STOP = "never_stop"
+
+
 class InterleaveDataset(data.IterableDataset):
     """Interleaves multiple IterableDataset objects based on normalized weights."""
 
     def __init__(
         self,
         datasets: Sequence[data.IterableDataset],
-        stop_strategy: str = dataset_config.InterleaveStopStrategy.last_exhausted,
+        stop_strategy: StopStrategy = StopStrategy.LAST_EXHAUSTED,
         seed: Optional[int] = 42,
         static: bool = False,
     ) -> None:
         """
         Args:
             datasets: A list of data.IterableDataset objects.
-            stop_strategy: Strategy for stopping iteration. Choose from 'first_exhausted', 'last_exhausted', 'never_stop'.
+            stop_strategy: Strategy for stopping iteration.
             seed: Optional seed for reproducibility.
             static: If true, the datasets are interleaved in a static order with equal weights.
         """
@@ -1115,27 +1122,17 @@ class InterleaveDataset(data.IterableDataset):
             try:
                 yield next(iters[iter_index])
             except StopIteration:
-                # Reconstruct the iterator
-                iters[iter_index] = iter(self._datasets[iter_index])
                 exhausted[iter_index] = True
-                if (
-                    self._stop_strategy
-                    == dataset_config.InterleaveStopStrategy.first_exhausted
-                    and any(exhausted)
-                ):
-                    break
-                elif (
-                    self._stop_strategy
-                    == dataset_config.InterleaveStopStrategy.last_exhausted
+
+                # Check if stopping condition is met
+                if self._stop_strategy == StopStrategy.FIRST_EXHAUSTED or (
+                    self._stop_strategy == StopStrategy.LAST_EXHAUSTED
                     and all(exhausted)
                 ):
                     break
-                elif (
-                    self._stop_strategy
-                    == dataset_config.InterleaveStopStrategy.never_stop
-                ):
-                    # Continue indefinitely
-                    pass
+
+                # Recreate the iterator if stopping condition is not met and yield the next sample
+                iters[iter_index] = iter(self._datasets[iter_index])
                 yield next(iters[iter_index])
 
 
