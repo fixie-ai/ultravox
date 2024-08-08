@@ -94,7 +94,7 @@ class UltravoxPipeline(transformers.Pipeline):
         temperature: Optional[float] = None,
         max_new_tokens: Optional[int] = None,
         repetition_penalty: float = 1.1,
-    ) -> List[int]:
+    ) -> dict[str, List[int]]:
         temperature = temperature or None
         do_sample = temperature is not None
 
@@ -113,7 +113,7 @@ class UltravoxPipeline(transformers.Pipeline):
         )
         return {"outputs": [output[input_len:] for output in outputs]}
 
-    def postprocess(self, model_outputs) -> str:
+    def postprocess(self, model_outputs) -> List[str]:
         return [
             self.processor.tokenizer.decode(output, skip_special_tokens=True)
             for output in model_outputs["outputs"]
