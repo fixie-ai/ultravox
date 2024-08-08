@@ -15,6 +15,8 @@ class DemoConfig:
     model_path: str = "wandb://fixie/ultravox/model-zhuang.2024-07-31-ultravox.blsp-kd-2-tinyllama:v5"
     default_prompt: str = ""
     max_new_tokens: int = 256
+    device: str = "mps"
+    data_type: str = "float16"
 
 
 class History:
@@ -46,8 +48,8 @@ def main():
     global args, history, inference
 
     args = simple_parsing.parse(config_class=DemoConfig)
-    inference = ultravox_infer.UltravoxInference(args.model_path)
-    history = History(audio_token_replacement=inference.tokenizer.eos_token)
+    inference = ultravox_infer.UltravoxInference(args.model_path, device=args.device, data_type=args.data_type)
+    history = History(audio_token_replacement=inference.tokenizer.bos_token)
 
     def add_text(chatbot: gr.Chatbot, text: str) -> gr.Chatbot:
         return chatbot + [(text, None)]
@@ -90,14 +92,14 @@ def main():
 
     def gradio_reset():
         global history
-        history = History(audio_token_replacement=inference.tokenizer.eos_token)
+        history = History(audio_token_replacement=inference.tokenizer.bos_token)
         return [], "", None
 
     with gr.Blocks() as demo:
-        chatbot = gr.Chatbot()
+        chatbot = gr.Chatbot(scale=1, height=800)
         
         with gr.Row():
-            with gr.Column(scale=0.2, min_width=0):
+            with gr.Column(scale=0.1):
                 num_beams = gr.Slider(
                     minimum=1,
                     maximum=10,
@@ -106,7 +108,6 @@ def main():
                     interactive=True,
                     label="beam",
                 )
-                
                 temperature = gr.Slider(
                     minimum=0.1,
                     maximum=2.0,
@@ -115,21 +116,21 @@ def main():
                     interactive=True,
                     label="temperature",
                 )
-            with gr.Column(scale=0.08, min_width=0):
-                clear = gr.Button("Reset")
-            with gr.Column(scale=0.85):
+            with gr.Column(scale=0.8):
                 prompt = gr.Textbox(
                     show_label=False,
+                    lines=4,
                     placeholder="Enter text (include <|audio|> to insert audio) and press enter",
                     value=args.default_prompt,
                     container=True)
-            with gr.Column(scale=0.2, min_width=0):
+            with gr.Column(scale=0.1):
                 audio = gr.Audio(
                     label="🎤",
                     sources=["microphone"],
                     type="filepath",
                     visible=True,
                 )
+                reset = gr.Button("Reset")               
 
         def process_text(chatbot, prompt, num_beams, temperature):
             return process_turn(chatbot, prompt, None, num_beams, temperature)
@@ -153,7 +154,7 @@ def main():
             enable_interaction, [], [prompt, audio], queue=False
         )
 
-        clear.click(gradio_reset, [], [chatbot, prompt, audio], queue=False)
+        reset.click(gradio_reset, [], [chatbot, prompt, audio], queue=False)
 
     demo.launch(share=True)
 
