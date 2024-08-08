@@ -127,9 +127,10 @@ class TextGenerationTask:
         try:
             # We need to filter out the audio before the sample is passed into the jinja template
             # or it will get loaded into memory and spike usage.
-            filtered_sample = {
-                k: v for k, v in sample.items() if k not in exclude_fields
-            }
+            filtered_sample = {}
+            for k in sample.keys():
+                if k not in exclude_fields:
+                    filtered_sample[k] = sample[k]
             rendered = jinja2.Template(
                 self.template, undefined=jinja2.StrictUndefined
             ).render(**filtered_sample, json_dump=json.dumps, text_proc=text_proc)
