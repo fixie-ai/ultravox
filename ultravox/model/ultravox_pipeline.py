@@ -101,7 +101,6 @@ class UltravoxPipeline(transformers.Pipeline):
         terminators = [self.tokenizer.eos_token_id]
         if "<|eot_id|>" in self.tokenizer.added_tokens_encoder:
             terminators.append(self.tokenizer.convert_tokens_to_ids("<|eot_id|>"))
-
         input_len = model_inputs["input_ids"].shape[1]
 
         outputs = self.model.generate(
@@ -112,11 +111,13 @@ class UltravoxPipeline(transformers.Pipeline):
             repetition_penalty=repetition_penalty,
             eos_token_id=terminators
         )
-        return outputs[0][input_len:]
+        return {"outputs": [output[input_len:] for output in outputs]}
 
     def postprocess(self, model_outputs) -> str:
-        output_text = self.tokenizer.decode(model_outputs, skip_special_tokens=True)
-        return output_text
+        return [
+            self.processor.tokenizer.decode(output, skip_special_tokens=True)
+            for output in model_outputs["outputs"]
+        ]
 
 
 transformers.pipelines.PIPELINE_REGISTRY.register_pipeline(
