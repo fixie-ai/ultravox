@@ -247,10 +247,10 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             **kwargs,
         )
 
-        if is_cache_empty(past_key_values) and audio_values is not None:
-            # We only want to use audio features in the 1st generation step
+        prefill_start_idx = kwargs['cache_position'][0]
+        if audio_values is not None and prefill_start_idx <= torch.max(audio_token_start_idx):
             model_input["audio_values"] = audio_values
-            model_input["audio_token_start_idx"] = audio_token_start_idx
+            model_input["audio_token_start_idx"] = audio_token_start_idx - prefill_start_idx
             model_input["audio_token_len"] = audio_token_len
 
         return model_input

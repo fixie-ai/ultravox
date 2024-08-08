@@ -109,9 +109,9 @@ def main():
                     label="beam",
                 )
                 temperature = gr.Slider(
-                    minimum=0.1,
+                    minimum=0,
                     maximum=2.0,
-                    value=1.0,
+                    value=0,
                     step=0.1,
                     interactive=True,
                     label="temperature",
