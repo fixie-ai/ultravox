@@ -310,10 +310,8 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         language_model = apply_lora(language_model, config.text_model_lora_config)
         return language_model
 
-    def merge_and_unload(self):
-        if isinstance(self.language_model, peft.PeftModel):
-            self.language_model = self.language_model.merge_and_unload()
-            # no need to download base language model weights anymore, so we can remove the id
+    def _add_language_model_weights_to_keep(self):
+        if self.config.text_model_id is not None:
             self.config.text_model_id = None
             self.keep_params.update(
                 set(
@@ -324,9 +322,8 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
                 )
             )
 
-        if isinstance(self.audio_tower, peft.PeftModel):
-            self.audio_tower = self.audio_tower.merge_and_unload()
-            # no need to download base audio model weights anymore, so we can remove the id
+    def _add_audio_tower_weights_to_keep(self):
+        if self.config.audio_model_id is not None:
             self.config.audio_model_id = None
             self.keep_params.update(
                 set(
@@ -336,6 +333,17 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
                     ]
                 )
             )
+
+    def merge_and_unload(self):
+        if isinstance(self.language_model, peft.PeftModel):
+            self.language_model = self.language_model.merge_and_unload()
+            # no need to download base language model weights anymore, so we can remove the id
+            self._add_language_model_weights_to_keep()
+
+        if isinstance(self.audio_tower, peft.PeftModel):
+            self.audio_tower = self.audio_tower.merge_and_unload()
+            # no need to download base audio model weights anymore, so we can remove the id
+            self._add_audio_tower_weights_to_keep()
 
         for param in ["text_model_lora_config", "audio_model_lora_config"]:
             if hasattr(self.config, param):

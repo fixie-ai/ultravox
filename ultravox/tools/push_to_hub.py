@@ -27,6 +27,8 @@ class UploadToHubArgs:
     data_type: Optional[str] = None
     # Public or private (default)
     private: bool = True
+    # Push LLM weights even if they are not fine-tuned
+    force_push_llm_weights: bool = True
 
 
 def main(args: UploadToHubArgs):
@@ -37,6 +39,11 @@ def main(args: UploadToHubArgs):
         device=args.device,
         data_type=args.data_type,
     )
+    if args.force_push_llm_weights and hasattr(
+        inference.model, "_add_language_model_weights_to_keep"
+    ):
+        inference.model._add_language_model_weights_to_keep()
+
     pipe = ultravox_pipeline.UltravoxPipeline(
         model=inference.model,
         tokenizer=inference.tokenizer,
