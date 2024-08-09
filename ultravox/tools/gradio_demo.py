@@ -17,7 +17,7 @@ Voice mode: Click the recording button to start, then click again to stop and su
 
 @dataclass
 class DemoConfig:
-    model_path: str = "wandb://fixie/ultravox/model-zhuang.2024-07-31-ultravox.blsp-kd-2-tinyllama:v5"
+    model_path: str = "wandb://fixie/ultravox/model-zhuang.2024-07-31-ultravox.blsp-kd-2b-tinyllama:v5"
     # Use <|audio|> to specify where to insert audio, otherwise, audio is inserted at the end in voice mode.
     default_prompt: str = ""
     max_new_tokens: int = 256
