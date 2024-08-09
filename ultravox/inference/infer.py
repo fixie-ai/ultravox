@@ -1,5 +1,5 @@
 import threading
-from typing import Optional, Union, Tuple
+from typing import Optional, Tuple, Union
 
 import librosa
 import numpy as np
@@ -40,15 +40,18 @@ class LocalInference(base.VoiceInference):
     ) -> base.VoiceOutput:
         inputs = self._dataproc(sample)
         input_len = inputs["input_ids"].shape[1]
-        output = self._generate(inputs, max_new_tokens, temperature, past_key_values, num_beams)
+        output = self._generate(
+            inputs, max_new_tokens, temperature, past_key_values, num_beams
+        )
         output_tokens = output.sequences[0][input_len:]
         output_text = self.tokenizer.decode(output_tokens, skip_special_tokens=True)
         output_len = len(output_tokens)
         audio_token_len = 0
-        if 'audio_token_len' in inputs:
-            audio_token_len = inputs['audio_token_len'][0]
-        return base.VoiceOutput(output_text, input_len, output_len, audio_token_len, output.past_key_values)
-
+        if "audio_token_len" in inputs:
+            audio_token_len = inputs["audio_token_len"][0]
+        return base.VoiceOutput(
+            output_text, input_len, output_len, audio_token_len, output.past_key_values
+        )
 
     def infer_stream(
         self,
@@ -65,7 +68,14 @@ class LocalInference(base.VoiceInference):
             self.tokenizer, skip_prompt=True, decode_kwargs=decode_kwargs
         )
 
-        thread_args = (inputs, max_new_tokens, temperature, past_key_values, num_beams, streamer)
+        thread_args = (
+            inputs,
+            max_new_tokens,
+            temperature,
+            past_key_values,
+            num_beams,
+            streamer,
+        )
         thread = threading.Thread(target=self._generate, args=thread_args)
         thread.start()
         output_tokens = 0
