@@ -15,7 +15,7 @@ bitsandbytes = "~0.42.0"
 peft = "~0.11.1"
 simple-parsing = "~0.1.5"
 librosa = "~0.10.2.post1"
-requests = "~2.31.0"  # Update to a newer version compatible with urllib3 >= 2.0
+requests = "~2.31.0"
 datasets = "~2.19.1"
 mosaicml-streaming = "~0.7.6"
 nltk = "~3.8.1"
