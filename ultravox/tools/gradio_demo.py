@@ -1,8 +1,7 @@
 from dataclasses import dataclass
-from typing import Optional, Tuple
+from typing import Optional
 
 import gradio as gr
-import numpy as np
 import simple_parsing
 
 from ultravox.data import datasets
@@ -29,7 +28,7 @@ class DemoConfig:
 
 
 def main():
-    args: DemoConfig = simple_parsing.parse(config_class=DemoConfig)
+    args = simple_parsing.parse(config_class=DemoConfig)
     inference = ultravox_infer.UltravoxInference(
         args.model_path, device=args.device, data_type=args.data_type
     )
@@ -44,7 +43,7 @@ def main():
     def process_turn(
         chatbot: gr.Chatbot,
         prompt: str,
-        audio: Optional[Tuple[int, np.ndarray]] = None,
+        audio: Optional[str] = None,
         num_beams: int = 1,
         temperature: float = 0,
     ):

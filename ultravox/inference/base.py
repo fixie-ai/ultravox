@@ -12,8 +12,8 @@ class VoiceOutput:
     text: str
     input_tokens: int
     output_tokens: int
-    audio_token_len: int
-    past_key_values: Union[Tuple, transformers.cache_utils.Cache]
+    audio_token_len: int = 0
+    past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None
 
 
 class InferenceMessage:
