@@ -17,9 +17,11 @@ Voice mode: Click the recording button to start, then click again to stop and su
 
 @dataclass
 class DemoConfig:
-    model_path: str = (
-        "wandb://fixie/ultravox/model-zhuang.2024-07-31-ultravox.blsp-kd-2b-tinyllama:v5"
-    )
+    # model_path can refer to a HF hub model_id, a local path, or a Weights & Biases artifact
+    #    fixie-ai/ultravox
+    #    runs/llama2_asr_gigaspeech/checkpoint-1000/
+    #    wandb://fixie/ultravox/model-llama2_asr_gigaspeech:v0
+    model_path: str = "fixie-ai/ultravox"
     # Use <|audio|> to specify where to insert audio, otherwise, audio is inserted at the end in voice mode.
     default_prompt: str = ""
     max_new_tokens: int = 256
