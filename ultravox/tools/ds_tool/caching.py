@@ -9,29 +9,40 @@ from ultravox.tools.ds_tool import tts
 
 
 class CachingChatWrapper:
-    def __init__(self, client: openai.Client, unique_id: str):
+    def __init__(self, client: openai.Client, unique_id: str, prefix_length: int = 1):
         super().__init__()
         self._client = client
         self._base_path = os.path.join(
             ".cache/ds_tool/textgen",
             unique_id.replace("https://", "").replace("/", "__"),
         )
-        os.makedirs(self._base_path, exist_ok=True)
+        self._prefix_length = prefix_length
+
+    def _get_prefixed_path(self, text_hash: str) -> str:
+        prefix = text_hash[: self._prefix_length]
+        prefixed_path = os.path.join(self._base_path, prefix)
+        os.makedirs(prefixed_path, exist_ok=True)
+        return os.path.join(prefixed_path, f"{text_hash}.txt")
 
     def chat_completion(self, **kwargs) -> str:
         text_hash = hashlib.sha256(json.dumps(kwargs).encode()).hexdigest()
 
-        cache_path = os.path.join(self._base_path, f"{text_hash}.txt")
-
+        # Try to read from cache
+        cache_path = self._get_prefixed_path(text_hash)
         if os.path.exists(cache_path):
             with open(cache_path, "r") as f:
                 return f.read()
 
+        # If not found, create new response
         response = self._client.chat.completions.create(**kwargs)
         text = response.choices[0].message.content
 
-        with open(cache_path, "w") as f:
-            f.write(text)
+        # Write to cache
+        try:
+            with open(cache_path, "w") as f:
+                f.write(text)
+        except IOError as e:
+            print(f"Warning: Unable to cache response: {e}")
 
         return text
 
