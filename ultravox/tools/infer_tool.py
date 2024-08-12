@@ -87,24 +87,31 @@ class InferArgs:
 
 
 def run_tui(
+    index: int,
     inference: base.VoiceInference,
-    samples: List[datasets.VoiceSample],
+    sample: datasets.VoiceSample,
     args: InferArgs,
     expected_response: Optional[str] = None,
     scores: Optional[List[float]] = None,
 ):
+    if index >= 0:
+        print(f"--- Sample {index} ---")
+    messages = sample.messages
+    question_message = messages[-2] if len(messages) > 1 else messages[-1]
+    transcript = f' ["{sample.audio_transcript}"]' if sample.audio_transcript else ""
+    print(f"Q: {question_message['content']}{transcript}")
+    print(f"A: ", end="")
     start_time = time.time()
-    first_token_time = [None] * len(samples)
-    texts = [""] * len(samples)
-    stats = [None] * len(samples)
+    first_token_time = None
+    text = ""
+    stats = None
 
     # Run streaming inference and print the output as it arrives.
-    output = inference.infer(
-        samples,
+    stream = inference.infer_stream(
+        sample,
         max_tokens=args.max_tokens,
         temperature=args.temperature,
     )
-    print("output!", output)
     for msg in stream:
         if isinstance(msg, base.InferenceChunk):
             if first_token_time is None:
@@ -161,34 +168,21 @@ def run_tui(
 
 
 def oneshot_infer(inference: base.VoiceInference, args: InferArgs):
-    # prompt = args.prompt or (DEFAULT_ASR_PROMPT if args.asr else DEFAULT_PROMPT)
-    # if args.audio_file is not None:
-    #     sample = datasets.VoiceSample.from_prompt_and_buf(
-    #         prompt, args.audio_file.read()
-    #     )
-    # else:
-    #     sample = datasets.VoiceSample.from_prompt(prompt)
-
-    prompts = [
-        "Listen to '<|audio|>' and respond to it",
-        "Listen to '<|audio|>' and respond to it 2",
-    ]
-    audio_files = ["../input.wav", "../input2.wav"]
-    samples = []
-    for prompt, audio_file in zip(prompts, audio_files):
-        with open(audio_file, "rb") as f:
-            audio_data = f.read()
-        sample = datasets.VoiceSample.from_prompt_and_buf(prompt, audio_data)
-        samples.append(sample)
-
-    run_tui(inference, samples, args)
+    prompt = args.prompt or (DEFAULT_ASR_PROMPT if args.asr else DEFAULT_PROMPT)
+    if args.audio_file is not None:
+        sample = datasets.VoiceSample.from_prompt_and_buf(
+            prompt, args.audio_file.read()
+        )
+    else:
+        sample = datasets.VoiceSample.from_prompt(prompt)
+    run_tui(-1, inference, sample, args)
 
 
 def dataset_infer(inference: base.VoiceInference, args: InferArgs):
     assert args.data_sets, "At least one data set must be provided"
     ds_args = datasets.VoiceDatasetArgs(
         data_dir=args.data_dir,
-        prompt=args.prompts[0],
+        prompt=args.prompt,
         include_audio=not args.text_only,
         include_context=args.context,
         shuffle=args.shuffle,
@@ -199,25 +193,62 @@ def dataset_infer(inference: base.VoiceInference, args: InferArgs):
         ds_args.shuffle_seed = args.seed
     ds = datasets.create_dataset(args.data_sets[0], ds_args)
     scores: List[float] = []
-    for i, sample in enumerate(datasets.Range(ds, args.num_samples)):
-        # Store the original question and answer for JSON output.
-        question_text = sample.audio_transcript
-        expected_answer = sample.messages[-1]["content"]
-        # Drop any assistant response from the sample.
-        sample.messages = sample.messages[:-1]
-        print("dataset sample", sample)
-        if not args.json:
+    if not args.json:
+        for i, sample in enumerate(datasets.Range(ds, args.num_samples)):
+            # Store the original question and answer for JSON output.
+            question_text = sample.audio_transcript
+            expected_answer = sample.messages[-1]["content"]
+            # Drop any assistant response from the sample.
+            sample.messages = sample.messages[:-1]
+            print("dataset sample", sample)
             run_tui(i, inference, sample, args, expected_answer, scores)
-        else:
-            output = inference.infer(
-                sample, max_tokens=args.max_tokens, temperature=args.temperature
+    else:
+        batch_start_time = time.time()
+        batched_samples = []
+        current_batch = []
+        batch_size = args.batch_size if args.batch_size else 1
+
+        for sample in datasets.Range(ds, args.num_samples):
+            question_text = sample.audio_transcript
+            expected_answer = sample.messages[-1]["content"]
+            sample.messages = sample.messages[:-1]
+            current_batch.append(
+                {
+                    "question_text": question_text,
+                    "expected_answer": expected_answer,
+                    "sample": sample,
+                }
             )
-            obj = {
-                "question": question_text,
-                "generated_answer": output.text,
-                "expected_answer": expected_answer,
-            }
-            print(json.dumps(obj))
+
+            if len(current_batch) == batch_size:
+                batched_samples.append(current_batch)
+                current_batch = []
+
+        print("batched_samples input", batched_samples)
+        batched_outputs = []
+        for batch in batched_samples:
+            voice_sample_batch = [s["sample"] for s in batch]
+            text_output_batch = inference.infer(
+                voice_sample_batch,
+                max_tokens=args.max_tokens,
+                temperature=args.temperature,
+            )
+            for i, text_output in enumerate(text_output_batch):
+                batch[i]["sample"] = text_output
+
+            batched_outputs.append(batch)
+        print("batched_outputs", batched_outputs)
+
+        for batch in batched_outputs:
+            for output in batch:
+                obj = {
+                    "question": output["question_text"],
+                    "generated_answer": output["sample"].text,
+                    "expected_answer": output["expected_answer"],
+                }
+                print(json.dumps(obj))
+
+        print("Total time:", time.time() - batch_start_time)
 
 
 def main(args: InferArgs):

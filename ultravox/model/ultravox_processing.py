@@ -218,7 +218,7 @@ class UltravoxProcessor(transformers.ProcessorMixin):
 
             # make sure all keys are tensors
             for key, val in data.items():
-                data[key] = torch.tensor(val)
+                data[key] = torch.tensor(np.array(val))
 
         return transformers.BatchFeature(data=data)
 

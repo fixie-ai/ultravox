@@ -149,6 +149,7 @@ class LocalInference(base.VoiceInference):
         temperature: Optional[float] = None,
         streamer: Optional[transformers.TextStreamer] = None,
     ):
+        print("generate shape", inputs.shape)
         temperature = temperature or None
         do_sample = temperature is not None
 
