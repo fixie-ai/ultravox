@@ -224,7 +224,6 @@ def dataset_infer(inference: base.VoiceInference, args: InferArgs):
                 batched_samples.append(current_batch)
                 current_batch = []
 
-        print("batched_samples input", batched_samples)
         batched_outputs = []
         for batch in batched_samples:
             voice_sample_batch = [s["sample"] for s in batch]
@@ -237,7 +236,6 @@ def dataset_infer(inference: base.VoiceInference, args: InferArgs):
                 batch[i]["sample"] = text_output
 
             batched_outputs.append(batch)
-        print("batched_outputs", batched_outputs)
 
         for batch in batched_outputs:
             for output in batch:
