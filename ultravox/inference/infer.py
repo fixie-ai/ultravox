@@ -38,13 +38,17 @@ class LocalInference(base.VoiceInference):
     ) -> base.VoiceOutput:
         inputs = self._dataproc(samples)
         input_len = inputs["input_ids"].shape[1]
-        output = self._generate(inputs, max_tokens, temperature)
-        print("actual raw output", output)
-        print("raw output shape", output.shape)
-        output_tokens = output[0][input_len:]
-        output_text = self.tokenizer.decode(output_tokens, skip_special_tokens=True)
-        output_len = len(output_tokens)
-        return base.VoiceOutput(output_text, input_len, output_len)
+        outputs = self._generate(inputs, max_tokens, temperature)
+        print("actual raw output", outputs)
+        print("raw output shape", outputs.shape)
+
+        return_vals = []
+        for output in outputs:
+            output_tokens = output[input_len:]
+            output_text = self.tokenizer.decode(output_tokens, skip_special_tokens=True)
+            output_len = len(output_tokens)
+            return_vals.append(base.VoiceOutput(output_text, input_len, output_len))
+        return return_vals
 
     def infer_stream(
         self,
