@@ -8,8 +8,8 @@ license = "MIT"
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.11"
-torch = "2.2.2"
+python = ">=3.10,<4.0"
+torch = ">=2.2.2"
 transformers = {version = ">=4.43.1", extras = ["torch"]}
 bitsandbytes = "~0.42.0"
 peft = "~0.11.1"
@@ -28,6 +28,7 @@ jiwer = "~3.0.4"
 tensorboardx = "~2.6.2.2"
 wandb = "~0.17.1"
 sacrebleu = "^2.4.2"
+ultravox-vllm = "^0.5.4.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "~24.4.2"
