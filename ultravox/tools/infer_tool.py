@@ -30,11 +30,13 @@ class InferArgs:
     # Model ID to use for the model
     model: str = simple_parsing.field(default="fixie-ai/ultravox-v0_2", alias="-m")
     # Path to the audio file
-    audio_file: Optional[IO] = simple_parsing.field(
-        default=None, type=argparse.FileType("rb"), alias="-f"
+    audio_files: Optional[List[IO]] = simple_parsing.field(
+        default=None, type=argparse.FileType("rb"), alias="-f", nargs="+"
     )
     # Prompt to use for inference
-    prompt: Optional[str] = None
+    prompts: Optional[List[str]] = None
+    prompt: Optional[List[str]] = None
+
     # Inference the model using only the text input or transcript, without audio
     text_only: bool = False
     # Use ASR for the prompt and compute WER
@@ -77,6 +79,8 @@ class InferArgs:
     verbose: bool = simple_parsing.field(default=False, alias="-v")
     # JSON output
     json: bool = simple_parsing.field(default=False)
+    # Batch size
+    batch_size: int = simple_parsing.field(default=1, alias="-b")
 
     def __post_init__(self):
         if self.prompt and self.prompt.startswith("@"):
@@ -85,28 +89,20 @@ class InferArgs:
 
 
 def run_tui(
-    index: int,
     inference: base.VoiceInference,
-    sample: datasets.VoiceSample,
+    samples: List[datasets.VoiceSample],
     args: InferArgs,
     expected_response: Optional[str] = None,
     scores: Optional[List[float]] = None,
 ):
-    if index >= 0:
-        print(f"--- Sample {index} ---")
-    messages = sample.messages
-    question_message = messages[-2] if len(messages) > 1 else messages[-1]
-    transcript = f' ["{sample.audio_transcript}"]' if sample.audio_transcript else ""
-    print(f"Q: {question_message['content']}{transcript}")
-    print(f"A: ", end="")
     start_time = time.time()
-    first_token_time = None
-    text = ""
-    stats = None
+    first_token_time = [None] * len(samples)
+    texts = [""] * len(samples)
+    stats = [None] * len(samples)
 
     # Run streaming inference and print the output as it arrives.
     stream = inference.infer_stream(
-        sample,
+        samples,
         max_tokens=args.max_tokens,
         temperature=args.temperature,
     )
@@ -166,21 +162,30 @@ def run_tui(
 
 
 def oneshot_infer(inference: base.VoiceInference, args: InferArgs):
-    prompt = args.prompt or (DEFAULT_ASR_PROMPT if args.asr else DEFAULT_PROMPT)
-    if args.audio_file is not None:
-        sample = datasets.VoiceSample.from_prompt_and_buf(
-            prompt, args.audio_file.read()
-        )
-    else:
-        sample = datasets.VoiceSample.from_prompt(prompt)
-    run_tui(-1, inference, sample, args)
+    prompts = [
+        prompt or (DEFAULT_ASR_PROMPT if args.asr else DEFAULT_PROMPT)
+        for prompt in args.prompts
+    ]
+    samples = []
+    if args.audio_files is not None:
+        for prompt, audio_file in zip(prompts, args.audio_files):
+            print("audio file", audio_file)
+            sample = datasets.VoiceSample.from_prompt_and_buf(prompt, audio_file.read())
+            samples.append(sample)
+    # else:
+    #     sample = datasets.VoiceSample.from_prompt(prompt)
+    print(prompts)
+    print(args.audio_files)
+    print("one shot samples", len(samples))
+    print(samples[0].messages, samples[1].messages)
+    run_tui(inference, samples, args)
 
 
 def dataset_infer(inference: base.VoiceInference, args: InferArgs):
     assert args.data_sets, "At least one data set must be provided"
     ds_args = datasets.VoiceDatasetArgs(
         data_dir=args.data_dir,
-        prompt=args.prompt,
+        prompt=args.prompts[0],
         include_audio=not args.text_only,
         include_context=args.context,
         shuffle=args.shuffle,
@@ -197,6 +202,7 @@ def dataset_infer(inference: base.VoiceInference, args: InferArgs):
         expected_answer = sample.messages[-1]["content"]
         # Drop any assistant response from the sample.
         sample.messages = sample.messages[:-1]
+        print("dataset sample", sample)
         if not args.json:
             run_tui(i, inference, sample, args, expected_answer, scores)
         else:

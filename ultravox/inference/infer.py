@@ -1,5 +1,5 @@
 import threading
-from typing import Optional
+from typing import List, Optional
 
 import librosa
 import numpy as np
@@ -46,11 +46,11 @@ class LocalInference(base.VoiceInference):
 
     def infer_stream(
         self,
-        sample: datasets.VoiceSample,
+        samples: List[datasets.VoiceSample],
         max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
     ) -> base.InferenceGenerator:
-        inputs = self._dataproc(sample)
+        inputs = self._dataproc(samples)
         input_tokens = inputs["input_ids"].shape[1]
         decode_kwargs = {"skip_special_tokens": True}
         streamer = transformers.TextIteratorStreamer(
@@ -68,34 +68,65 @@ class LocalInference(base.VoiceInference):
         yield base.InferenceStats(input_tokens, output_tokens)
         thread.join()
 
-    def _dataproc(self, sample: datasets.VoiceSample):
-        text_input = self.tokenizer.apply_chat_template(
-            sample.messages, add_generation_prompt=True, tokenize=False
-        )
-        if sample.audio is not None:
-            audio = sample.audio
-            sample_rate = sample.sample_rate
-            # Normalize audio to float32.
-            if audio.dtype == np.int16:
-                audio = audio / np.float32(32768.0)
-            if audio.dtype not in [np.float64, np.float32]:
-                raise ValueError("Audio must be float64 or float32 or int16")
+    def _dataproc(self, samples: List[datasets.VoiceSample]):
+        text_inputs = [
+            self.tokenizer.apply_chat_template(
+                sample.messages, add_generation_prompt=True, tokenize=False
+            )
+            for sample in samples
+        ]
 
-            # Convert to tensor, resampling to 16kHz if needed.
-            if sample_rate != SAMPLE_RATE:
-                audio = librosa.resample(
-                    audio, orig_sr=sample_rate, target_sr=SAMPLE_RATE
-                )
-            audio_input = torch.from_numpy(audio)
-            # Squeeze from [1, T] to [T] if needed.
-            if sample.audio.ndim == 2:
-                audio_input = audio_input.squeeze(0)
-        else:
-            audio_input = None
+        audio_inputs = []
+        for sample in samples:
+            if sample.audio is not None:
+                audio = sample.audio
+                sample_rate = sample.sample_rate
+                # Normalize audio to float32.
+                if audio.dtype == np.int16:
+                    audio = audio / np.float32(32768.0)
+                if audio.dtype not in [np.float64, np.float32]:
+                    raise ValueError("Audio must be float64 or float32 or int16")
+
+                # Convert to tensor, resampling to 16kHz if needed.
+                if sample_rate != SAMPLE_RATE:
+                    audio = librosa.resample(
+                        audio, orig_sr=sample_rate, target_sr=SAMPLE_RATE
+                    )
+                audio_input = torch.from_numpy(audio)
+                # Squeeze from [1, T] to [T] if needed.
+                if sample.audio.ndim == 2:
+                    audio_input = audio_input.squeeze(0)
+            else:
+                audio_input = None
+            audio_inputs.append(audio_input)
+
+        # Check if audio inputs are uniform and match text inputs
+        if audio_inputs and len(audio_inputs) != len(text_inputs):
+            raise ValueError(
+                f"Mismatch between number of text inputs ({len(text_inputs)}) and audio inputs ({len(audio_inputs)})"
+            )
+
+        # check if audio inputs are uniform
+        if not all(x is None for x in audio_inputs) and not all(
+            x is not None for x in audio_inputs
+        ):
+            raise ValueError(
+                "Audio batch must be uniform. All elements in the audio batch must either be None or all must contain audio data."
+            )
+        audio_inputs = audio_inputs if audio_inputs[0] is not None else None
+
+        # check if text inputs are uniform
+        if not all(x is None for x in text_inputs) and not all(
+            x is not None for x in text_inputs
+        ):
+            raise ValueError(
+                "Text batch must be uniform. All elements in the text batch must either be None or all must contain text data."
+            )
+        text_inputs = text_inputs if text_inputs[0] is not None else None
 
         inputs = self.processor(
-            audio=audio_input,
-            text=text_input,
+            audios=audio_inputs,
+            texts=text_inputs,
             return_tensors="pt",
             sampling_rate=SAMPLE_RATE,
         )

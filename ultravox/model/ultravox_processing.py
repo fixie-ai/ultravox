@@ -1,8 +1,33 @@
-from typing import Optional, Union
+from typing import List, Optional, Union
 
 import numpy as np
 import torch
 import transformers
+
+
+def collate_tokens(values: List[List[int]], pad_token_id=0, padding_side="right"):
+    # Convert lists to tensors
+    tensors = [torch.tensor(v, dtype=torch.long) for v in values]
+
+    # Get max length
+    max_length = max(len(v) for v in values)
+
+    # Pad tensors
+    if padding_side == "right":
+        padded_tensors = [
+            torch.nn.functional.pad(t, (0, max_length - t.size(0)), value=pad_token_id)
+            for t in tensors
+        ]
+    elif padding_side == "left":
+        padded_tensors = [
+            torch.nn.functional.pad(t, (max_length - t.size(0), 0), value=pad_token_id)
+            for t in tensors
+        ]
+    else:
+        raise ValueError("padding_side must be either 'left' or 'right'")
+
+    # Stack tensors
+    return torch.stack(padded_tensors)
 
 
 class UltravoxProcessor(transformers.ProcessorMixin):
@@ -58,8 +83,8 @@ class UltravoxProcessor(transformers.ProcessorMixin):
 
     def __call__(
         self,
-        text: Optional[str] = None,
-        audio: Optional[Union[np.ndarray, torch.Tensor]] = None,
+        texts: Optional[List[str]] = None,
+        audios: Optional[List[Union[np.ndarray, torch.Tensor]]] = None,
         sampling_rate: Optional[int] = None,
         return_tensors: Optional[
             Union[str, transformers.TensorType]
@@ -103,64 +128,80 @@ class UltravoxProcessor(transformers.ProcessorMixin):
               Returned when `audio` is not `None`.
             - **audio_token_start_idx** -- The index in the tokenized text where the audio starts. Returned when `audio` is not `None`.
         """
-        # TODO: Add support for multiple audio and text inputs.
         data = {}
-        audio_embed_frames = 0
-        if audio is not None and len(audio) > 0:
-            if self.audio_padding == "max_length":
-                # 30 seconds is the expected length for Whisper
-                assert sampling_rate is not None, "Sampling rate must be provided."
-                audio_len = 30 * sampling_rate
-            else:
-                audio_len = audio.shape[-1]
-            # It's guaranteed that the number of frames is less than or equal to this amount.
-            # For Whisper this is exact AFAICT, but for Wav2Vec2 it's an upper bound.
-            # Currently, StackAudioFrames makes sure an over-estimation won't cause issues by padding the audio embeddings.
-            nb_encoder_frames = int(round(audio_len / self.encoder_ds_factor + 1e-4))
-            audio_embed_frames = int(np.ceil(nb_encoder_frames / self.stack_factor))
-            data["audio_token_len"] = [audio_embed_frames]
+        if audios is not None:
+            # collate audios
+            audios = collate_tokens(audios, 0.0, "right")
 
-            # Main audio processing. The processor is model-specific.
-            x = self.audio_processor(
-                audio,
-                sampling_rate=sampling_rate,
-                padding="longest",
-                max_length=audio_len,
-                **kwargs,
+            audio_embed_frames = []
+            audio_values = []
+            for aud in audios:
+                if self.audio_padding == "max_length":
+                    # 30 seconds is the expected length for Whisper
+                    assert sampling_rate is not None, "Sampling rate must be provided."
+                    audio_len = 30 * sampling_rate
+                else:
+                    audio_len = aud.shape[-1]
+
+                nb_encoder_frames = int(
+                    round(audio_len / self.encoder_ds_factor + 1e-4)
+                )
+                audio_embed_frames.append(
+                    int(np.ceil(nb_encoder_frames / self.stack_factor))
+                )
+
+                x = self.audio_processor(
+                    aud,
+                    sampling_rate=sampling_rate,
+                    padding="longest",
+                    max_length=audio_len,
+                    **kwargs,
+                )
+                audio_values.append(
+                    x.input_features if "input_features" in x else x.input_values
+                )
+
+            data["audio_values"] = audio_values
+            data["audio_token_len"] = audio_embed_frames
+
+        if texts is not None:
+            # collate text
+            texts = collate_tokens(texts, 0, "left")
+            processed_texts = []
+            audio_token_start_idx = []
+            for i, t in enumerate(texts):
+                assert isinstance(
+                    t, str
+                ), f"Text must be a string. Got {type(t)} for item {i}."
+                if self.audio_placeholder in t:
+                    if "audio_token_len" not in data:
+                        raise ValueError(
+                            f"Audio must be provided when using audio placeholder ({self.audio_placeholder}) in text."
+                        )
+
+                    start_idx = len(
+                        self.tokenizer.encode(
+                            t[: t.index(self.audio_placeholder)],
+                            add_special_tokens=False,
+                        )
+                    )
+                    audio_token_start_idx.append(start_idx)
+
+                    t = t.replace(
+                        self.audio_placeholder,
+                        self.audio_token_replacement * data["audio_token_len"][i],
+                    )
+                else:
+                    raise ValueError(f"Audio must include audio_placeholder token")
+
+                processed_texts.append(t)
+
+            data["audio_token_start_idx"] = audio_token_start_idx
+            data.update(
+                self.tokenizer(processed_texts, add_special_tokens=False, **kwargs)
             )
-            if "input_features" in x:
-                data["audio_values"] = x.input_features
-            else:
-                data["audio_values"] = x.input_values
 
-        if text is not None:
-            assert isinstance(
-                text, str
-            ), "Text must be a string. Batch mode not supported yet."
-            if self.audio_placeholder in text:
-                if "audio_token_len" not in data:
-                    raise ValueError(
-                        f"audio must be provided when using audio placeholder ({self.audio_placeholder}) in text."
-                    )
-
-                start_idx = len(
-                    self.tokenizer.encode(
-                        text[: text.index(self.audio_placeholder)],
-                        add_special_tokens=False,
-                    )
-                )
-                data["audio_token_start_idx"] = [start_idx]
-
-                # Replace the audio placeholder with the audio token.
-                #   e.g. "Transcribe\n<|audio|>" -> "Transcribe </s></s></s></s></s></s></s></s>"
-                #        where the number of </s> is the number of audio frames.
-                text = text.replace(
-                    self.audio_placeholder,
-                    self.audio_token_replacement * audio_embed_frames,
-                )
-
-            # Special tokens like BOS should already have been added by the caller.
-            data.update(self.tokenizer([text], add_special_tokens=False, **kwargs))
+        print("data!", data)
 
         return transformers.BatchFeature(data=data, tensor_type=return_tensors)
 
