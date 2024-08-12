@@ -99,11 +99,12 @@ def run_tui(
     stats = [None] * len(samples)
 
     # Run streaming inference and print the output as it arrives.
-    stream = inference.infer_stream(
+    output = inference.infer(
         samples,
         max_tokens=args.max_tokens,
         temperature=args.temperature,
     )
+    print("output!", output)
     for msg in stream:
         if isinstance(msg, base.InferenceChunk):
             if first_token_time is None:

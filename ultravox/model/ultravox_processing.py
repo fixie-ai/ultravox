@@ -5,29 +5,38 @@ import torch
 import transformers
 
 
-def collate_tokens(values: List[List[int]], pad_token_id=0, padding_side="right"):
+def collate_tokens(values: List[List[any]], pad_token_id=0, padding_side="right"):
     # Convert lists to tensors
-    tensors = [torch.tensor(v, dtype=torch.long) for v in values]
+    tensors = [torch.tensor(v) for v in values]
 
     # Get max length
     max_length = max(len(v) for v in values)
 
     # Pad tensors
-    if padding_side == "right":
-        padded_tensors = [
-            torch.nn.functional.pad(t, (0, max_length - t.size(0)), value=pad_token_id)
-            for t in tensors
-        ]
-    elif padding_side == "left":
-        padded_tensors = [
-            torch.nn.functional.pad(t, (max_length - t.size(0), 0), value=pad_token_id)
-            for t in tensors
-        ]
-    else:
-        raise ValueError("padding_side must be either 'left' or 'right'")
+    padded_tensors = []
+    pad_lengths = []
+
+    for t in tensors:
+        pad_length = max_length - t.size(0)
+        pad_lengths.append(pad_length)
+
+        if padding_side == "right":
+            padded_tensor = torch.nn.functional.pad(
+                t, (0, pad_length), value=pad_token_id
+            )
+        elif padding_side == "left":
+            padded_tensor = torch.nn.functional.pad(
+                t, (pad_length, 0), value=pad_token_id
+            )
+        else:
+            raise ValueError("padding_side must be either 'left' or 'right'")
+
+        padded_tensors.append(padded_tensor)
 
     # Stack tensors
-    return torch.stack(padded_tensors)
+    stacked_tensor = torch.stack(padded_tensors)
+
+    return stacked_tensor, pad_lengths
 
 
 class UltravoxProcessor(transformers.ProcessorMixin):
@@ -128,11 +137,11 @@ class UltravoxProcessor(transformers.ProcessorMixin):
               Returned when `audio` is not `None`.
             - **audio_token_start_idx** -- The index in the tokenized text where the audio starts. Returned when `audio` is not `None`.
         """
+
         data = {}
         if audios is not None:
             # collate audios
-            audios = collate_tokens(audios, 0.0, "right")
-
+            audios, _ = collate_tokens(audios, 0.0, "right")
             audio_embed_frames = []
             audio_values = []
             for aud in audios:
@@ -149,7 +158,6 @@ class UltravoxProcessor(transformers.ProcessorMixin):
                 audio_embed_frames.append(
                     int(np.ceil(nb_encoder_frames / self.stack_factor))
                 )
-
                 x = self.audio_processor(
                     aud,
                     sampling_rate=sampling_rate,
@@ -157,16 +165,15 @@ class UltravoxProcessor(transformers.ProcessorMixin):
                     max_length=audio_len,
                     **kwargs,
                 )
-                audio_values.append(
-                    x.input_features if "input_features" in x else x.input_values
-                )
+                val = x.input_features if "input_features" in x else x.input_values
+                audio_values.append(val.squeeze())
 
             data["audio_values"] = audio_values
             data["audio_token_len"] = audio_embed_frames
 
         if texts is not None:
             processed_texts = []
-            audio_token_start_idx = []
+
             for i, t in enumerate(texts):
                 assert isinstance(
                     t, str
@@ -177,15 +184,6 @@ class UltravoxProcessor(transformers.ProcessorMixin):
                         raise ValueError(
                             f"Audio must be provided when using audio placeholder ({self.audio_placeholder}) in text."
                         )
-
-                    start_idx = len(
-                        self.tokenizer.encode(
-                            t[: t.index(self.audio_placeholder)],
-                            add_special_tokens=False,
-                        )
-                    )
-                    # audio_token_start_idx.append(start_idx)
-
                     t = t.replace(
                         self.audio_placeholder,
                         self.audio_token_replacement * data["audio_token_len"][i],
@@ -195,20 +193,34 @@ class UltravoxProcessor(transformers.ProcessorMixin):
 
                 processed_texts.append(t)
 
-            # data["audio_token_start_idx"] = audio_token_start_idx
             tokenized_texts = self.tokenizer(
                 processed_texts, add_special_tokens=False, **kwargs
             )
-            print("text after tokenization", tokenized_texts)
-            input_ids_collated = collate_tokens(texts["input_ids"], 0, "left")
-            attention_mask_collated = collate_tokens(texts["attention_mask"], 0, "left")
-            data.update(
-                self.tokenizer(processed_texts, add_special_tokens=False, **kwargs)
+
+            tokenized_texts["input_ids"], pad_lengths = collate_tokens(
+                tokenized_texts["input_ids"], 0, "left"
             )
+            tokenized_texts["attention_mask"], _ = collate_tokens(
+                tokenized_texts["attention_mask"], 0, "left"
+            )
+            data["audio_token_start_idx"] = [
+                len(
+                    self.tokenizer.encode(
+                        t[: t.index(self.audio_placeholder)],
+                        add_special_tokens=False,
+                    )
+                )
+                + pad_lengths[i]
+                for i, t in enumerate(texts)
+            ]
 
-        print("data!", data)
+            data.update(tokenized_texts)
 
-        return transformers.BatchFeature(data=data, tensor_type=return_tensors)
+            # make sure all keys are tensors
+            for key, val in data.items():
+                data[key] = torch.tensor(val)
+
+        return transformers.BatchFeature(data=data)
 
     def batch_decode(self, *args, **kwargs):
         return self.tokenizer.batch_decode(*args, **kwargs)

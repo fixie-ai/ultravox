@@ -32,13 +32,15 @@ class LocalInference(base.VoiceInference):
 
     def infer(
         self,
-        sample: datasets.VoiceSample,
+        samples: List[datasets.VoiceSample],
         max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
     ) -> base.VoiceOutput:
-        inputs = self._dataproc(sample)
+        inputs = self._dataproc(samples)
         input_len = inputs["input_ids"].shape[1]
         output = self._generate(inputs, max_tokens, temperature)
+        print("actual raw output", output)
+        print("raw output shape", output.shape)
         output_tokens = output[0][input_len:]
         output_text = self.tokenizer.decode(output_tokens, skip_special_tokens=True)
         output_len = len(output_tokens)
@@ -46,11 +48,11 @@ class LocalInference(base.VoiceInference):
 
     def infer_stream(
         self,
-        samples: List[datasets.VoiceSample],
+        sample: datasets.VoiceSample,
         max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
     ) -> base.InferenceGenerator:
-        inputs = self._dataproc(samples)
+        inputs = self._dataproc(sample)
         input_tokens = inputs["input_ids"].shape[1]
         decode_kwargs = {"skip_special_tokens": True}
         streamer = transformers.TextIteratorStreamer(
