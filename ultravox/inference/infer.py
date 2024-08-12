@@ -56,7 +56,7 @@ class LocalInference(base.VoiceInference):
         max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
     ) -> base.InferenceGenerator:
-        inputs = self._dataproc(sample)
+        inputs = self._dataproc([sample])
         input_tokens = inputs["input_ids"].shape[1]
         decode_kwargs = {"skip_special_tokens": True}
         streamer = transformers.TextIteratorStreamer(
