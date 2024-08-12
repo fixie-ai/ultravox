@@ -165,14 +165,13 @@ class UltravoxProcessor(transformers.ProcessorMixin):
             data["audio_token_len"] = audio_embed_frames
 
         if texts is not None:
-            # collate text
-            texts = collate_tokens(texts, 0, "left")
             processed_texts = []
             audio_token_start_idx = []
             for i, t in enumerate(texts):
                 assert isinstance(
                     t, str
                 ), f"Text must be a string. Got {type(t)} for item {i}."
+
                 if self.audio_placeholder in t:
                     if "audio_token_len" not in data:
                         raise ValueError(
@@ -185,7 +184,7 @@ class UltravoxProcessor(transformers.ProcessorMixin):
                             add_special_tokens=False,
                         )
                     )
-                    audio_token_start_idx.append(start_idx)
+                    # audio_token_start_idx.append(start_idx)
 
                     t = t.replace(
                         self.audio_placeholder,
@@ -196,7 +195,13 @@ class UltravoxProcessor(transformers.ProcessorMixin):
 
                 processed_texts.append(t)
 
-            data["audio_token_start_idx"] = audio_token_start_idx
+            # data["audio_token_start_idx"] = audio_token_start_idx
+            tokenized_texts = self.tokenizer(
+                processed_texts, add_special_tokens=False, **kwargs
+            )
+            print("text after tokenization", tokenized_texts)
+            input_ids_collated = collate_tokens(texts["input_ids"], 0, "left")
+            attention_mask_collated = collate_tokens(texts["attention_mask"], 0, "left")
             data.update(
                 self.tokenizer(processed_texts, add_special_tokens=False, **kwargs)
             )

@@ -30,13 +30,11 @@ class InferArgs:
     # Model ID to use for the model
     model: str = simple_parsing.field(default="fixie-ai/ultravox-v0_2", alias="-m")
     # Path to the audio file
-    audio_files: Optional[List[IO]] = simple_parsing.field(
-        default=None, type=argparse.FileType("rb"), alias="-f", nargs="+"
+    audio_file: Optional[IO] = simple_parsing.field(
+        default=None, type=argparse.FileType("rb"), alias="-f"
     )
     # Prompt to use for inference
-    prompts: Optional[List[str]] = None
-    prompt: Optional[List[str]] = None
-
+    prompt: Optional[str] = None
     # Inference the model using only the text input or transcript, without audio
     text_only: bool = False
     # Use ASR for the prompt and compute WER
@@ -162,22 +160,26 @@ def run_tui(
 
 
 def oneshot_infer(inference: base.VoiceInference, args: InferArgs):
-    prompts = [
-        prompt or (DEFAULT_ASR_PROMPT if args.asr else DEFAULT_PROMPT)
-        for prompt in args.prompts
-    ]
-    samples = []
-    if args.audio_files is not None:
-        for prompt, audio_file in zip(prompts, args.audio_files):
-            print("audio file", audio_file)
-            sample = datasets.VoiceSample.from_prompt_and_buf(prompt, audio_file.read())
-            samples.append(sample)
+    # prompt = args.prompt or (DEFAULT_ASR_PROMPT if args.asr else DEFAULT_PROMPT)
+    # if args.audio_file is not None:
+    #     sample = datasets.VoiceSample.from_prompt_and_buf(
+    #         prompt, args.audio_file.read()
+    #     )
     # else:
     #     sample = datasets.VoiceSample.from_prompt(prompt)
-    print(prompts)
-    print(args.audio_files)
-    print("one shot samples", len(samples))
-    print(samples[0].messages, samples[1].messages)
+
+    prompts = [
+        "Listen to '<|audio|>' and respond to it",
+        "Listen to '<|audio|>' and respond to it 2",
+    ]
+    audio_files = ["../input.wav", "../input2.wav"]
+    samples = []
+    for prompt, audio_file in zip(prompts, audio_files):
+        with open(audio_file, "rb") as f:
+            audio_data = f.read()
+        sample = datasets.VoiceSample.from_prompt_and_buf(prompt, audio_data)
+        samples.append(sample)
+
     run_tui(inference, samples, args)
 
 
