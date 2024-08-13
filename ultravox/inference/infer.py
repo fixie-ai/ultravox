@@ -89,7 +89,7 @@ class LocalInference(base.VoiceInference):
     def infer_stream(
         self,
         sample: datasets.VoiceSample,
-        max_new_tokens: Optional[int] = None,
+        max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
     ) -> base.InferenceGenerator:
         inputs = self._dataproc(sample)
@@ -101,7 +101,7 @@ class LocalInference(base.VoiceInference):
 
         thread_args = (
             inputs,
-            max_new_tokens,
+            max_tokens,
             temperature,
             streamer,
         )
