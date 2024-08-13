@@ -69,9 +69,7 @@ class LocalInference(base.VoiceInference):
         extended_sample = self._get_sample_with_past(sample)
         inputs = self._dataproc(extended_sample)
         input_len = inputs["input_ids"].shape[1]
-        output = self._generate(
-            inputs, max_tokens, temperature, self.past_key_values
-        )
+        output = self._generate(inputs, max_tokens, temperature, self.past_key_values)
         output_tokens = output.sequences[0][input_len:]
         output_text = self.tokenizer.decode(output_tokens, skip_special_tokens=True)
         output_len = len(output_tokens)
