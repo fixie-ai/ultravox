@@ -1,5 +1,6 @@
+import copy
 import threading
-from typing import Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import librosa
 import numpy as np
@@ -29,36 +30,68 @@ class LocalInference(base.VoiceInference):
         self.tokenizer = tokenizer
         self.processor = processor
         self.dtype = dtype
+        self.past_messages: List[Dict[str, str]] = []
+        self.past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = (
+            None
+        )
+
+    def reset_history(self):
+        self.past_messages = []
+        self.past_key_values = None
+
+    def _add_past_message(self, message: Dict[str, str], audio_token_len: int):
+        message = copy.copy(message)
+        content = message["content"]
+        if audio_token_len > 0:
+            if content.count("<|audio|>") != 1:
+                raise ValueError(
+                    f"Expected 1 audio placeholder, found {content.count('<|audio|>')}"
+                )
+            message["content"] = content.replace(
+                "<|audio|>", self.tokenizer.eos_token * audio_token_len
+            )
+
+        self.past_messages.append(message)
+
+    def _get_sample_with_past(
+        self, sample: datasets.VoiceSample
+    ) -> datasets.VoiceSample:
+        sample = copy.copy(sample)
+        sample.add_past_messages(self.past_messages)
+        return sample
 
     def infer(
         self,
         sample: datasets.VoiceSample,
         max_new_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
-        past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
         num_beams: int = 1,
     ) -> base.VoiceOutput:
-        inputs = self._dataproc(sample)
+        extended_sample = self._get_sample_with_past(sample)
+        inputs = self._dataproc(extended_sample)
         input_len = inputs["input_ids"].shape[1]
         output = self._generate(
-            inputs, max_new_tokens, temperature, past_key_values, num_beams
+            inputs, max_new_tokens, temperature, self.past_key_values, num_beams
         )
         output_tokens = output.sequences[0][input_len:]
         output_text = self.tokenizer.decode(output_tokens, skip_special_tokens=True)
         output_len = len(output_tokens)
-        audio_token_len = 0
-        if "audio_token_len" in inputs:
-            audio_token_len = inputs["audio_token_len"][0]
-        return base.VoiceOutput(
-            output_text, input_len, output_len, audio_token_len, output.past_key_values
+
+        # update history
+        audio_token_len = (
+            0 if "audio_token_len" not in inputs else inputs["audio_token_len"][0]
         )
+        self._add_past_message(extended_sample.messages[-1], audio_token_len)
+        self._add_past_message({"role": "assistant", "content": output_text}, 0)
+        self.past_key_values = output.past_key_values
+
+        return base.VoiceOutput(output_text, input_len, output_len, audio_token_len)
 
     def infer_stream(
         self,
         sample: datasets.VoiceSample,
         max_new_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
-        past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
         num_beams: int = 1,
     ) -> base.InferenceGenerator:
         inputs = self._dataproc(sample)
@@ -72,7 +105,6 @@ class LocalInference(base.VoiceInference):
             inputs,
             max_new_tokens,
             temperature,
-            past_key_values,
             num_beams,
             streamer,
         )

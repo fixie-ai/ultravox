@@ -5,7 +5,6 @@ import gradio as gr
 import simple_parsing
 
 from ultravox.data import datasets
-from ultravox.inference import base as infer_base
 from ultravox.inference import ultravox_infer
 
 demo_instruction: str = """Enter your prompt here (audio will be inserted at the end or at <|audio|>).
@@ -34,7 +33,6 @@ def main():
     inference = ultravox_infer.UltravoxInference(
         args.model_path, device=args.device, data_type=args.data_type
     )
-    history = infer_base.History(audio_token_replacement=inference.tokenizer.eos_token)
 
     def add_text(chatbot: gr.Chatbot, text: str) -> gr.Chatbot:
         return chatbot + [(text, None)]
@@ -63,20 +61,13 @@ def main():
             raise ValueError(
                 f"Expected exactly 1 message in sample but got {len(sample.messages)}"
             )
-        user_message = sample.messages[-1]
-        sample.add_past_messages(history.past_messages)
 
         output = inference.infer(
             sample,
             max_new_tokens=args.max_new_tokens,
-            past_key_values=history.key_values,
             num_beams=num_beams,
             temperature=temperature,
         )
-        history.update_key_values(output.past_key_values)
-        # audio_token_len is computed during inference
-        history.add_message(user_message, output.audio_token_len)
-        history.add_message({"role": "assistant", "content": output.text}, 0)
 
         chatbot = chatbot + [(None, output.text)]
         return chatbot, gr.update(value=prompt_to_return)
@@ -88,7 +79,7 @@ def main():
         return process_turn(chatbot, prompt, audio, num_beams, temperature)
 
     def gradio_reset():
-        history.reset()
+        inference.reset_history()
         return [], "", None
 
     with gr.Blocks() as demo:
