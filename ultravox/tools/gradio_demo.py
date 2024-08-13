@@ -44,7 +44,6 @@ def main():
         chatbot: gr.Chatbot,
         prompt: str,
         audio: Optional[str] = None,
-        num_beams: int = 1,
         temperature: float = 0,
     ):
         # We want to keep the prompt (mixed audio/text instruction) as is in voice mode, but set it to "" in anticipation of new prompt in text mode.
@@ -65,18 +64,17 @@ def main():
         output = inference.infer(
             sample,
             max_tokens=args.max_new_tokens,
-            num_beams=num_beams,
             temperature=temperature,
         )
 
         chatbot = chatbot + [(None, output.text)]
         return chatbot, gr.update(value=prompt_to_return)
 
-    def process_text(chatbot, prompt, num_beams, temperature):
-        return process_turn(chatbot, prompt, None, num_beams, temperature)
+    def process_text(chatbot, prompt, temperature):
+        return process_turn(chatbot, prompt, None, temperature)
 
-    def process_audio(chatbot, prompt, audio, num_beams, temperature):
-        return process_turn(chatbot, prompt, audio, num_beams, temperature)
+    def process_audio(chatbot, prompt, audio, temperature):
+        return process_turn(chatbot, prompt, audio, temperature)
 
     def gradio_reset():
         inference.reset_history()
@@ -103,14 +101,6 @@ def main():
                     container=True,
                 )
             with gr.Column(scale=1):
-                num_beams = gr.Slider(
-                    minimum=1,
-                    maximum=10,
-                    value=1,
-                    step=1,
-                    interactive=True,
-                    label="beam",
-                )
                 temperature = gr.Slider(
                     minimum=0,
                     maximum=5.0,
@@ -122,13 +112,13 @@ def main():
 
         prompt.submit(add_text, [chatbot, prompt], [chatbot], queue=False).then(
             process_text,
-            [chatbot, prompt, num_beams, temperature],
+            [chatbot, prompt, temperature],
             [chatbot, prompt],
             queue=False,
         )
         audio.stop_recording(add_audio, [chatbot, audio], [chatbot], queue=False).then(
             process_audio,
-            [chatbot, prompt, audio, num_beams, temperature],
+            [chatbot, prompt, audio, temperature],
             [chatbot, prompt],
             queue=False,
         )

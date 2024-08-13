@@ -65,13 +65,12 @@ class LocalInference(base.VoiceInference):
         sample: datasets.VoiceSample,
         max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
-        num_beams: int = 1,
     ) -> base.VoiceOutput:
         extended_sample = self._get_sample_with_past(sample)
         inputs = self._dataproc(extended_sample)
         input_len = inputs["input_ids"].shape[1]
         output = self._generate(
-            inputs, max_tokens, temperature, self.past_key_values, num_beams
+            inputs, max_tokens, temperature, self.past_key_values
         )
         output_tokens = output.sequences[0][input_len:]
         output_text = self.tokenizer.decode(output_tokens, skip_special_tokens=True)
@@ -92,7 +91,6 @@ class LocalInference(base.VoiceInference):
         sample: datasets.VoiceSample,
         max_new_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
-        num_beams: int = 1,
     ) -> base.InferenceGenerator:
         inputs = self._dataproc(sample)
         input_tokens = inputs["input_ids"].shape[1]
@@ -105,7 +103,6 @@ class LocalInference(base.VoiceInference):
             inputs,
             max_new_tokens,
             temperature,
-            num_beams,
             streamer,
         )
         thread = threading.Thread(target=self._generate, args=thread_args)
@@ -161,7 +158,6 @@ class LocalInference(base.VoiceInference):
         max_new_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
         past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
-        num_beams: int = 1,
         streamer: Optional[transformers.TextStreamer] = None,
     ):
         temperature = temperature or None
@@ -181,6 +177,5 @@ class LocalInference(base.VoiceInference):
             eos_token_id=terminators,
             streamer=streamer,
             past_key_values=past_key_values,
-            num_beams=num_beams,
             return_dict_in_generate=True,
         )
