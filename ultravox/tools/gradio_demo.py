@@ -64,7 +64,7 @@ def main():
 
         output = inference.infer(
             sample,
-            max_new_tokens=args.max_new_tokens,
+            max_tokens=args.max_new_tokens,
             num_beams=num_beams,
             temperature=temperature,
         )

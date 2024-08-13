@@ -63,7 +63,7 @@ class LocalInference(base.VoiceInference):
     def infer(
         self,
         sample: datasets.VoiceSample,
-        max_new_tokens: Optional[int] = None,
+        max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
         num_beams: int = 1,
     ) -> base.VoiceOutput:
@@ -71,7 +71,7 @@ class LocalInference(base.VoiceInference):
         inputs = self._dataproc(extended_sample)
         input_len = inputs["input_ids"].shape[1]
         output = self._generate(
-            inputs, max_new_tokens, temperature, self.past_key_values, num_beams
+            inputs, max_tokens, temperature, self.past_key_values, num_beams
         )
         output_tokens = output.sequences[0][input_len:]
         output_text = self.tokenizer.decode(output_tokens, skip_special_tokens=True)
