@@ -194,6 +194,7 @@ def dataset_infer(inference: base.VoiceInference, args: InferArgs):
     ds = datasets.create_dataset(args.data_sets[0], ds_args)
 
     if args.batch_size:
+        start_time = time.time()
         print("batch size", args.batch_size)
         samples = []
         for i, sample in enumerate(datasets.Range(ds, args.num_samples)):
@@ -205,8 +206,11 @@ def dataset_infer(inference: base.VoiceInference, args: InferArgs):
             max_tokens=args.max_tokens,
             temperature=args.temperature,
         )
+        print("printing outputs...")
+        for sample in output:
+            print(sample)
+        print("Total time", time.time() - start_time)
 
-        print("output", output)
     else:
         scores: List[float] = []
         for i, sample in enumerate(datasets.Range(ds, args.num_samples)):

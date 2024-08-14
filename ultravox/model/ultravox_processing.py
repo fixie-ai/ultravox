@@ -163,7 +163,6 @@ class UltravoxProcessor(transformers.ProcessorMixin):
             tokenizer_output = self.tokenizer(
                 [text], add_special_tokens=False, **kwargs
             )
-            print("tokenizer output", tokenizer_output)
             data.update(tokenizer_output)
 
         return transformers.BatchFeature(data=data, tensor_type=return_tensors)
