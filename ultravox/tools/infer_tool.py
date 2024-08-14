@@ -195,8 +195,6 @@ def dataset_infer(inference: base.VoiceInference, args: InferArgs):
 
     if args.batch_size:
         start_time = time.time()
-        print("batch size", args.batch_size)
-
         samples = []
         for i, sample in enumerate(datasets.Range(ds, args.num_samples)):
             samples.append(sample)

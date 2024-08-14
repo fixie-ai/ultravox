@@ -37,7 +37,7 @@ class LocalInference(base.VoiceInference):
         batch_size: int = 1,
         max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
-    ) -> List[base.VoiceOutput]:
+    ):
         dataset = [self._process_dataset_batch(i, s) for i, s in enumerate(samples)]
 
         data_collator = datasets.DataCollatorForSeq2SeqWithAudio(
