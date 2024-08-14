@@ -121,8 +121,6 @@ class LocalInference(base.VoiceInference):
         return data_proc
 
     def _dataproc(self, sample: datasets.VoiceSample | Dict[str, Any], batch=False):
-        if not isinstance(sample, datasets.VoiceSample):
-            sample = datasets.VoiceSample.from_json(sample)
         text_input = self.tokenizer.apply_chat_template(
             sample.messages, add_generation_prompt=True, tokenize=False
         )
