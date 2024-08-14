@@ -152,7 +152,6 @@ class TextGenerationTask:
         else:
             turns = [{"role": "user", "content": rendered}]
 
-
         max_retries = 3  # Number of retry attempts
         retry_delay = 2  # Delay in seconds between retries
 
@@ -167,14 +166,18 @@ class TextGenerationTask:
                 )
                 break
             except Exception as e:
-                duration = time.time() - start_time 
+                duration = time.time() - start_time
                 if attempt < max_retries - 1:
-                    print(f"Attempt {attempt + 1} failed after {duration:.2f} seconds: {e}.")
+                    print(
+                        f"Attempt {attempt + 1} failed after {duration:.2f} seconds: {e}."
+                    )
                     print(f"Message: {turns}")
                     print(f"Retrying in {retry_delay} seconds...")
                     time.sleep(retry_delay)
                 else:
-                    print(f"Attempt {attempt + 1} failed after {duration:.2f} seconds: {e}.")
+                    print(
+                        f"Attempt {attempt + 1} failed after {duration:.2f} seconds: {e}."
+                    )
                     print(f"Message: {turns}")
                     print("No more retries left.")
                     raise
