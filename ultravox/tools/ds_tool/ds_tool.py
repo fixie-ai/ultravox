@@ -1,6 +1,7 @@
 import dataclasses
 import json
 import os
+import time
 from typing import Any, Dict, List, Optional, Union
 
 import datasets
@@ -151,12 +152,33 @@ class TextGenerationTask:
         else:
             turns = [{"role": "user", "content": rendered}]
 
-        sample[self.new_column_name] = chat_client.chat_completion(
-            model=self.language_model,
-            messages=turns,
-            max_tokens=self.max_tokens,
-            temperature=self.temperature,
-        )
+
+        max_retries = 3  # Number of retry attempts
+        retry_delay = 2  # Delay in seconds between retries
+
+        for attempt in range(max_retries):
+            try:
+                start_time = time.time()  # Record start time
+                sample[self.new_column_name] = chat_client.chat_completion(
+                    model=self.language_model,
+                    messages=turns,
+                    max_tokens=self.max_tokens,
+                    temperature=self.temperature,
+                )
+                break
+            except Exception as e:
+                duration = time.time() - start_time 
+                if attempt < max_retries - 1:
+                    print(f"Attempt {attempt + 1} failed after {duration:.2f} seconds: {e}.")
+                    print(f"Message: {turns}")
+                    print(f"Retrying in {retry_delay} seconds...")
+                    time.sleep(retry_delay)
+                else:
+                    print(f"Attempt {attempt + 1} failed after {duration:.2f} seconds: {e}.")
+                    print(f"Message: {turns}")
+                    print("No more retries left.")
+                    raise
+
         return sample
 
 
