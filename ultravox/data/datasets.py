@@ -76,9 +76,6 @@ class DataCollatorForSeq2SeqWithAudio(transformers.DataCollatorForSeq2Seq):
 
     def __call__(self, features, *args, **kwargs):
         audio_values = [f.pop("audio_values", None) for f in features]
-        indices = [f.pop("index", None) for f in features]
-        question_texts = [f.pop("question_text", None) for f in features]
-        expected_answers = [f.pop("expected_answer", None) for f in features]
 
         for i, audio in enumerate(audio_values):
             audio_values[i] = torch.tensor(audio)
@@ -105,10 +102,6 @@ class DataCollatorForSeq2SeqWithAudio(transformers.DataCollatorForSeq2Seq):
             batch["audio_values"] = torch.stack(
                 [F.pad(x, (0, max_len - x.shape[-1])) for x in audio_values]
             )
-
-        batch["indices"] = indices
-        batch["question_texts"] = question_texts
-        batch["expected_answers"] = expected_answers
 
         return batch
 

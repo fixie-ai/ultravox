@@ -43,20 +43,30 @@ class LocalInference(base.VoiceInference):
             tokenizer=self.tokenizer,
             include_alt_fields=False,
         )
+        sample_additional_info = []
+        for i, sample in enumerate(samples):
+            question_text = sample.audio_transcript
+            expected_answer = sample.messages[-1]["content"]
+            sample_additional_info.append(
+                {
+                    "index": i,
+                    "question_text": question_text,
+                    "expected_answer": expected_answer,
+                }
+            )
+            sample.messages = sample.messages[:-1]
+
         dataset: Dataset[Any] = Dataset.from_list(
-            [self._process_dataset_batch(i, s) for i, s in enumerate(samples)]
+            [self._dataproc(s, batch=True) for s in samples]
         )
         dataloader: DataLoader = DataLoader(
             dataset, collate_fn=data_collator, batch_size=batch_size
         )
+        sample_index = 0
         for batch in dataloader:
-            indices = batch.pop("indices")
-            question_texts = batch.pop("question_texts")
-            expected_answers = batch.pop("expected_answers")
-
             input_len = batch["input_ids"].shape[1]
             output_batch = self._generate(batch, max_tokens, temperature)
-            for i, output in enumerate(output_batch):
+            for _, output in enumerate(output_batch):
                 output_tokens = output[input_len:]
                 output_text = self.tokenizer.decode(
                     output_tokens, skip_special_tokens=True
@@ -65,10 +75,15 @@ class LocalInference(base.VoiceInference):
                 output_text = base.VoiceOutput(output_text, input_len, output_len)
                 output = {
                     "output_text": output_text,
-                    "question_text": question_texts[i],
-                    "expected_answer": expected_answers[i],
-                    "index": indices[i],
+                    "question_text": sample_additional_info[sample_index][
+                        "question_text"
+                    ],
+                    "expected_answer": sample_additional_info[sample_index][
+                        "expected_answer"
+                    ],
+                    "index": sample_additional_info[sample_index]["index"],
                 }
+                sample_index += 1
                 yield output
 
     def infer(
@@ -121,6 +136,7 @@ class LocalInference(base.VoiceInference):
         return data_proc
 
     def _dataproc(self, sample: datasets.VoiceSample, batch=False):
+        print("sample", sample)
         text_input = self.tokenizer.apply_chat_template(
             sample.messages, add_generation_prompt=True, tokenize=False
         )
