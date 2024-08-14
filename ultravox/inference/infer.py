@@ -1,5 +1,5 @@
 import threading
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
 import librosa
 import numpy as np
@@ -120,7 +120,7 @@ class LocalInference(base.VoiceInference):
         data_proc["expected_answer"] = expected_answer
         return data_proc
 
-    def _dataproc(self, sample: datasets.VoiceSample | Dict[str, Any], batch=False):
+    def _dataproc(self, sample: datasets.VoiceSample, batch=False):
         text_input = self.tokenizer.apply_chat_template(
             sample.messages, add_generation_prompt=True, tokenize=False
         )
