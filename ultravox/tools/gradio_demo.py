@@ -20,10 +20,9 @@ class DemoConfig:
     #    fixie-ai/ultravox
     #    runs/llama2_asr_gigaspeech/checkpoint-1000/
     #    wandb://fixie/ultravox/model-llama2_asr_gigaspeech:v0
-    model_path: str = "fixie-ai/ultravox"
-    # Use <|audio|> to specify where to insert audio, otherwise, audio is inserted at the end in voice mode.
+    model_path: str = "fixie-ai/ultravox-v0_3"
     default_prompt: str = ""
-    max_new_tokens: int = 256
+    # "mps", "cuda", or "cpu"
     device: str = "mps"
     data_type: str = "float16"
 
@@ -47,6 +46,7 @@ def main():
         chatbot: gr.Chatbot,
         prompt: str,
         audio: Optional[str] = None,
+        max_new_tokens: int = 200,
         temperature: float = 0,
     ):
         # We want to keep the prompt (mixed audio/text instruction) as is in voice mode, but set it to "" in anticipation of new prompt in text mode.
@@ -66,18 +66,18 @@ def main():
 
         output = inference.infer(
             sample,
-            max_tokens=args.max_new_tokens,
+            max_tokens=max_new_tokens,
             temperature=temperature,
         )
 
         chatbot = chatbot + [(None, output.text)]
         return chatbot, gr.update(value=prompt_to_return)
 
-    def process_text(chatbot, prompt, temperature):
-        return process_turn(chatbot, prompt, None, temperature)
+    def process_text(chatbot, prompt, max_new_tokens, temperature):
+        return process_turn(chatbot, prompt, max_new_tokens=max_new_tokens, temperature=temperature)
 
-    def process_audio(chatbot, prompt, audio, temperature):
-        return process_turn(chatbot, prompt, audio, temperature)
+    def process_audio(chatbot, prompt, audio, max_new_tokens, temperature):
+        return process_turn(chatbot, prompt, audio=audio, max_new_tokens=max_new_tokens, temperature=temperature)
 
     def gradio_reset():
         inference.reset_conversation()
@@ -104,6 +104,14 @@ def main():
                     container=True,
                 )
             with gr.Column(scale=1):
+                max_new_tokens = gr.Slider(
+                    minimum=50,
+                    maximum=2000,
+                    value=200,
+                    step=10,
+                    interactive=True,
+                    label="max_new_tokens",
+                )
                 temperature = gr.Slider(
                     minimum=0,
                     maximum=5.0,
@@ -115,13 +123,13 @@ def main():
 
         prompt.submit(add_text, [chatbot, prompt], [chatbot], queue=False).then(
             process_text,
-            [chatbot, prompt, temperature],
+            [chatbot, prompt, max_new_tokens, temperature],
             [chatbot, prompt],
             queue=False,
         )
         audio.stop_recording(add_audio, [chatbot, audio], [chatbot], queue=False).then(
             process_audio,
-            [chatbot, prompt, audio, temperature],
+            [chatbot, prompt, audio, max_new_tokens, temperature],
             [chatbot, prompt],
             queue=False,
         )
