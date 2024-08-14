@@ -237,6 +237,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
         attention_mask: Optional[torch.Tensor] = None,
         inputs_embeds: Optional[torch.Tensor] = None,
+        cache_position: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> Dict[str, Any]:
         model_input = self.language_model.prepare_inputs_for_generation(
@@ -247,7 +248,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             **kwargs,
         )
 
-        prefill_start_idx = kwargs["cache_position"][0]
+        prefill_start_idx = cache_position[0]
         if (
             audio_values is not None
             and audio_token_start_idx is not None
