@@ -124,17 +124,6 @@ class LocalInference(base.VoiceInference):
         yield base.InferenceStats(input_tokens, output_tokens)
         thread.join()
 
-    def _process_dataset_batch(self, index: int, sample: datasets.VoiceSample):
-        question_text = sample.audio_transcript
-        expected_answer = sample.messages[-1]["content"]
-        sample.messages = sample.messages[:-1]
-
-        data_proc = self._dataproc(sample, batch=True)
-        data_proc["index"] = index
-        data_proc["question_text"] = question_text
-        data_proc["expected_answer"] = expected_answer
-        return data_proc
-
     def _dataproc(self, sample: datasets.VoiceSample, batch=False):
         print("sample", sample)
         text_input = self.tokenizer.apply_chat_template(
