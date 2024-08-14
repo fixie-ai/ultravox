@@ -2,12 +2,11 @@ import base64
 import json
 import os
 import tempfile
-from typing import Any, List, Optional, Tuple, Union
+from typing import Any, List, Optional
 
 import gradio_client
 import numpy as np
 import requests
-import transformers
 
 from ultravox.data import datasets
 from ultravox.inference import base

@@ -249,7 +249,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             **kwargs,
         )
 
-        prefill_start_idx = cache_position[0]
+        prefill_start_idx = 0 if cache_position is None else cache_position[0]
         if (
             audio_values is not None
             and audio_token_start_idx is not None
