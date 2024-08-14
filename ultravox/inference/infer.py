@@ -25,17 +25,20 @@ class LocalInference(base.VoiceInference):
         tokenizer: transformers.PreTrainedTokenizer,
         device: str,
         dtype: torch.dtype,
+        conversation_mode: bool = False
     ):
         self.model = model.to(device).to(dtype).eval()
         self.tokenizer = tokenizer
         self.processor = processor
         self.dtype = dtype
+        
+        self.conversation_mode = conversation_mode
         self.past_messages: List[Dict[str, str]] = []
         self.past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = (
             None
         )
 
-    def reset_history(self):
+    def reset_conversation(self):
         self.past_messages = []
         self.past_key_values = None
 
@@ -74,13 +77,14 @@ class LocalInference(base.VoiceInference):
         output_text = self.tokenizer.decode(output_tokens, skip_special_tokens=True)
         output_len = len(output_tokens)
 
-        # update history
-        audio_token_len = (
-            0 if "audio_token_len" not in inputs else inputs["audio_token_len"][0]
-        )
-        self._add_past_message(extended_sample.messages[-1], audio_token_len)
-        self._add_past_message({"role": "assistant", "content": output_text}, 0)
-        self.past_key_values = output.past_key_values
+        if self.conversation_mode:
+            # update conversation history
+            audio_token_len = (
+                0 if "audio_token_len" not in inputs else inputs["audio_token_len"][0]
+            )
+            self._add_past_message(extended_sample.messages[-1], audio_token_len)
+            self._add_past_message({"role": "assistant", "content": output_text}, 0)
+            self.past_key_values = output.past_key_values
 
         return base.VoiceOutput(output_text, input_len, output_len, audio_token_len)
 

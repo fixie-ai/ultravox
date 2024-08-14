@@ -31,7 +31,7 @@ class DemoConfig:
 def main():
     args = simple_parsing.parse(config_class=DemoConfig)
     inference = ultravox_infer.UltravoxInference(
-        args.model_path, device=args.device, data_type=args.data_type
+        args.model_path, device=args.device, data_type=args.data_type, conversation_mode=True
     )
 
     def add_text(chatbot: gr.Chatbot, text: str) -> gr.Chatbot:
@@ -77,7 +77,7 @@ def main():
         return process_turn(chatbot, prompt, audio, temperature)
 
     def gradio_reset():
-        inference.reset_history()
+        inference.reset_conversation()
         return [], "", None
 
     with gr.Blocks() as demo:
