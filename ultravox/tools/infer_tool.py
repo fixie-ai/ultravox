@@ -77,6 +77,8 @@ class InferArgs:
     verbose: bool = simple_parsing.field(default=False, alias="-v")
     # JSON output
     json: bool = simple_parsing.field(default=False)
+    # Batch size
+    batch_size: Optional[int] = simple_parsing.field(default=None, alias="-b")
 
     def __post_init__(self):
         if self.prompt and self.prompt.startswith("@"):
@@ -190,25 +192,41 @@ def dataset_infer(inference: base.VoiceInference, args: InferArgs):
     if args.seed is not None:
         ds_args.shuffle_seed = args.seed
     ds = datasets.create_dataset(args.data_sets[0], ds_args)
-    scores: List[float] = []
-    for i, sample in enumerate(datasets.Range(ds, args.num_samples)):
-        # Store the original question and answer for JSON output.
-        question_text = sample.audio_transcript
-        expected_answer = sample.messages[-1]["content"]
-        # Drop any assistant response from the sample.
-        sample.messages = sample.messages[:-1]
-        if not args.json:
-            run_tui(i, inference, sample, args, expected_answer, scores)
-        else:
-            output = inference.infer(
-                sample, max_tokens=args.max_tokens, temperature=args.temperature
-            )
-            obj = {
-                "question": question_text,
-                "generated_answer": output.text,
-                "expected_answer": expected_answer,
-            }
-            print(json.dumps(obj))
+
+    if args.batch_size:
+        print("batch size", args.batch_size)
+        samples = []
+        for i, sample in enumerate(datasets.Range(ds, args.num_samples)):
+            samples.append(sample)
+        samples = sorted(samples, key=lambda sample: len(sample.audio_transcript))
+        output = inference.batch_infer(
+            samples,
+            batch_size=args.batch_size,
+            max_tokens=args.max_tokens,
+            temperature=args.temperature,
+        )
+
+        print("output", output)
+    else:
+        scores: List[float] = []
+        for i, sample in enumerate(datasets.Range(ds, args.num_samples)):
+            # Store the original question and answer for JSON output.
+            question_text = sample.audio_transcript
+            expected_answer = sample.messages[-1]["content"]
+            # Drop any assistant response from the sample.
+            sample.messages = sample.messages[:-1]
+            if not args.json:
+                run_tui(i, inference, sample, args, expected_answer, scores)
+            else:
+                output = inference.infer(
+                    sample, max_tokens=args.max_tokens, temperature=args.temperature
+                )
+                obj = {
+                    "question": question_text,
+                    "generated_answer": output.text,
+                    "expected_answer": expected_answer,
+                }
+                print(json.dumps(obj))
 
 
 def main(args: InferArgs):

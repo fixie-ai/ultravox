@@ -160,7 +160,11 @@ class UltravoxProcessor(transformers.ProcessorMixin):
                 )
 
             # Special tokens like BOS should already have been added by the caller.
-            data.update(self.tokenizer([text], add_special_tokens=False, **kwargs))
+            tokenizer_output = self.tokenizer(
+                [text], add_special_tokens=False, **kwargs
+            )
+            print("tokenizer output", tokenizer_output)
+            data.update(tokenizer_output)
 
         return transformers.BatchFeature(data=data, tensor_type=return_tensors)
 

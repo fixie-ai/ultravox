@@ -1,10 +1,12 @@
 import threading
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 import librosa
 import numpy as np
 import torch
 import transformers
+from datasets import Dataset
+from torch.utils.data.dataloader import DataLoader
 
 from ultravox.data import datasets
 from ultravox.inference import base
@@ -29,6 +31,44 @@ class LocalInference(base.VoiceInference):
         self.tokenizer = tokenizer
         self.processor = processor
         self.dtype = dtype
+
+    def batch_infer(
+        self,
+        samples: List[datasets.VoiceSample],
+        batch_size: int = 1,
+        max_tokens: Optional[int] = None,
+        temperature: Optional[float] = None,
+    ) -> List[base.VoiceOutput]:
+        dataset = [self._dataproc(s, batch=True) for s in samples]
+        for val in dataset:
+            print("val1!", val)
+        dataset = Dataset.from_list(dataset)
+        for val in dataset:
+            print("val2!", val)
+        # Set up the data loader
+        data_collator = datasets.DataCollatorForSeq2SeqWithAudio(
+            tokenizer=self.tokenizer,
+            include_alt_fields=False,
+        )
+        dataloader = DataLoader(
+            dataset, collate_fn=data_collator, batch_size=batch_size
+        )
+        all_voice_outputs = []
+        for batch in dataloader:
+            print("batch", batch)
+            input_len = batch["input_ids"].shape[1]
+            output_batch = self._generate(batch, max_tokens, temperature)
+            print("raw output batch", output_batch)
+            print("raw output batch shape", output_batch.shape)
+            for output in output_batch:
+                output_tokens = output[input_len:]
+                output_text = self.tokenizer.decode(
+                    output_tokens, skip_special_tokens=True
+                )
+                output_len = len(output_tokens)
+                output_text = base.VoiceOutput(output_text, input_len, output_len)
+                all_voice_outputs.append(output_text)
+        return all_voice_outputs
 
     def infer(
         self,
@@ -68,7 +108,10 @@ class LocalInference(base.VoiceInference):
         yield base.InferenceStats(input_tokens, output_tokens)
         thread.join()
 
-    def _dataproc(self, sample: datasets.VoiceSample):
+    def _dataproc(self, sample: datasets.VoiceSample | Dict[str, Any], batch=False):
+        if not isinstance(sample, datasets.VoiceSample):
+            sample = datasets.VoiceSample.from_json(sample)
+        print("sample before data proc", sample)
         text_input = self.tokenizer.apply_chat_template(
             sample.messages, add_generation_prompt=True, tokenize=False
         )
@@ -102,6 +145,11 @@ class LocalInference(base.VoiceInference):
         inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
         if "audio_values" in inputs:
             inputs["audio_values"] = inputs["audio_values"].to(dtype=self.dtype)
+        print("sample after dataproc", inputs)
+        if batch:
+            for key, val in inputs.items():
+                inputs[key] = val.squeeze()
+        print("sample after dataproc after squeeze", inputs)
         return inputs
 
     @torch.inference_mode()
