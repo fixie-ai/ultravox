@@ -29,7 +29,6 @@ class DemoConfig:
     temperature: float = 0
 
 
-
 def main():
     args = simple_parsing.parse(config_class=DemoConfig)
     inference = ultravox_infer.UltravoxInference(
@@ -77,10 +76,18 @@ def main():
         return chatbot, gr.update(value=prompt_to_return)
 
     def process_text(chatbot, prompt, max_new_tokens, temperature):
-        return process_turn(chatbot, prompt, max_new_tokens=max_new_tokens, temperature=temperature)
+        return process_turn(
+            chatbot, prompt, max_new_tokens=max_new_tokens, temperature=temperature
+        )
 
     def process_audio(chatbot, prompt, audio, max_new_tokens, temperature):
-        return process_turn(chatbot, prompt, audio=audio, max_new_tokens=max_new_tokens, temperature=temperature)
+        return process_turn(
+            chatbot,
+            prompt,
+            audio=audio,
+            max_new_tokens=max_new_tokens,
+            temperature=temperature,
+        )
 
     def gradio_reset():
         inference.reset_conversation()
