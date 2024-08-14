@@ -5,6 +5,7 @@ import librosa
 import numpy as np
 import torch
 import transformers
+from datasets import Dataset
 from torch.utils.data.dataloader import DataLoader
 
 from ultravox.data import datasets
@@ -37,14 +38,15 @@ class LocalInference(base.VoiceInference):
         batch_size: int = 1,
         max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
-    ):
-        dataset = [self._process_dataset_batch(i, s) for i, s in enumerate(samples)]
-
+    ) -> base.InferenceGenerator:
         data_collator = datasets.DataCollatorForSeq2SeqWithAudio(
             tokenizer=self.tokenizer,
             include_alt_fields=False,
         )
-        dataloader = DataLoader(
+        dataset: Dataset[Any] = Dataset.from_list(
+            [self._process_dataset_batch(i, s) for i, s in enumerate(samples)]
+        )
+        dataloader: DataLoader = DataLoader(
             dataset, collate_fn=data_collator, batch_size=batch_size
         )
         for batch in dataloader:
@@ -107,12 +109,9 @@ class LocalInference(base.VoiceInference):
         yield base.InferenceStats(input_tokens, output_tokens)
         thread.join()
 
-    def _process_dataset_batch(
-        self, index: int, sample: datasets.VoiceSample | Dict[str, Any]
-    ):
+    def _process_dataset_batch(self, index: int, sample: datasets.VoiceSample):
         question_text = sample.audio_transcript
         expected_answer = sample.messages[-1]["content"]
-        # Drop any assistant response from the sample.
         sample.messages = sample.messages[:-1]
 
         data_proc = self._dataproc(sample, batch=True)
