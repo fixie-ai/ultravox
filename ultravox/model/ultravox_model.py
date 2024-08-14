@@ -245,6 +245,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             past_key_values=past_key_values,
             attention_mask=attention_mask,
             inputs_embeds=inputs_embeds,
+            cache_position=cache_position,
             **kwargs,
         )
 

@@ -24,7 +24,6 @@ class OpenAIInference(base.VoiceInference):
         sample: datasets.VoiceSample,
         max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
-        past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
     ) -> base.VoiceOutput:
         text = ""
         stats = None
@@ -43,7 +42,6 @@ class OpenAIInference(base.VoiceInference):
         sample: datasets.VoiceSample,
         max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
-        past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
     ) -> base.InferenceGenerator:
         url = f"{self._base_url}/chat/completions"
         headers = {"Content-Type": "application/json"}
@@ -107,7 +105,6 @@ class DatabricksInference(base.VoiceInference):
         sample: datasets.VoiceSample,
         max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
-        past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
     ) -> base.VoiceOutput:
         headers = {"Content-Type": "application/json"}
         response = requests.post(
@@ -131,7 +128,6 @@ class GradioInference(base.VoiceInference):
         sample: datasets.VoiceSample,
         max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
-        past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
     ) -> base.VoiceOutput:
         # For some reason the most recent Gradio endpoint only accepts
         # audio as a file, not as a base64-encoded string. There's probably
