@@ -35,12 +35,12 @@ class LocalInference(base.VoiceInference):
         samples: List[datasets.VoiceSample],
         max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
-    ) -> base.VoiceOutput:
+    ) -> List[base.VoiceOutput]:
         inputs = self._dataproc(samples)
         input_len = inputs["input_ids"].shape[1]
         outputs = self._generate(inputs, max_tokens, temperature)
         print("actual raw output", outputs)
-        print("raw output shape", outputs.shape)
+        # print("raw output shape", outputs.shape)
 
         return_vals = []
         for output in outputs:
@@ -56,7 +56,7 @@ class LocalInference(base.VoiceInference):
         max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
     ) -> base.InferenceGenerator:
-        inputs = self._dataproc(sample)
+        inputs = self._dataproc([sample])[0]
         input_tokens = inputs["input_ids"].shape[1]
         decode_kwargs = {"skip_special_tokens": True}
         streamer = transformers.TextIteratorStreamer(
@@ -81,7 +81,7 @@ class LocalInference(base.VoiceInference):
             )
             for sample in samples
         ]
-
+        sample_len = len(samples)
         audio_inputs = []
         for sample in samples:
             if sample.audio is not None:
@@ -102,34 +102,18 @@ class LocalInference(base.VoiceInference):
                 # Squeeze from [1, T] to [T] if needed.
                 if sample.audio.ndim == 2:
                     audio_input = audio_input.squeeze(0)
-            else:
-                audio_input = None
+
             audio_inputs.append(audio_input)
 
-        # Check if audio inputs are uniform and match text inputs
+        audio_inputs = [] if len(audio_inputs) != sample_len else audio_inputs
+
+        # Check if audio batch size matches text batch size
         if audio_inputs and len(audio_inputs) != len(text_inputs):
             raise ValueError(
                 f"Mismatch between number of text inputs ({len(text_inputs)}) and audio inputs ({len(audio_inputs)})"
             )
-
-        # check if audio inputs are uniform
-        if not all(x is None for x in audio_inputs) and not all(
-            x is not None for x in audio_inputs
-        ):
-            raise ValueError(
-                "Audio batch must be uniform. All elements in the audio batch must either be None or all must contain audio data."
-            )
-        audio_inputs = audio_inputs if audio_inputs[0] is not None else None
-
-        # check if text inputs are uniform
-        if not all(x is None for x in text_inputs) and not all(
-            x is not None for x in text_inputs
-        ):
-            raise ValueError(
-                "Text batch must be uniform. All elements in the text batch must either be None or all must contain text data."
-            )
-        text_inputs = text_inputs if text_inputs[0] is not None else None
-
+        print("audio inputs", audio_inputs)
+        print("text inputs", text_inputs)
         inputs = self.processor(
             audios=audio_inputs,
             texts=text_inputs,

@@ -68,13 +68,15 @@ def test_infer_16kHz(tokenizer, audio_processor):
     sample = datasets.VoiceSample.from_prompt_and_raw(
         "Transcribe\n<|audio|>", array, 16000
     )
-    output = inference.infer(sample)
+    print("my sample", sample)
+    outputs = inference.infer([sample])
+    output = outputs[0]
     assert output.input_tokens == 20
     assert output.output_tokens == 5
     assert output.text == "56789"
     generate_args = inference.model.generate.call_args[1]
     call_audio_values = generate_args["audio_values"]
-    assert call_audio_values.shape == (1, 16000)
+    assert call_audio_values.shape == (1, 1, 16000)
     call_input_ids = generate_args["input_ids"]
     assert call_input_ids.shape == (1, 20)
     assert call_input_ids[0, :4].tolist() == EXPECTED_TOKEN_IDS_START
@@ -91,13 +93,14 @@ def test_infer_48kHz(tokenizer, audio_processor):
     sample = datasets.VoiceSample.from_prompt_and_raw(
         "Transcribe\n<|audio|>", array, 48000
     )
-    output = inference.infer(sample)
+    outputs = inference.infer([sample])
+    output = outputs[0]
     assert output.input_tokens == 20
     assert output.output_tokens == 5
     assert output.text == "56789"
     generate_args = inference.model.generate.call_args[1]
     call_audio_values = generate_args["audio_values"]
-    assert call_audio_values.shape == (1, 16000)
+    assert call_audio_values.shape == (1, 1, 16000)
     call_input_ids = generate_args["input_ids"]
     assert call_input_ids.shape == (1, 20)
     assert call_input_ids[0, :4].tolist() == EXPECTED_TOKEN_IDS_START
@@ -141,7 +144,8 @@ def test_infer_text_only(tokenizer, audio_processor):
     """Ensure we handle text without audio properly."""
     inference = FakeInference(tokenizer, audio_processor)
     sample = datasets.VoiceSample.from_prompt("Hello?")
-    output = inference.infer(sample)
+    outputs = inference.infer([sample])
+    output = outputs[0]
     assert output.input_tokens == 12
     assert output.output_tokens == 13
     assert output.text == "-./0123456789"

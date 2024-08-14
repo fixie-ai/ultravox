@@ -208,7 +208,12 @@ def dataset_infer(inference: base.VoiceInference, args: InferArgs):
         current_batch = []
         batch_size = args.batch_size if args.batch_size else 1
 
-        for sample in datasets.Range(ds, args.num_samples):
+        sorted_range = sorted(
+            datasets.Range(ds, args.num_samples),
+            key=lambda sample: len(sample.audio_transcript),
+        )
+
+        for sample in sorted_range:
             question_text = sample.audio_transcript
             expected_answer = sample.messages[-1]["content"]
             sample.messages = sample.messages[:-1]

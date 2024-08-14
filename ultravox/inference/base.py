@@ -1,6 +1,6 @@
 import abc
 import dataclasses
-from typing import Generator, Optional
+from typing import Generator, List, Optional
 
 from ultravox.data import datasets
 
@@ -34,10 +34,10 @@ class VoiceInference(abc.ABC):
     @abc.abstractmethod
     def infer(
         self,
-        sample: datasets.VoiceSample,
+        sample: List[datasets.VoiceSample],
         max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
-    ) -> VoiceOutput:
+    ) -> List[VoiceOutput]:
         pass
 
     def infer_stream(
@@ -47,6 +47,6 @@ class VoiceInference(abc.ABC):
         temperature: Optional[float] = None,
     ) -> InferenceGenerator:
         """Streaming polyfill, if not supported directly in derived classes."""
-        output = self.infer(sample, max_tokens, temperature)
+        output = self.infer([sample], max_tokens, temperature)[0]
         yield InferenceChunk(output.text)
         yield InferenceStats(output.input_tokens, output.output_tokens)

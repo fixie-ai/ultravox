@@ -33,9 +33,10 @@ def dataset_infer(
         sample.messages = sample.messages[:-1]
         history = sample.messages[:-2]
 
-        output = inference.infer(
+        outputs = inference.infer(
             sample, max_tokens=max_new_tokens, temperature=temperature
         )
+        output = outputs[0]
         eval_sample = eval_types.Sample(
             question=question_text,
             generated_answer=output.text,

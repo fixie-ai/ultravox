@@ -20,10 +20,11 @@ class OpenAIInference(base.VoiceInference):
 
     def infer(
         self,
-        sample: datasets.VoiceSample,
+        samples: List[datasets.VoiceSample],
         max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
-    ) -> base.VoiceOutput:
+    ) -> List[base.VoiceOutput]:
+        sample = samples[0]
         text = ""
         stats = None
         gen = self.infer_stream(sample, max_tokens, temperature)
@@ -34,7 +35,7 @@ class OpenAIInference(base.VoiceInference):
                 stats = msg
         if stats is None:
             raise ValueError("No stats received")
-        return base.VoiceOutput(text, stats.input_tokens, stats.output_tokens)
+        return [base.VoiceOutput(text, stats.input_tokens, stats.output_tokens)]
 
     def infer_stream(
         self,
@@ -101,10 +102,11 @@ class DatabricksInference(base.VoiceInference):
 
     def infer(
         self,
-        sample: datasets.VoiceSample,
+        samples: List[datasets.VoiceSample],
         max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
-    ) -> base.VoiceOutput:
+    ) -> List[base.VoiceOutput]:
+        sample = samples[0]
         headers = {"Content-Type": "application/json"}
         response = requests.post(
             f"{self.url}/invocations",
@@ -124,14 +126,15 @@ class GradioInference(base.VoiceInference):
 
     def infer(
         self,
-        sample: datasets.VoiceSample,
+        samples: List[datasets.VoiceSample],
         max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
-    ) -> base.VoiceOutput:
+    ) -> List[base.VoiceOutput]:
         # For some reason the most recent Gradio endpoint only accepts
         # audio as a file, not as a base64-encoded string. There's probably
         # a better way to do this, but I spent too much time on this already.
         # api = self._client.view_api(print_info=False, return_format="dict")
+        sample = samples[0]
         text = sample.messages[0][
             "content"
         ]  # TODO: change regarding multiple messages?
@@ -152,7 +155,7 @@ class GradioInference(base.VoiceInference):
             else:
                 args.append(None)
             result = self._client.predict(*args)
-        return base.VoiceOutput(result, 0, 0)
+        return [base.VoiceOutput(result, 0, 0)]
 
     def _encode_audio(self, pcm: np.ndarray, sample_rate: int, filename: str = "x.wav"):
         wav = datasets.audio_to_wav(pcm, sample_rate)

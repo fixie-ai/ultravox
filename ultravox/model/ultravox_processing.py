@@ -5,7 +5,11 @@ import torch
 import transformers
 
 
-def collate_tokens(values: List[List[any]], pad_token_id=0, padding_side="right"):
+def collate_tokens(
+    values: Union[List[np.ndarray], List[torch.Tensor]],
+    pad_token_id=0,
+    padding_side="right",
+):
     # Convert lists to tensors
     tensors = [torch.tensor(v) for v in values]
 
@@ -92,8 +96,8 @@ class UltravoxProcessor(transformers.ProcessorMixin):
 
     def __call__(
         self,
-        texts: Optional[List[str]] = None,
-        audios: Optional[List[Union[np.ndarray, torch.Tensor]]] = None,
+        texts: List[str] = [],
+        audios: Union[List[np.ndarray], List[torch.Tensor]] = [],
         sampling_rate: Optional[int] = None,
         return_tensors: Optional[
             Union[str, transformers.TensorType]
@@ -137,11 +141,12 @@ class UltravoxProcessor(transformers.ProcessorMixin):
               Returned when `audio` is not `None`.
             - **audio_token_start_idx** -- The index in the tokenized text where the audio starts. Returned when `audio` is not `None`.
         """
-
+        # TODO: Add support for multiple audio and text inputs.
         data = {}
-        if audios is not None:
+        if audios is not []:
             # collate audios
             audios, _ = collate_tokens(audios, 0.0, "right")
+            assert audios is not None
             audio_embed_frames = []
             audio_values = []
             for aud in audios:
@@ -166,12 +171,15 @@ class UltravoxProcessor(transformers.ProcessorMixin):
                     **kwargs,
                 )
                 val = x.input_features if "input_features" in x else x.input_values
-                audio_values.append(val.squeeze())
+                if not isinstance(val, list):
+                    audio_values.append(val.squeeze())
+                else:
+                    audio_values.append(val)
 
             data["audio_values"] = audio_values
             data["audio_token_len"] = audio_embed_frames
 
-        if texts is not None:
+        if texts is not []:
             processed_texts = []
 
             for i, t in enumerate(texts):
@@ -215,12 +223,7 @@ class UltravoxProcessor(transformers.ProcessorMixin):
             ]
 
             data.update(tokenized_texts)
-
-            # make sure all keys are tensors
-            for key, val in data.items():
-                data[key] = torch.tensor(np.array(val))
-
-        return transformers.BatchFeature(data=data)
+        return transformers.BatchFeature(data=data, tensor_type=return_tensors)
 
     def batch_decode(self, *args, **kwargs):
         return self.tokenizer.batch_decode(*args, **kwargs)
