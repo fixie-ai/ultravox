@@ -40,7 +40,7 @@ class FakeInference(infer.LocalInference):
             )
             streamer = kwargs.get("streamer", None)
             if streamer:
-                for token in output.squences[0][input.shape[1] :]:
+                for token in output.sequences[0][input.shape[1] :]:
                     streamer.on_finalized_text(tokenizer.decode(token))
                 streamer.on_finalized_text("", stream_end=True)
             return output
