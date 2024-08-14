@@ -47,7 +47,6 @@ class LocalInference(base.VoiceInference):
         dataloader = DataLoader(
             dataset, collate_fn=data_collator, batch_size=batch_size
         )
-        all_voice_outputs = []
         for batch in dataloader:
             indices = batch.pop("indices")
             question_texts = batch.pop("question_texts")
@@ -68,8 +67,7 @@ class LocalInference(base.VoiceInference):
                     "expected_answer": expected_answers[i],
                     "index": indices[i],
                 }
-                all_voice_outputs.append(output)
-        return all_voice_outputs
+                yield output
 
     def infer(
         self,
