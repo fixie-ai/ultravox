@@ -25,13 +25,13 @@ class LocalInference(base.VoiceInference):
         tokenizer: transformers.PreTrainedTokenizer,
         device: str,
         dtype: torch.dtype,
-        conversation_mode: bool = False
+        conversation_mode: bool = False,
     ):
         self.model = model.to(device).to(dtype).eval()
         self.tokenizer = tokenizer
         self.processor = processor
         self.dtype = dtype
-        
+
         self.conversation_mode = conversation_mode
         self.past_messages: List[Dict[str, str]] = []
         self.past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = (
@@ -78,7 +78,6 @@ class LocalInference(base.VoiceInference):
         output_len = len(output_tokens)
 
         if self.conversation_mode:
-            # update conversation history
             audio_token_len = (
                 0 if "audio_token_len" not in inputs else inputs["audio_token_len"][0]
             )
@@ -86,7 +85,7 @@ class LocalInference(base.VoiceInference):
             self._add_past_message({"role": "assistant", "content": output_text}, 0)
             self.past_key_values = output.past_key_values
 
-        return base.VoiceOutput(output_text, input_len, output_len, audio_token_len)
+        return base.VoiceOutput(output_text, input_len, output_len)
 
     def infer_stream(
         self,

@@ -31,7 +31,10 @@ class DemoConfig:
 def main():
     args = simple_parsing.parse(config_class=DemoConfig)
     inference = ultravox_infer.UltravoxInference(
-        args.model_path, device=args.device, data_type=args.data_type, conversation_mode=True
+        args.model_path,
+        device=args.device,
+        data_type=args.data_type,
+        conversation_mode=True,
     )
 
     def add_text(chatbot: gr.Chatbot, text: str) -> gr.Chatbot:

@@ -10,7 +10,6 @@ class VoiceOutput:
     text: str
     input_tokens: int
     output_tokens: int
-    audio_token_len: int = 0
 
 
 class InferenceMessage:
