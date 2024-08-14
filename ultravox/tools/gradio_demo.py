@@ -21,10 +21,13 @@ class DemoConfig:
     #    runs/llama2_asr_gigaspeech/checkpoint-1000/
     #    wandb://fixie/ultravox/model-llama2_asr_gigaspeech:v0
     model_path: str = "fixie-ai/ultravox-v0_3"
-    default_prompt: str = ""
     # "mps", "cuda", or "cpu"
     device: str = "mps"
     data_type: str = "float16"
+    default_prompt: str = ""
+    max_new_tokens: int = 200
+    temperature: float = 0
+
 
 
 def main():
@@ -107,7 +110,7 @@ def main():
                 max_new_tokens = gr.Slider(
                     minimum=50,
                     maximum=2000,
-                    value=200,
+                    value=args.max_new_tokens,
                     step=10,
                     interactive=True,
                     label="max_new_tokens",
@@ -115,7 +118,7 @@ def main():
                 temperature = gr.Slider(
                     minimum=0,
                     maximum=5.0,
-                    value=0,
+                    value=args.temperature,
                     step=0.1,
                     interactive=True,
                     label="temperature",
