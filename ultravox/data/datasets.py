@@ -76,25 +76,15 @@ class DataCollatorForSeq2SeqWithAudio(transformers.DataCollatorForSeq2Seq):
 
     def __call__(self, features, *args, **kwargs):
         audio_values = [f.pop("audio_values", None) for f in features]
-
         for i, audio in enumerate(audio_values):
             audio_values[i] = torch.tensor(audio)
-        if self.include_alt_fields:
-            # these fields are hard-coded in the transformer data collator, so they need special handling before calling the super method
-            alt_features = [
-                {
-                    "input_ids": f.pop("alt_input_ids"),
-                    "attention_mask": f.pop("alt_attention_mask"),
-                    "labels": f.pop("alt_labels"),
-                }
-                for f in features
-            ]
+
+        for i, feature in enumerate(features):
+            features[i]["input_ids"] = torch.tensor(feature["input_ids"])
+
+        input_ids_len = torch.LongTensor([f["input_ids"].shape[-1] for f in features])
+
         batch = super().__call__(features, *args, **kwargs)
-        if self.include_alt_fields:
-            alt_batch = super().__call__(alt_features, *args, **kwargs)
-            batch["alt_input_ids"] = alt_batch["input_ids"]
-            batch["alt_attention_mask"] = alt_batch["attention_mask"]
-            batch["alt_labels"] = alt_batch["labels"]
 
         # Pad the last dimension of all audio_values to the same length, with 0s on the right.
         if audio_values and audio_values[0] is not None:
@@ -102,6 +92,11 @@ class DataCollatorForSeq2SeqWithAudio(transformers.DataCollatorForSeq2Seq):
             batch["audio_values"] = torch.stack(
                 [F.pad(x, (0, max_len - x.shape[-1])) for x in audio_values]
             )
+            if self.tokenizer.padding_side == "left":
+                displacement = batch["input_ids"].shape[-1] - input_ids_len
+                batch["audio_token_start_idx"] += displacement.to(
+                    batch["audio_token_start_idx"].device
+                )
 
         return batch
 
