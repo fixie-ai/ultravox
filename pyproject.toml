@@ -28,7 +28,7 @@ jiwer = "~3.0.4"
 tensorboardx = "~2.6.2.2"
 wandb = "~0.17.1"
 sacrebleu = "^2.4.2"
-ultravox-vllm = ">=0.5.4"
+evals = {git = "https://github.com/fixie-ai/evals"}
 
 [tool.poetry.group.dev.dependencies]
 black = "~24.4.2"

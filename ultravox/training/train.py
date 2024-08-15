@@ -1,14 +1,18 @@
 import copy
 import dataclasses
+import gc
 import glob
 import logging
 import os
+import pathlib
 import re
+import subprocess
 import sys
 from datetime import datetime
 from typing import Dict, List, Optional
 
 import datasets as hf_datasets
+import pandas as pd
 import safetensors.torch
 import simple_parsing
 import torch
@@ -16,11 +20,12 @@ import torch.distributed
 import transformers
 import wandb
 import wandb.sdk
+import wandb.wandb_run
+from evals.elsuite.audio import make_table
 from torch.distributed.elastic.multiprocessing.errors import record
 from torch.utils import data
 
 from ultravox.data import datasets
-from ultravox.inference import infer
 from ultravox.model import data_processing
 from ultravox.model import ultravox_config
 from ultravox.model import ultravox_model
@@ -28,7 +33,6 @@ from ultravox.model import ultravox_processing
 from ultravox.model import wandb_utils
 from ultravox.training import config_base
 from ultravox.training import ddp_utils
-from ultravox.training import evaluation
 
 INPUT_EXAMPLE = {"text": "Transcribe\n<|audio|>", "audio": b"\x00\x00" * 16000}
 OUTPUT_EXAMPLE = {"text": "Hello, world!"}
@@ -78,6 +82,19 @@ def main() -> None:
 
     transformers.set_seed(args.seed)
 
+    local_rank = int(os.environ.get("LOCAL_RANK", 0))
+    is_master = local_rank == 0
+
+    if args.do_train:
+        train(args)
+
+    if args.do_eval and is_master:
+        gc.collect()
+        torch.cuda.empty_cache()
+        evaluate(args)
+
+
+def train(args: config_base.TrainConfig):
     world_size = int(os.environ.get("WORLD_SIZE", 1))
     local_rank = int(os.environ.get("LOCAL_RANK", 0))
     is_master = local_rank == 0
@@ -282,48 +299,77 @@ def main() -> None:
             # fsdp_transformer_layer_cls_to_wrap='LlamaDecoderLayer',
         ),
     )
-    if args.do_train:
-        # Training loop
-        logging.info("Starting training...")
-        t_start = datetime.now()
-        logging.info(f"train start time: {t_start}")
-        if args.val_steps:
-            trainer.evaluate()
-        trainer.train()
-        trainer.save_model(args.output_dir)
-        t_end = datetime.now()
-        logging.info(f"train end time: {t_end}")
-        logging.info(f"elapsed: {t_end - t_start}")
 
-    if args.do_eval:
-        logging.info("Starting evaluation...")
-        t_start = datetime.now()
-        logging.info(f"eval start time: {t_start}")
+    # Training loop
+    logging.info("Starting training...")
+    t_start = datetime.now()
+    logging.info(f"train start time: {t_start}")
+    if args.val_steps:
+        trainer.evaluate()
+    trainer.train()
+    trainer.save_model(args.output_dir)
+    t_end = datetime.now()
+    logging.info(f"train end time: {t_end}")
+    logging.info(f"elapsed: {t_end - t_start}")
 
-        # Merge LoRA weights for better inference performance.
-        # Note: this is irreversible and changes model saving format
-        model.merge_and_unload()
-        inference = infer.LocalInference(
-            model=model,
-            processor=processor,
-            tokenizer=text_tokenizer,
-            device=args.device,
-            dtype=dtype,
-        )
-        metrics = evaluation.evaluate(
-            inference,
-            data_dir=args.data_dir,
-            num_procs=args.eval_num_procs,
-            num_samples=args.eval_num_samples,
-            max_new_tokens=args.eval_max_new_tokens,
-            log_dir=wandb.run.dir if wandb.run else str(args.logs_dir),
-        )
-        if is_master:
-            trainer.log(metrics)
 
-        t_end = datetime.now()
-        logging.info(f"eval end time: {t_end}")
-        logging.info(f"elapsed: {t_end - t_start}")
+def evaluate(args: config_base.TrainConfig):
+    logging.info("Starting evaluation...")
+    t_start = datetime.now()
+    logging.info(f"eval start time: {t_start}")
+
+    if args.text_model_lora_config.r or args.audio_model_lora_config.r:
+        # TODO: merge and model.save_pretrained in a different location?
+        raise ValueError("LoRA models are not currently supported for evaluation")
+
+    logs_dir = wandb.run.dir if wandb.run else str(args.logs_dir)
+
+    # Run audio-based evaluations and log to W&B
+    audio_metrics = run_oaievalset(
+        log_dir=os.path.join(logs_dir, "oaieval/audio"),
+        model_dir=args.output_dir,
+        eval_set="audio-required",
+    )
+    audio_metrics = {f"eval_audio_{k}": v for k, v in audio_metrics.items()}
+    # TODO: it would be best to do trainer.log, but then we'd risk keeping parts of the model
+    # in GPU memory, which could cause OOM errors.
+    wandb.run.log(audio_metrics)
+
+    # Run text-only evaluations and log to W&B
+    text_metrics = run_oaievalset(
+        log_dir=os.path.join(logs_dir, "oaieval/text"),
+        model_dir=args.output_dir,
+        eval_set="transcript-required",
+    )
+    text_metrics = {f"eval_text_{k}": v for k, v in text_metrics.items()}
+    wandb.run.log(text_metrics)
+
+    t_end = datetime.now()
+    logging.info(f"eval end time: {t_end}")
+    logging.info(f"elapsed: {t_end - t_start}")
+
+
+def run_oaievalset(log_dir: str, model_dir: str, eval_set: str):
+    # Run the evaluation set
+    subprocess.run(
+        [
+            "oaievalset",
+            "--record_dir",
+            log_dir,
+            "generation/gpu/ultravox-dev",
+            eval_set,
+            f"--completion_args=model={model_dir}",
+        ],
+        check=True,
+    )
+
+    # Extract the results from the log directory
+    df = make_table.extract_results(pathlib.Path(log_dir))
+    pd.set_option("display.precision", 2)  # Adjust precision as needed
+    logging.info(f"Eval Results:\n{df}")
+    metrics = df.set_index("eval")["score"].to_dict()
+
+    return metrics
 
 
 if __name__ == "__main__":
