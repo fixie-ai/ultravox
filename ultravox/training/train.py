@@ -20,7 +20,6 @@ import torch.distributed
 import transformers
 import wandb
 import wandb.sdk
-import wandb.wandb_run
 from evals.elsuite.audio import make_table
 from torch.distributed.elastic.multiprocessing.errors import record
 from torch.utils import data
@@ -318,7 +317,7 @@ def evaluate(args: config_base.TrainConfig):
     t_start = datetime.now()
     logging.info(f"eval start time: {t_start}")
 
-    if args.text_model_lora_config.r or args.audio_model_lora_config.r:
+    if args.text_model_lora_config and args.text_model_lora_config.r:
         # TODO: merge and model.save_pretrained in a different location?
         raise ValueError("LoRA models are not currently supported for evaluation")
 
