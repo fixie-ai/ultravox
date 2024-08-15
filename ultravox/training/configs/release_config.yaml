@@ -1,8 +1,8 @@
-# SLM with ultravox & llama3, trained wtih knowledge distillation.
+# SLM with ultravox & llama3.1, trained wtih knowledge distillation.
 exp_name: "ultravox-v0_3"
 
 # Make sure to accept the license agreement on huggingface hub
-text_model: "meta-llama/Meta-Llama-3-8B-Instruct"
+text_model: "meta-llama/Meta-Llama-3.1-8B-Instruct"
 audio_model: "openai/whisper-small"
 
 
