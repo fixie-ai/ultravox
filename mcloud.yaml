@@ -14,4 +14,4 @@ command: >-
 env_variables:
   MLFLOW_TRACKING_URI: databricks
   UV_BRANCH: update_default_config_to_ultravox_v0.3
-  TRAIN_ARGS: --config_path ultravox/training/configs/llama3_whisper_kd.yaml
+  TRAIN_ARGS: --config_path ultravox/training/configs/release_config.yaml
