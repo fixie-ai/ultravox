@@ -9,6 +9,7 @@ import simple_parsing
 import torch
 
 from ultravox.data import dataset_config
+from ultravox.data import datasets
 from ultravox.model import ultravox_config
 
 
@@ -33,9 +34,8 @@ class TrainConfig:
     do_train: bool = True
     do_eval: bool = True
 
-    # In InterleaveDataset, if one dataset runs out, should we repeat it to keep
-    # the ratio of samples from each dataset fixed?
-    repeat_data: bool = False
+    # In InterleaveDataset, when to stop interleave: choose from last_exhausted (default), first_exhausted, or never_stop
+    stop_strategy: datasets.StopStrategy = datasets.StopStrategy.LAST_EXHAUSTED
     data_dir: Optional[str] = None
     mds: bool = False
     num_samples: Optional[int] = None
