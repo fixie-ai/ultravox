@@ -253,9 +253,10 @@ def main(args: DatasetToolArgs):
         data_dict[split] = args.task.map_split(
             ds_split, args.num_workers, args.writer_batch_size, args.exclude_fields
         )
-        data_dict[split] = args.task.filter_split(
-            data_dict[split], args.num_workers, args.writer_batch_size
-        )
+        if isinstance(args.task, TextGenerationTask):
+            data_dict[split] = args.task.filter_split(
+                data_dict[split], args.num_workers, args.writer_batch_size
+            )
 
     hub_args: Dict[str, Any] = {
         "config_name": args.upload_subset or "default",

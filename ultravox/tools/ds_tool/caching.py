@@ -27,7 +27,7 @@ class CachingChatWrapper:
         os.makedirs(prefixed_path, exist_ok=True)
         return os.path.join(prefixed_path, f"{text_hash}.txt")
 
-    @retry(wait_fixed(3), stop_after_attempt(3))
+    @retry(wait=wait_fixed(3), stop=stop_after_attempt(3))
     def chat_completion(self, **kwargs) -> str:
         text_hash = hashlib.sha256(json.dumps(kwargs).encode()).hexdigest()
 
