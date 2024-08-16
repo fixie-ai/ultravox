@@ -2,7 +2,6 @@
 
 import argparse
 import dataclasses
-import json
 import os
 import time
 from typing import IO, List, Optional
@@ -14,6 +13,7 @@ from ultravox.data import datasets
 from ultravox.evaluation import eval
 from ultravox.evaluation import eval_types
 from ultravox.inference import base
+from ultravox.inference import infer
 from ultravox.tools import infer_api
 
 # There are two default modes for this tool, agent mode and ASR mode.
@@ -193,43 +193,35 @@ def dataset_infer(inference: base.VoiceInference, args: InferArgs):
         ds_args.shuffle_seed = args.seed
     ds = datasets.create_dataset(args.data_sets[0], ds_args)
 
-    if args.batch_size:
-        start_time = time.time()
-        samples = []
-        for i, sample in enumerate(datasets.Range(ds, args.num_samples)):
-            samples.append(sample)
-        samples = sorted(samples, key=lambda sample: len(sample.audio_transcript))
-        output = inference.batch_infer(
-            samples,
-            batch_size=args.batch_size,
-            max_tokens=args.max_tokens,
-            temperature=args.temperature,
-        )
-        print("printing outputs...")
-        for sample in output:
-            print(sample)
-        print("Total time", time.time() - start_time)
-
-    else:
-        scores: List[float] = []
-        for i, sample in enumerate(datasets.Range(ds, args.num_samples)):
-            # Store the original question and answer for JSON output.
-            question_text = sample.audio_transcript
-            expected_answer = sample.messages[-1]["content"]
-            # Drop any assistant response from the sample.
-            sample.messages = sample.messages[:-1]
-            if not args.json:
-                run_tui(i, inference, sample, args, expected_answer, scores)
-            else:
-                output = inference.infer(
-                    sample, max_tokens=args.max_tokens, temperature=args.temperature
+    scores: List[float] = []
+    for i, sample in enumerate(datasets.Range(ds, args.num_samples)):
+        # Store the original question and answer for JSON output.
+        question_text = sample.audio_transcript
+        expected_answer = sample.messages[-1]["content"]
+        # Drop any assistant response from the sample.
+        sample.messages = sample.messages[:-1]
+        if not args.json:
+            run_tui(i, inference, sample, args, expected_answer, scores)
+        else:
+            if not args.batch_size:
+                print("Setting default batch size to 1")
+                args.batch_size = 1
+            if isinstance(inference, infer.LocalInference):
+                start_time = time.time()
+                all_samples = []
+                for i, sample in enumerate(datasets.Range(ds, args.num_samples)):
+                    all_samples.append(sample)
+                all_samples.sort(key=lambda sample: len(sample.audio_transcript))
+                output_batch = inference.batch_infer(
+                    all_samples,
+                    batch_size=args.batch_size,
+                    max_tokens=args.max_tokens,
+                    temperature=args.temperature,
                 )
-                obj = {
-                    "question": question_text,
-                    "generated_answer": output.text,
-                    "expected_answer": expected_answer,
-                }
-                print(json.dumps(obj))
+                print("printing outputs...")
+                for sample in output_batch:
+                    print(sample)
+                print("Total time", time.time() - start_time)
 
 
 def main(args: InferArgs):

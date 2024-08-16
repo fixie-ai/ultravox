@@ -34,7 +34,7 @@ class LocalInference(base.VoiceInference):
 
     def batch_infer(
         self,
-        samples: List[datasets.VoiceSample],
+        all_samples: List[datasets.VoiceSample],
         batch_size: int = 1,
         max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
@@ -44,7 +44,7 @@ class LocalInference(base.VoiceInference):
             include_alt_fields=False,
         )
         sample_additional_info = []
-        for i, sample in enumerate(samples):
+        for i, sample in enumerate(all_samples):
             question_text = sample.audio_transcript
             expected_answer = sample.messages[-1]["content"]
             sample_additional_info.append(
@@ -57,7 +57,7 @@ class LocalInference(base.VoiceInference):
             sample.messages = sample.messages[:-1]
 
         dataset: Dataset[Any] = Dataset.from_list(
-            [self._dataproc(s, batch=True) for s in samples]
+            [self._dataproc(s, batch=True) for s in all_samples]
         )
         dataloader: DataLoader = DataLoader(
             dataset, collate_fn=data_collator, batch_size=batch_size
@@ -125,7 +125,6 @@ class LocalInference(base.VoiceInference):
         thread.join()
 
     def _dataproc(self, sample: datasets.VoiceSample, batch=False):
-        print("sample", sample)
         text_input = self.tokenizer.apply_chat_template(
             sample.messages, add_generation_prompt=True, tokenize=False
         )
@@ -161,7 +160,7 @@ class LocalInference(base.VoiceInference):
             inputs["audio_values"] = inputs["audio_values"].to(dtype=self.dtype)
         if batch:
             for key, val in inputs.items():
-                inputs[key] = val.squeeze()
+                inputs[key] = val.squeeze(0)
         return inputs
 
     @torch.inference_mode()
