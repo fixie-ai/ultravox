@@ -191,7 +191,7 @@ class VoiceSample:
         if self.audio is not None:
             obj["audio"] = audio_to_wav_base64(self.audio, self.sample_rate)
         return obj
-
+    
     def __post_init__(self):
         """Ensure audio is float32 PCM."""
         if self.audio is not None:
@@ -1125,7 +1125,9 @@ class Dataproc(abc.ABC, data.IterableDataset):
         pass
 
     def __iter__(self):
-        return (self._process(sample) for sample in self._dataset)
+        for sample in self._dataset:
+            print("sample to process", sample )
+            yield self._process(sample)
 
 
 class Range(data.IterableDataset):

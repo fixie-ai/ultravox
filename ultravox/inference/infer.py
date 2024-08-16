@@ -1,12 +1,10 @@
 import threading
-from typing import Any, List, Optional
+from typing import List, Optional
 
 import librosa
 import numpy as np
 import torch
 import transformers
-from datasets import Dataset
-from torch.utils.data.dataloader import DataLoader
 
 from ultravox.data import datasets
 from ultravox.inference import base
@@ -34,57 +32,31 @@ class LocalInference(base.VoiceInference):
 
     def batch_infer(
         self,
-        all_samples: List[datasets.VoiceSample],
-        batch_size: int = 1,
+        samples: List[datasets.VoiceSample],
         max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
     ) -> base.InferenceGenerator:
-        data_collator = datasets.DataCollatorForSeq2SeqWithAudio(
-            tokenizer=self.tokenizer,
-            include_alt_fields=False,
-        )
-        sample_additional_info = []
-        for i, sample in enumerate(all_samples):
-            question_text = sample.audio_transcript
-            expected_answer = sample.messages[-1]["content"]
-            sample_additional_info.append(
-                {
-                    "index": i,
-                    "question_text": question_text,
-                    "expected_answer": expected_answer,
-                }
-            )
-            sample.messages = sample.messages[:-1]
+        # sample_additional_info = []
+        # for i, sample in enumerate(all_samples):
+        #     question_text = sample.audio_transcript
+        #     expected_answer = sample.messages[-1]["content"]
+        #     sample_additional_info.append(
+        #         {
+        #             "index": i,
+        #             "question_text": question_text,
+        #             "expected_answer": expected_answer,
+        #         }
+        #     )
+        #     sample.messages = sample.messages[:-1]
 
-        dataset: Dataset[Any] = Dataset.from_list(
-            [self._dataproc(s, batch=True) for s in all_samples]
-        )
-        dataloader: DataLoader = DataLoader(
-            dataset, collate_fn=data_collator, batch_size=batch_size
-        )
-        sample_index = 0
-        for batch in dataloader:
-            input_len = batch["input_ids"].shape[1]
-            output_batch = self._generate(batch, max_tokens, temperature)
-            for _, output in enumerate(output_batch):
-                output_tokens = output[input_len:]
-                output_text = self.tokenizer.decode(
-                    output_tokens, skip_special_tokens=True
-                )
-                output_len = len(output_tokens)
-                output_text = base.VoiceOutput(output_text, input_len, output_len)
-                output = {
-                    "output_text": output_text,
-                    "question_text": sample_additional_info[sample_index][
-                        "question_text"
-                    ],
-                    "expected_answer": sample_additional_info[sample_index][
-                        "expected_answer"
-                    ],
-                    "index": sample_additional_info[sample_index]["index"],
-                }
-                sample_index += 1
-                yield output
+        input_len = samples["input_ids"].shape[1]
+        output_batch = self._generate(samples, max_tokens, temperature)
+        for _, output in enumerate(output_batch):
+            output_tokens = output[input_len:]
+            output_text = self.tokenizer.decode(output_tokens, skip_special_tokens=True)
+            output_len = len(output_tokens)
+            output_text = base.VoiceOutput(output_text, input_len, output_len)
+            yield output_text
 
     def infer(
         self,
