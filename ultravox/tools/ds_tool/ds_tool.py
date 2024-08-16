@@ -106,19 +106,19 @@ class TextGenerationTask:
         if self.template.startswith("@"):
             with open(self.template[1:], "r") as template_file:
                 self.template = template_file.read()
-                
+
     def filter_split(
         self,
         ds_split: datasets.Dataset,
         num_proc: int,
         writer_batch_size: int,
-    ) -> datasets.Dataset: 
+    ) -> datasets.Dataset:
         return ds_split.filter(
             self._filter_sample,
             num_proc=num_proc,
             writer_batch_size=writer_batch_size,
         )
-    
+
     def _filter_sample(self, sample):
         if sample[self.new_column_name] == "":
             return False
@@ -152,7 +152,6 @@ class TextGenerationTask:
             rendered = jinja2.Template(
                 self.template, undefined=jinja2.StrictUndefined
             ).render(**filtered_sample, json_dump=json.dumps, text_proc=text_proc)
-            rendered = ""
             if rendered.strip() == "":
                 sample[self.new_column_name] = ""
                 return sample
@@ -257,10 +256,6 @@ def main(args: DatasetToolArgs):
         data_dict[split] = args.task.filter_split(
             data_dict[split], args.num_workers, args.writer_batch_size
         )
-    print("data dict len", len(data_dict[split]))
-    print(data_dict[split][0])
-
-    return 
 
     hub_args: Dict[str, Any] = {
         "config_name": args.upload_subset or "default",
