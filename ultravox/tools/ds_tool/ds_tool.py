@@ -9,6 +9,7 @@ import jinja2
 import openai
 import simple_parsing
 import yaml
+from tenacity import retry
 
 from ultravox.data import text_proc
 from ultravox.tools.ds_tool import caching
