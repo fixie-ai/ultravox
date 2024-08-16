@@ -221,7 +221,7 @@ def dataset_infer(inference: base.VoiceInference, args: InferArgs):
                     output[i]["output_text"] = output_text
                     print(output)
                 current_batch = []
-            print("Total time", time.time() - start_time)
+        print("Total time", time.time() - start_time)
 
     else:
         scores: List[float] = []

@@ -76,11 +76,6 @@ class DataCollatorForSeq2SeqWithAudio(transformers.DataCollatorForSeq2Seq):
 
     def __call__(self, features, *args, **kwargs):
         audio_values = [f.pop("audio_values", None) for f in features]
-        for i, audio in enumerate(audio_values):
-            audio_values[i] = torch.tensor(audio)
-
-        for i, feature in enumerate(features):
-            features[i]["input_ids"] = torch.tensor(feature["input_ids"])
 
         if self.include_alt_fields:
             # these fields are hard-coded in the transformer data collator, so they need special handling before calling the super method
