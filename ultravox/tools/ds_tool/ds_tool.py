@@ -1,7 +1,6 @@
 import dataclasses
 import json
 import os
-import time
 from typing import Any, Dict, List, Optional, Union
 
 import datasets
@@ -9,9 +8,6 @@ import jinja2
 import openai
 import simple_parsing
 import yaml
-from tenacity import retry
-from tenacity import stop_after_attempt
-from tenacity import wait_fixed
 
 from ultravox.data import text_proc
 from ultravox.tools.ds_tool import caching
@@ -125,7 +121,6 @@ class TextGenerationTask:
             writer_batch_size=writer_batch_size,
         )
 
-    @retry(wait_fixed(3), stop_after_attempt(3))
     def _map_sample(self, sample, exclude_fields):
         # using a Jinja template for some added flexibility, template can include variables and functions
         # e.g., {{ text }} or {{ text_proc.format_asr_text(text) }}
@@ -139,6 +134,9 @@ class TextGenerationTask:
             rendered = jinja2.Template(
                 self.template, undefined=jinja2.StrictUndefined
             ).render(**filtered_sample, json_dump=json.dumps, text_proc=text_proc)
+            if rendered.strip() == "":
+                raise ValueError("Template rendering is empty")
+
         except jinja2.TemplateError as e:
             print(f"Error rendering template: {e}")
             print(f"template: {self.template}")
@@ -156,18 +154,12 @@ class TextGenerationTask:
         else:
             turns = [{"role": "user", "content": rendered}]
 
-        try:
-            start_time = time.time()  # Record start time
-            sample[self.new_column_name] = chat_client.chat_completion(
-                model=self.language_model,
-                messages=turns,
-                max_tokens=self.max_tokens,
-                temperature=self.temperature,
-            )
-        except Exception as e:
-            duration = time.time() - start_time
-            print(f"Attempt failed after {duration:.2f} seconds: {e}. Message: {turns}")
-            raise e
+        sample[self.new_column_name] = chat_client.chat_completion(
+            model=self.language_model,
+            messages=turns,
+            max_tokens=self.max_tokens,
+            temperature=self.temperature,
+        )
 
         return sample
 
