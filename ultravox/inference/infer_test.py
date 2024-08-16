@@ -35,10 +35,12 @@ class FakeInference(infer.LocalInference):
     ):
         def fake_generate(**kwargs):
             input = kwargs.get("input_ids")
-            output = [range(25)]
+            output = transformers.generation.utils.GenerateDecoderOnlyOutput(
+                sequences=[range(25)]
+            )
             streamer = kwargs.get("streamer", None)
             if streamer:
-                for token in output[0][input.shape[1] :]:
+                for token in output.sequences[0][input.shape[1] :]:
                     streamer.on_finalized_text(tokenizer.decode(token))
                 streamer.on_finalized_text("", stream_end=True)
             return output
