@@ -1,7 +1,7 @@
 import dataclasses
 import json
 import os
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import datasets
 import jinja2
@@ -19,9 +19,9 @@ chat_client: caching.CachingChatWrapper
 
 @dataclasses.dataclass
 class TtsTask:
-    implementation: str = simple_parsing.field(default="azure", alias="-i")
-    # Column name containing the text to convert to audio. It can be a Jinja variable expression.
+    # Jinja template for the text that needs to be converted to audio
     template: str = simple_parsing.field(alias="-T")
+    implementation: str = simple_parsing.field(default="azure", alias="-i")
     json_mode: bool = simple_parsing.field(default=False, alias="-j")
     audio_column_name: Optional[str] = simple_parsing.field(default=None, alias="-a")
     voice: Optional[str] = simple_parsing.field(default=None, alias="-V")
@@ -42,7 +42,11 @@ class TtsTask:
                 self.template = template_file.read()
 
     def map_split(
-        self, ds_split: datasets.Dataset, num_proc: int, writer_batch_size: int
+        self,
+        ds_split: datasets.Dataset,
+        num_proc: int,
+        writer_batch_size: int,
+        exclude_fields: List[str],
     ) -> datasets.Dataset:
         print(f'TTS mapping "{self.template}" to "{self.audio_column_name}"...')
         ds_split = ds_split.map(
@@ -104,24 +108,36 @@ class TextGenerationTask:
                 self.template = template_file.read()
 
     def map_split(
-        self, ds_split: datasets.Dataset, num_proc: int, writer_batch_size: int
+        self,
+        ds_split: datasets.Dataset,
+        num_proc: int,
+        writer_batch_size: int,
+        exclude_fields: List[str],
     ) -> datasets.Dataset:
         print(f'Generating "{self.new_column_name}" with template:\n{self.template}')
         return ds_split.map(
-            self._map_sample, num_proc=num_proc, writer_batch_size=writer_batch_size
+            lambda sample: self._map_sample(sample, set(exclude_fields)),
+            num_proc=num_proc,
+            writer_batch_size=writer_batch_size,
         )
 
-    def _map_sample(self, sample):
+    def _map_sample(self, sample, exclude_fields):
         # using a Jinja template for some added flexibility, template can include variables and functions
         # e.g., {{ text }} or {{ text_proc.format_asr_text(text) }}
         try:
+            # We need to filter out the audio before the sample is passed into the jinja template
+            # or it will get loaded into memory and spike usage.
+            filtered_sample = {
+                k: sample[k] for k in sample.keys() if k not in exclude_fields
+            }
+
             rendered = jinja2.Template(
                 self.template, undefined=jinja2.StrictUndefined
-            ).render(**sample, json_dump=json.dumps, text_proc=text_proc)
+            ).render(**filtered_sample, json_dump=json.dumps, text_proc=text_proc)
         except jinja2.TemplateError as e:
             print(f"Error rendering template: {e}")
             print(f"template: {self.template}")
-            print(f"sample keys: {list(sample.keys())}")
+            print(f"sample keys: {list(filtered_sample.keys())}")
             raise ValueError(
                 f"Template rendering failed. Make sure all keys in the template exist in the sample."
             ) from e
@@ -165,6 +181,7 @@ class DatasetToolArgs:
     num_samples: Optional[int] = simple_parsing.field(default=None, alias="-n")
     num_workers: int = simple_parsing.field(default=16, alias="-w")
     writer_batch_size: int = simple_parsing.field(default=1000)
+    exclude_fields: List[str] = simple_parsing.field(default_factory=lambda: ["audio"])
 
     # HF destination dataset parameters
     upload_name: Optional[str] = simple_parsing.field(default=None, alias="-u")
@@ -211,7 +228,7 @@ def main(args: DatasetToolArgs):
         if args.num_samples:
             ds_split = ds_split.select(range(args.num_samples))
         data_dict[split] = args.task.map_split(
-            ds_split, args.num_workers, args.writer_batch_size
+            ds_split, args.num_workers, args.writer_batch_size, args.exclude_fields
         )
 
     hub_args: Dict[str, Any] = {
