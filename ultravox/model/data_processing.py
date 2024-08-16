@@ -1,4 +1,3 @@
-import heapq
 from typing import Any, Dict
 
 import datasets
@@ -8,35 +7,6 @@ from torch.utils import data
 from ultravox.data import datasets
 from ultravox.model import ultravox_processing
 
-class SortedIterableDataset(data.IterableDataset):
-    def __init__(self, dataset, sort_key_func, buffer_size=10000, reverse=False):
-        self.dataset = dataset
-        self.sort_key_func = sort_key_func
-        self.buffer_size = buffer_size
-        self.reverse = reverse
-
-    def __iter__(self):
-        buffer = []
-        
-        # Fill the buffer
-        for item in self.dataset:
-            if len(buffer) < self.buffer_size:
-                heapq.heappush(buffer, (self.sort_key_func(item), item))
-            else:
-                # Buffer is full, start yielding
-                yield from self._yield_sorted(buffer)
-                buffer = [(self.sort_key_func(item), item)]  # Start a new buffer
-        
-        # Yield remaining items in the buffer
-        yield from self._yield_sorted(buffer)
-
-    def _yield_sorted(self, buffer):
-        # Sort the buffer
-        buffer.sort(key=lambda x: x[0], reverse=self.reverse)
-        
-        # Yield items
-        for _, item in buffer:
-            yield item
 
 class UltravoxDataproc(datasets.Dataproc):
     def __init__(

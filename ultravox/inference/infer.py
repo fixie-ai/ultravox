@@ -36,22 +36,15 @@ class LocalInference(base.VoiceInference):
         max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
     ) -> base.InferenceGenerator:
-        # sample_additional_info = []
-        # for i, sample in enumerate(all_samples):
-        #     question_text = sample.audio_transcript
-        #     expected_answer = sample.messages[-1]["content"]
-        #     sample_additional_info.append(
-        #         {
-        #             "index": i,
-        #             "question_text": question_text,
-        #             "expected_answer": expected_answer,
-        #         }
-        #     )
-        #     sample.messages = sample.messages[:-1]
-
-        input_len = samples["input_ids"].shape[1]
-        output_batch = self._generate(samples, max_tokens, temperature)
-        for _, output in enumerate(output_batch):
+        inputs = [self._dataproc(s, batch=True) for s in samples]
+        data_collator = datasets.DataCollatorForSeq2SeqWithAudio(
+            tokenizer=self.tokenizer,
+            include_alt_fields=False,
+        )
+        tensors = data_collator(inputs)
+        input_len = tensors["input_ids"].shape[1]
+        output_batch = self._generate(tensors, max_tokens, temperature)
+        for output in output_batch:
             output_tokens = output[input_len:]
             output_text = self.tokenizer.decode(output_tokens, skip_special_tokens=True)
             output_len = len(output_tokens)

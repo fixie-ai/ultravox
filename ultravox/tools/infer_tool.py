@@ -7,14 +7,12 @@ from typing import IO, List, Optional
 
 import numpy as np
 import simple_parsing
-from torch.utils.data.dataloader import DataLoader
 
 from ultravox.data import datasets
 from ultravox.evaluation import eval
 from ultravox.evaluation import eval_types
 from ultravox.inference import base
 from ultravox.inference import infer
-from ultravox.model import data_processing
 from ultravox.tools import infer_api
 
 # There are two default modes for this tool, agent mode and ASR mode.
@@ -199,52 +197,32 @@ def dataset_infer(inference: base.VoiceInference, args: InferArgs):
             args.batch_size = 1
 
         start_time = time.time()
+        current_batch = []
+        for i, sample in enumerate(datasets.Range(ds, args.num_samples)):
+            current_batch.append(sample)
+            if len(current_batch) == args.batch_size:
+                output = []
+                for sample in current_batch:
+                    output.append(
+                        {
+                            "index": i,
+                            "question_text": sample.audio_transcript,
+                            "expected_answer": sample.messages[-1]["content"],
+                        }
+                    )
+                    sample.messages = sample.messages[:-1]
 
-        def sort_key_func(sample):
-            print("sample!", sample)
-            # Return a constant value, or a simple attribute of VoiceSample if needed
-            return 0  # This will effectively shuffle the dataset randomly
+                output_batch = inference.batch_infer(
+                    current_batch,
+                    max_tokens=args.max_tokens,
+                    temperature=args.temperature,
+                )
+                for i, output_text in enumerate(output_batch):
+                    output[i]["output_text"] = output_text
+                    print(output)
+                current_batch = []
+            print("Total time", time.time() - start_time)
 
-        # Create the sorted dataset
-        limited_ds = datasets.Range(ds, args.num_samples)
-        # sorted_ds = data_processing.SortedIterableDataset(limited_ds, sort_key_func)
-        sorted_ds = limited_ds.sort('audio_transcript')
-
-        ds_with_proc = data_processing.UltravoxDataproc(
-            sorted_ds, processor=inference.processor, inference_mode=True
-        )
-
-        # batch_sampler = BatchSampler(SequentialSampler(range(args.num_samples)), batch_size=args.batch_size, drop_last=False)
-        data_collator = datasets.DataCollatorForSeq2SeqWithAudio(
-            tokenizer=inference.tokenizer,
-            include_alt_fields=False,
-        )
-        dataloader: DataLoader = DataLoader(
-            ds_with_proc, collate_fn=data_collator, batch_size=args.batch_size
-        )
-
-        for batch in dataloader:
-            output_batch = inference.batch_infer(
-                batch,
-                max_tokens=args.max_tokens,
-                temperature=args.temperature,
-            )
-            for sample in output_batch:
-                print(sample)
-        print("Total time", time.time() - start_time)
-
-        # for batch_indices in batch_sampler:
-        #     batch_samples = [sorted_dataset[j] for j in batch_indices]
-        #     output_batch = inference.batch_infer(
-        #         batch_samples,
-        #         batch_size=args.batch_size,
-        #         max_tokens=args.max_tokens,
-        #         temperature=args.temperature,
-        #     )
-        #     print("printing outputs...")
-        #     for sample in output_batch:
-        #         print(sample)
-        #     print("Total time", time.time() - start_time)
     else:
         scores: List[float] = []
         for i, sample in enumerate(datasets.Range(ds, args.num_samples)):
