@@ -1125,9 +1125,7 @@ class Dataproc(abc.ABC, data.IterableDataset):
         pass
 
     def __iter__(self):
-        for sample in self._dataset:
-            print("sample to process", sample)
-            yield self._process(sample)
+        return (self._process(sample) for sample in self._dataset)
 
 
 class Range(data.IterableDataset):
