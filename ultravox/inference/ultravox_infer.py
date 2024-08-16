@@ -17,6 +17,7 @@ class UltravoxInference(infer.LocalInference):
         tokenizer_id: Optional[str] = None,
         device: Optional[str] = None,
         data_type: Optional[str] = None,
+        conversation_mode: bool = False,
     ):
         """
         Args:
@@ -29,6 +30,7 @@ class UltravoxInference(infer.LocalInference):
             tokenizer_id: model_id for the tokenizer to use. If not provided, it will be inferred
             device: where to put the model and data
             data_type: data type to use for the model
+            conversation_mode: if true, keep track of past messages in a conversation
         """
         device = device or utils.default_device()
         dtype = utils.get_dtype(data_type) if data_type else utils.default_dtype()
@@ -65,4 +67,5 @@ class UltravoxInference(infer.LocalInference):
             tokenizer=tokenizer,
             device=device,
             dtype=dtype,
+            conversation_mode=conversation_mode,
         )

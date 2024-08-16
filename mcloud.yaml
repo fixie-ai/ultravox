@@ -14,4 +14,4 @@ command: >-
 env_variables:
   MLFLOW_TRACKING_URI: databricks
   UV_BRANCH: main
-  TRAIN_ARGS: --config_path ultravox/training/configs/llama3_whisper_kd.yaml
+  TRAIN_ARGS: --config_path ultravox/training/configs/release_config.yaml
