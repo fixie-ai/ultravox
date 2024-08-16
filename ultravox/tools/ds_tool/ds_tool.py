@@ -10,6 +10,8 @@ import openai
 import simple_parsing
 import yaml
 from tenacity import retry
+from tenacity import stop_after_attempt
+from tenacity import wait_fixed
 
 from ultravox.data import text_proc
 from ultravox.tools.ds_tool import caching
@@ -123,6 +125,7 @@ class TextGenerationTask:
             writer_batch_size=writer_batch_size,
         )
 
+    @retry(wait_fixed(3), stop_after_attempt(3))
     def _map_sample(self, sample, exclude_fields):
         # using a Jinja template for some added flexibility, template can include variables and functions
         # e.g., {{ text }} or {{ text_proc.format_asr_text(text) }}
@@ -153,35 +156,18 @@ class TextGenerationTask:
         else:
             turns = [{"role": "user", "content": rendered}]
 
-        max_retries = 3  # Number of retry attempts
-        retry_delay = 2  # Delay in seconds between retries
-
-        for attempt in range(max_retries):
-            try:
-                start_time = time.time()  # Record start time
-                sample[self.new_column_name] = chat_client.chat_completion(
-                    model=self.language_model,
-                    messages=turns,
-                    max_tokens=self.max_tokens,
-                    temperature=self.temperature,
-                )
-                break
-            except Exception as e:
-                duration = time.time() - start_time
-                if attempt < max_retries - 1:
-                    print(
-                        f"Attempt {attempt + 1} failed after {duration:.2f} seconds: {e}."
-                    )
-                    print(f"Message: {turns}")
-                    print(f"Retrying in {retry_delay} seconds...")
-                    time.sleep(retry_delay)
-                else:
-                    print(
-                        f"Attempt {attempt + 1} failed after {duration:.2f} seconds: {e}."
-                    )
-                    print(f"Message: {turns}")
-                    print("No more retries left.")
-                    raise
+        try:
+            start_time = time.time()  # Record start time
+            sample[self.new_column_name] = chat_client.chat_completion(
+                model=self.language_model,
+                messages=turns,
+                max_tokens=self.max_tokens,
+                temperature=self.temperature,
+            )
+        except Exception as e:
+            duration = time.time() - start_time
+            print(f"Attempt failed after {duration:.2f} seconds: {e}. Message: {turns}")
+            raise e
 
         return sample
 
@@ -256,6 +242,7 @@ def main(args: DatasetToolArgs):
         data_dict[split] = args.task.map_split(
             ds_split, args.num_workers, args.writer_batch_size, args.exclude_fields
         )
+    return
 
     hub_args: Dict[str, Any] = {
         "config_name": args.upload_subset or "default",
