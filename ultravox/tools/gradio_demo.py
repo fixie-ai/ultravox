@@ -21,9 +21,8 @@ class DemoConfig:
     #    runs/llama2_asr_gigaspeech/checkpoint-1000/
     #    wandb://fixie/ultravox/model-llama2_asr_gigaspeech:v0
     model_path: str = "fixie-ai/ultravox-v0_3"
-    # "mps", "cuda", or "cpu"
-    device: str = "mps"
-    data_type: str = "float16"
+    device: Optional[str] = None
+    data_type: Optional[str] = None
     default_prompt: str = ""
     max_new_tokens: int = 200
     temperature: float = 0
@@ -90,7 +89,7 @@ def main():
         )
 
     def gradio_reset():
-        inference.reset_conversation()
+        inference.update_conversation()
         return [], "", None
 
     with gr.Blocks() as demo:
@@ -144,6 +143,7 @@ def main():
             queue=False,
         )
         reset.click(gradio_reset, [], [chatbot, prompt, audio], queue=False)
+        demo.load(gradio_reset, [], [chatbot, prompt, audio], queue=False)
 
     demo.launch(share=True)
 

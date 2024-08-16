@@ -38,23 +38,13 @@ class LocalInference(base.VoiceInference):
             None
         )
 
-    def reset_conversation(self):
-        self.past_messages = []
-        self.past_key_values = None
-
-    def _add_past_message(self, message: Dict[str, str], audio_token_len: int):
-        message = copy.copy(message)
-        content = message["content"]
-        if audio_token_len > 0:
-            if content.count("<|audio|>") != 1:
-                raise ValueError(
-                    f"Expected 1 audio placeholder, found {content.count('<|audio|>')}"
-                )
-            message["content"] = content.replace(
-                "<|audio|>", self.tokenizer.eos_token * audio_token_len
-            )
-
-        self.past_messages.append(message)
+    def update_conversation(
+        self,
+        past_messages: List[Dict[str, str]] = [],
+        past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
+    ):
+        self.past_messages = past_messages
+        self.past_key_values = past_key_values
 
     def _get_sample_with_past(
         self, sample: datasets.VoiceSample
@@ -80,15 +70,25 @@ class LocalInference(base.VoiceInference):
         output_len = len(output_tokens)
 
         if self.conversation_mode:
+            past_messages = copy.deepcopy(extended_sample.messages)
             audio_token_len = (
                 0 if "audio_token_len" not in inputs else inputs["audio_token_len"][0]
             )
-            self._add_past_message(extended_sample.messages[-1], audio_token_len)
-            self._add_past_message({"role": "assistant", "content": output_text}, 0)
-            self.past_key_values = output.past_key_values
+            if audio_token_len > 0:
+                user_content = past_messages[-1]["content"]
+                if user_content.count("<|audio|>") != 1:
+                    raise ValueError(
+                        f"Expected 1 audio placeholder, found {user_content.count('<|audio|>')}"
+                    )
+                past_messages[-1]["content"] = user_content.replace(
+                    "<|audio|>", self.tokenizer.eos_token * audio_token_len
+                )
+            past_messages.append({"role": "assistant", "content": output_text})
+            self.update_conversation(past_messages, output.past_key_values)
 
         return base.VoiceOutput(output_text, input_len, output_len)
 
+    # streaming is not supported in conversation mode yet, to be implemented
     def infer_stream(
         self,
         sample: datasets.VoiceSample,
