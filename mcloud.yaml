@@ -6,12 +6,12 @@ compute:
   cluster: r14z3p1
 integrations:
   - integration_type: git_repo
-    git_repo: fixie-ai/ultravox
+    git_repo: lipatrick/ultravox
     git_branch: $UV_BRANCH
     pip_install: poetry==1.7.1
 command: >-
   cd ultravox && poetry install --no-dev && poetry run torchrun --nproc_per_node=8 -m ultravox.training.train $TRAIN_ARGS
 env_variables:
   MLFLOW_TRACKING_URI: databricks
-  UV_BRANCH: update_default_config_to_ultravox_v0.3
+  UV_BRANCH: patrick.2024-08-15-ultravox.practice.1
   TRAIN_ARGS: --config_path ultravox/training/configs/release_config.yaml

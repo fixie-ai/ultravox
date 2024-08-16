@@ -4,7 +4,7 @@ exp_name: "ultravox-v0_3"
 # Make sure to accept the license agreement on huggingface hub
 text_model: "meta-llama/Meta-Llama-3.1-8B-Instruct"
 audio_model: "openai/whisper-small"
-
+model_load_dir: "wandb://model-ultravox-v0_3:v5"
 
 loss_config:
   # Choose from ["KL_Divergence", "CrossEntropy"], default is "KL_Divergence"
@@ -15,6 +15,7 @@ val_sets: ["anyinstruct", "soda", "peoplespeech"]
 
 batch_size: 24
 max_steps: 7200 # x8x24 = 1,382,400 samples
+do_train: False
 
 data_sets: []
 data_dicts:
