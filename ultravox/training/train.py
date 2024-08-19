@@ -313,6 +313,11 @@ def train(args: config_base.TrainConfig):
 
 
 def evaluate(args: config_base.TrainConfig):
+    """
+    Evaluate the model on the audio and text datasets.
+
+    NOTE: This function must be run only on the primary process.
+    """
     logging.info("Starting evaluation...")
     t_start = datetime.now()
     logging.info(f"eval start time: {t_start}")
@@ -326,22 +331,24 @@ def evaluate(args: config_base.TrainConfig):
     # Run audio-based evaluations and log to W&B
     audio_metrics = run_oaievalset(
         log_dir=os.path.join(logs_dir, "oaieval/audio"),
-        model_dir=args.output_dir,
+        model_dir=str(args.output_dir),
         eval_set="audio-core",
     )
     audio_metrics = {f"eval_audio_{k}": v for k, v in audio_metrics.items()}
     # TODO: it would be best to do trainer.log, but then we'd risk keeping parts of the model
     # in GPU memory, which could cause OOM errors.
-    wandb.run.log(audio_metrics)
+    if wandb.run:
+        wandb.run.log(audio_metrics)
 
     # Run text-only evaluations and log to W&B
     text_metrics = run_oaievalset(
         log_dir=os.path.join(logs_dir, "oaieval/text"),
-        model_dir=args.output_dir,
+        model_dir=str(args.output_dir),
         eval_set="transcript-core",
     )
     text_metrics = {f"eval_text_{k}": v for k, v in text_metrics.items()}
-    wandb.run.log(text_metrics)
+    if wandb.run:
+        wandb.run.log(text_metrics)
 
     t_end = datetime.now()
     logging.info(f"eval end time: {t_end}")
