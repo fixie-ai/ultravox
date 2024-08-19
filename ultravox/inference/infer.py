@@ -67,6 +67,7 @@ class LocalInference(base.VoiceInference):
             output_len = len(output_tokens)
             output_text = base.VoiceOutput(output_text, input_len, output_len)
             output_texts.append(output_text)
+        print("len(output_texts):", len(output_texts))
         return output_texts
 
     def update_conversation(

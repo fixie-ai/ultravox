@@ -7,6 +7,7 @@ from typing import IO, List, Optional
 
 import numpy as np
 import simple_parsing
+from torch.utils.data import DataLoader
 
 from ultravox.data import datasets
 from ultravox.evaluation import eval
@@ -195,30 +196,34 @@ def dataset_infer(inference: base.VoiceInference, args: InferArgs):
     if args.json and isinstance(inference, infer.LocalInference):
         # TODO: Add multithreading support for preparing the batch.
         start_time = time.time()
+        dl = DataLoader(
+            datasets.Range(ds, args.num_samples),
+            batch_size=args.batch_size,
+            collate_fn=lambda x: x,
+        )
         current_batch = []
-        for i, sample in enumerate(datasets.Range(ds, args.num_samples)):
-            current_batch.append(sample)
-            if len(current_batch) == args.batch_size or i == args.num_samples - 1:
-                output = []
-                for sample in current_batch:
-                    output.append(
-                        {
-                            "index": i,
-                            "question_text": sample.audio_transcript,
-                            "expected_answer": sample.messages[-1]["content"],
-                        }
-                    )
-                    sample.messages = sample.messages[:-1]
-
-                output_batch = inference.batch_infer(
-                    current_batch,
-                    max_tokens=args.max_tokens,
-                    temperature=args.temperature,
+        sample_index = 0
+        for current_batch in dl:
+            output = []
+            for sample in current_batch:
+                output.append(
+                    {
+                        "index": sample_index,
+                        "question_text": sample.audio_transcript,
+                        "expected_answer": sample.messages[-1]["content"],
+                    }
                 )
-                for i, output_text in enumerate(output_batch):
-                    output[i]["output_text"] = output_text
-                    print(output)
-                current_batch = []
+                sample.messages = sample.messages[:-1]
+                sample_index += 1
+
+            output_batch = inference.batch_infer(
+                current_batch,
+                max_tokens=args.max_tokens,
+                temperature=args.temperature,
+            )
+            for i, output_text in enumerate(output_batch):
+                output[i]["output_text"] = output_text
+            print(output)
         print("Total time", time.time() - start_time)
 
     else:
