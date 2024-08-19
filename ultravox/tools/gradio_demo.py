@@ -99,7 +99,7 @@ def process_audio(chatbot, prompt, audio, max_new_tokens, temperature):
 
 
 def gradio_reset():
-    inference.reset_conversation()
+    inference.update_conversation()
     return [], "", None
 
 
