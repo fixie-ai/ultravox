@@ -38,6 +38,8 @@ class LocalInference(base.VoiceInference):
             None
         )
 
+        assert self.tokenizer.padding_side == "left"
+
     def batch_infer(
         self,
         samples: List[datasets.VoiceSample],
