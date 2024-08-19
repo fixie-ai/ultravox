@@ -237,6 +237,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
         attention_mask: Optional[torch.Tensor] = None,
         inputs_embeds: Optional[torch.Tensor] = None,
+        cache_position: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> Dict[str, Any]:
         model_input = self.language_model.prepare_inputs_for_generation(
@@ -244,13 +245,22 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             past_key_values=past_key_values,
             attention_mask=attention_mask,
             inputs_embeds=inputs_embeds,
+            cache_position=cache_position,
             **kwargs,
         )
 
-        if is_cache_empty(past_key_values) and audio_values is not None:
-            # We only want to use audio features in the 1st generation step
+        # include audio information in model_input only when it is needed during prefilling
+        # audio_token_start_idx should always be relative to the current cache position
+        prefill_start_idx = 0 if cache_position is None else cache_position[0]
+        if (
+            audio_values is not None
+            and audio_token_start_idx is not None
+            and prefill_start_idx <= torch.max(audio_token_start_idx)
+        ):
             model_input["audio_values"] = audio_values
-            model_input["audio_token_start_idx"] = audio_token_start_idx
+            model_input["audio_token_start_idx"] = (
+                audio_token_start_idx - prefill_start_idx
+            )
             model_input["audio_token_len"] = audio_token_len
 
         return model_input
