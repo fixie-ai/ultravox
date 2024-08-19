@@ -327,7 +327,7 @@ def evaluate(args: config_base.TrainConfig):
     audio_metrics = run_oaievalset(
         log_dir=os.path.join(logs_dir, "oaieval/audio"),
         model_dir=args.output_dir,
-        eval_set="audio-required",
+        eval_set="audio-core",
     )
     audio_metrics = {f"eval_audio_{k}": v for k, v in audio_metrics.items()}
     # TODO: it would be best to do trainer.log, but then we'd risk keeping parts of the model
@@ -338,7 +338,7 @@ def evaluate(args: config_base.TrainConfig):
     text_metrics = run_oaievalset(
         log_dir=os.path.join(logs_dir, "oaieval/text"),
         model_dir=args.output_dir,
-        eval_set="transcript-required",
+        eval_set="transcript-core",
     )
     text_metrics = {f"eval_text_{k}": v for k, v in text_metrics.items()}
     wandb.run.log(text_metrics)
