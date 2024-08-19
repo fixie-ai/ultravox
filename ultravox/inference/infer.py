@@ -116,8 +116,8 @@ class LocalInference(base.VoiceInference):
             )
             q.put(result)
 
-        q = queue.Queue()
-        thread = threading.Thread(target=thunk, args=(q,))
+        result_queue: queue.Queue = queue.Queue()
+        thread = threading.Thread(target=thunk, args=(result_queue,))
         thread.start()
         output_text = ""
         output_token_len = 0
@@ -127,7 +127,7 @@ class LocalInference(base.VoiceInference):
                 output_token_len += 1
                 yield base.InferenceChunk(chunk)
         thread.join()
-        output = q.get()
+        output = result_queue.get()
         if self.conversation_mode:
             audio_token_len = inputs.get("audio_token_len", [0])[0]
             past_messages = self._build_past_messages(
