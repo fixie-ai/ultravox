@@ -1,4 +1,5 @@
 import copy
+import queue
 import threading
 from typing import Dict, List, Optional, Tuple, Union
 
@@ -53,6 +54,25 @@ class LocalInference(base.VoiceInference):
         sample.add_past_messages(self.past_messages)
         return sample
 
+    def _build_past_messages(
+        self,
+        query_messages: List[Dict[str, str]],
+        audio_token_len: int,
+        response_content: str,
+    ) -> List[Dict[str, str]]:
+        messages = query_messages[:]
+        if audio_token_len > 0:
+            user_content = messages[-1]["content"]
+            if user_content.count("<|audio|>") != 1:
+                raise ValueError(
+                    f"Expected 1 audio placeholder, found {user_content.count('<|audio|>')}"
+                )
+            messages[-1]["content"] = user_content.replace(
+                "<|audio|>", self.tokenizer.eos_token * audio_token_len
+            )
+        messages.append({"role": "assistant", "content": response_content})
+        return messages
+
     def infer(
         self,
         sample: datasets.VoiceSample,
@@ -68,55 +88,53 @@ class LocalInference(base.VoiceInference):
         output_tokens = output.sequences[0][input_len:]
         output_text = self.tokenizer.decode(output_tokens, skip_special_tokens=True)
         output_len = len(output_tokens)
-
         if self.conversation_mode:
-            past_messages = copy.deepcopy(extended_sample.messages)
-            audio_token_len = (
-                0 if "audio_token_len" not in inputs else inputs["audio_token_len"][0]
+            audio_token_len = inputs.get("audio_token_len", [0])[0]
+            past_messages = self._build_past_messages(
+                extended_sample.messages, audio_token_len, output_text
             )
-            if audio_token_len > 0:
-                user_content = past_messages[-1]["content"]
-                if user_content.count("<|audio|>") != 1:
-                    raise ValueError(
-                        f"Expected 1 audio placeholder, found {user_content.count('<|audio|>')}"
-                    )
-                past_messages[-1]["content"] = user_content.replace(
-                    "<|audio|>", self.tokenizer.eos_token * audio_token_len
-                )
-            past_messages.append({"role": "assistant", "content": output_text})
             self.update_conversation(past_messages, output.past_key_values)
-
         return base.VoiceOutput(output_text, input_len, output_len)
 
-    # streaming is not supported in conversation mode yet, to be implemented
     def infer_stream(
         self,
         sample: datasets.VoiceSample,
         max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
     ) -> base.InferenceGenerator:
-        inputs = self._dataproc(sample)
+        extended_sample = self._get_sample_with_past(sample)
+        inputs = self._dataproc(extended_sample)
         input_tokens = inputs["input_ids"].shape[1]
         decode_kwargs = {"skip_special_tokens": True}
         streamer = transformers.TextIteratorStreamer(
             self.tokenizer, skip_prompt=True, decode_kwargs=decode_kwargs
         )
 
-        thread_args = (
-            inputs,
-            max_tokens,
-            temperature,
-            streamer,
-        )
-        thread = threading.Thread(target=self._generate, args=thread_args)
+        def thunk(q: queue.Queue):
+            result = self._generate(
+                inputs, max_tokens, temperature, streamer, self.past_key_values
+            )
+            q.put(result)
+
+        q = queue.Queue()
+        thread = threading.Thread(target=thunk, args=(q,))
         thread.start()
-        output_tokens = 0
+        output_text = ""
+        output_token_len = 0
         for chunk in streamer:
             if chunk:
+                output_text += chunk
+                output_token_len += 1
                 yield base.InferenceChunk(chunk)
-                output_tokens += 1
-        yield base.InferenceStats(input_tokens, output_tokens)
         thread.join()
+        output = q.get()
+        if self.conversation_mode:
+            audio_token_len = inputs.get("audio_token_len", [0])[0]
+            past_messages = self._build_past_messages(
+                extended_sample.messages, audio_token_len, output_text
+            )
+            self.update_conversation(past_messages, output.past_key_values)
+        yield base.InferenceStats(input_tokens, output_token_len)
 
     def _dataproc(self, sample: datasets.VoiceSample):
         text_input = self.tokenizer.apply_chat_template(
