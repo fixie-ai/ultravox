@@ -77,7 +77,7 @@ class InferArgs:
     # JSON output
     json: bool = simple_parsing.field(default=False)
     # Batch size
-    batch_size: Optional[int] = simple_parsing.field(default=None, alias="-b")
+    batch_size: Optional[int] = simple_parsing.field(default=1, alias="-b")
 
     def __post_init__(self):
         if self.prompt and self.prompt.startswith("@"):
@@ -193,15 +193,12 @@ def dataset_infer(inference: base.VoiceInference, args: InferArgs):
     ds = datasets.create_dataset(args.data_sets[0], ds_args)
 
     if args.json and isinstance(inference, infer.LocalInference):
-        if not args.batch_size:
-            args.batch_size = 1
-
         # TODO: Add multithreading support for preparing the batch.
         start_time = time.time()
         current_batch = []
         for i, sample in enumerate(datasets.Range(ds, args.num_samples)):
             current_batch.append(sample)
-            if len(current_batch) == args.batch_size:
+            if len(current_batch) == args.batch_size or i == args.num_samples - 1:
                 output = []
                 for sample in current_batch:
                     output.append(

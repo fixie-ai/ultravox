@@ -37,6 +37,10 @@ class LocalInference(base.VoiceInference):
         self.past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = (
             None
         )
+        self.data_collator = datasets.DataCollatorForSeq2SeqWithAudio(
+            tokenizer=self.tokenizer,
+            include_alt_fields=False,
+        )
 
         assert self.tokenizer.padding_side == "left"
 
@@ -45,21 +49,25 @@ class LocalInference(base.VoiceInference):
         samples: List[datasets.VoiceSample],
         max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
-    ) -> base.InferenceGenerator:
-        inputs = [self._dataproc(s, batch=True) for s in samples]
-        data_collator = datasets.DataCollatorForSeq2SeqWithAudio(
-            tokenizer=self.tokenizer,
-            include_alt_fields=False,
-        )
-        tensors = data_collator(inputs)
+    ) -> List[base.VoiceOutput]:
+        inputs = [self._dataproc(s) for s in samples]
+        for input in inputs:
+            for key, val in input.items():
+                input[key] = val.squeeze(0)
+
+        tensors = self.data_collator(inputs)
         input_len = tensors["input_ids"].shape[1]
-        output_batch = self._generate(tensors, max_tokens, temperature)
+        output_batch = self._generate(
+            tensors, max_tokens, temperature, return_dict_in_generate=False
+        )
+        output_texts = []
         for output in output_batch:
             output_tokens = output[input_len:]
             output_text = self.tokenizer.decode(output_tokens, skip_special_tokens=True)
             output_len = len(output_tokens)
             output_text = base.VoiceOutput(output_text, input_len, output_len)
-            yield output_text
+            output_texts.append(output_text)
+        return output_texts
 
     def update_conversation(
         self,
@@ -141,7 +149,7 @@ class LocalInference(base.VoiceInference):
         yield base.InferenceStats(input_tokens, output_tokens)
         thread.join()
 
-    def _dataproc(self, sample: datasets.VoiceSample, batch=False):
+    def _dataproc(self, sample: datasets.VoiceSample):
         text_input = self.tokenizer.apply_chat_template(
             sample.messages, add_generation_prompt=True, tokenize=False
         )
@@ -175,9 +183,6 @@ class LocalInference(base.VoiceInference):
         inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
         if "audio_values" in inputs:
             inputs["audio_values"] = inputs["audio_values"].to(dtype=self.dtype)
-        if batch:
-            for key, val in inputs.items():
-                inputs[key] = val.squeeze(0)
         return inputs
 
     @torch.inference_mode()
@@ -188,6 +193,7 @@ class LocalInference(base.VoiceInference):
         temperature: Optional[float] = None,
         streamer: Optional[transformers.TextStreamer] = None,
         past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
+        return_dict_in_generate: bool = True,
     ):
         temperature = temperature or None
         do_sample = temperature is not None
@@ -206,5 +212,5 @@ class LocalInference(base.VoiceInference):
             eos_token_id=terminators,
             streamer=streamer,
             past_key_values=past_key_values,
-            return_dict_in_generate=True,
+            return_dict_in_generate=return_dict_in_generate,
         )
