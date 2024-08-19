@@ -67,7 +67,6 @@ class LocalInference(base.VoiceInference):
             output_len = len(output_tokens)
             output_text = base.VoiceOutput(output_text, input_len, output_len)
             output_texts.append(output_text)
-        print("len(output_texts):", len(output_texts))
         return output_texts
 
     def update_conversation(
@@ -194,7 +193,7 @@ class LocalInference(base.VoiceInference):
         temperature: Optional[float] = None,
         streamer: Optional[transformers.TextStreamer] = None,
         past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
-        return_dict_in_generate: bool = True,
+        return_dict_in_generate: Optional[bool] = True,
     ):
         temperature = temperature or None
         do_sample = temperature is not None

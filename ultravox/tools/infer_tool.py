@@ -194,7 +194,6 @@ def dataset_infer(inference: base.VoiceInference, args: InferArgs):
     ds = datasets.create_dataset(args.data_sets[0], ds_args)
 
     if args.json and isinstance(inference, infer.LocalInference):
-        # TODO: Add multithreading support for preparing the batch.
         start_time = time.time()
         dl = DataLoader(
             datasets.Range(ds, args.num_samples),
