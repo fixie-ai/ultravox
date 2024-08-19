@@ -30,10 +30,10 @@ def format_asr_text(text: str) -> str:
     """
     remaining_words = []
     for word in text.split():
-        if word in GIGASPEECH_GARBAGE_UTTERANCE_TAGS:
-            return ""
         if word in GIGASPEECH_PUNCTUATIONS:
             word = GIGASPEECH_PUNCTUATIONS[word]
+        if word in GIGASPEECH_GARBAGE_UTTERANCE_TAGS:
+            word = ""
         remaining_words.append(word)
 
     text = " ".join(remaining_words)
