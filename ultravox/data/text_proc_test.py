@@ -11,7 +11,7 @@ from ultravox.data import text_proc
             "I see lots of people have drones here, maverick as well.",
         ),
         # truecase messes with the case of special tags too, but we probably don't care about that
-        ("<NOISE> OH WHAT WAS THAT?", "Oh what was that?"),
+        ("<NOISE> OH WHAT WAS THAT?", ""),
     ],
 )
 def test_no_space_punctuation(text, expected):

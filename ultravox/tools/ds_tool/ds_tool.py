@@ -112,18 +112,20 @@ class TextGenerationTask:
         ds_split: datasets.Dataset,
         num_proc: int,
         writer_batch_size: int,
+        column_to_check_filter: str = "text",
     ) -> datasets.Dataset:
+        print(
+            f'Filtering out samples with an empty "{column_to_check_filter}" after text_proc.format_asr_text'
+        )
         return ds_split.filter(
-            self._filter_sample,
+            lambda x: (
+                True
+                if text_proc.format_asr_text(x[column_to_check_filter]) != ""
+                else False
+            ),
             num_proc=num_proc,
             writer_batch_size=writer_batch_size,
         )
-
-    def _filter_sample(self, sample):
-        if sample[self.new_column_name] == "":
-            return False
-
-        return True
 
     def map_split(
         self,
@@ -148,13 +150,9 @@ class TextGenerationTask:
             filtered_sample = {
                 k: sample[k] for k in sample.keys() if k not in exclude_fields
             }
-
             rendered = jinja2.Template(
                 self.template, undefined=jinja2.StrictUndefined
             ).render(**filtered_sample, json_dump=json.dumps, text_proc=text_proc)
-            if rendered.strip() == "":
-                sample[self.new_column_name] = ""
-                return sample
 
         except jinja2.TemplateError as e:
             print(f"Error rendering template: {e}")
@@ -216,6 +214,10 @@ class DatasetToolArgs:
     private: bool = simple_parsing.field(default=False)
     token: Optional[str] = None
 
+    column_to_check_filter: Optional[str] = simple_parsing.field(
+        default=None, alias="-f"
+    )
+
     task: Union[TtsTask, TextGenerationTask] = simple_parsing.subgroups(
         {"tts": TtsTask, "textgen": TextGenerationTask},  # type: ignore
         default_factory=TtsTask,
@@ -253,9 +255,13 @@ def main(args: DatasetToolArgs):
         data_dict[split] = args.task.map_split(
             ds_split, args.num_workers, args.writer_batch_size, args.exclude_fields
         )
-        if isinstance(args.task, TextGenerationTask):
+        # Filter out samples where column_to_check is empty after text_proc.format_asr_text
+        if isinstance(args.task, TextGenerationTask) and args.column_to_check_filter:
             data_dict[split] = args.task.filter_split(
-                data_dict[split], args.num_workers, args.writer_batch_size
+                data_dict[split],
+                args.num_workers,
+                args.writer_batch_size,
+                args.column_to_check_filter,
             )
 
     hub_args: Dict[str, Any] = {
