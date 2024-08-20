@@ -146,7 +146,9 @@ class LocalInference(base.VoiceInference):
             )
             f.set_result(result)
 
-        future = futures.Future()
+        future: futures.Future[transformers.GenerateDecoderOnlyOutput] = (
+            futures.Future()
+        )
         thread = threading.Thread(target=thunk, args=(future,))
         thread.start()
         output_text = ""
