@@ -340,7 +340,11 @@ class VoiceDataset(abc.ABC, data.IterableDataset):
                     <= self._args.max_audio_duration_secs
                 ):
                     yield sample
-
+                    
+    def __len__(self):
+        print("Getting length in voicedataset", type(self._dataset), len(self._dataset))
+        return len(self._dataset)
+                    
     @abc.abstractmethod
     def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
         """
@@ -774,6 +778,7 @@ class LibriSpeechDataset(VoiceDataset):
         return self._get_transcribe_sample(row, tproc=text_proc.format_asr_text)
 
 
+
 # TODO: this dataset can be replaced with GenericVoiceDataset and will be removed/updated in the future.
 class GigaSpeechDataset(VoiceDataset):
     """
@@ -1043,6 +1048,10 @@ class GenericVoiceDataset(VoiceDataset):
             self._get_audio(row),
             audio_transcript=transcript,
         )
+    
+    def __len__(self):
+        print("getting length in generic voicedataset", type(self._dataset), len(self._dataset))
+        return len(self._dataset)
 
 
 def create_dataset(name: str, args: VoiceDatasetArgs) -> data.IterableDataset:
@@ -1137,6 +1146,13 @@ class InterleaveDataset(data.IterableDataset):
                 # Recreate the iterator if stopping condition is not met and yield the next sample
                 iters[iter_index] = iter(self._datasets[iter_index])
                 yield next(iters[iter_index])
+                
+    def __len__(self):
+        print("getting length of interleave dataset!", type(self._datasets))
+        for ds in self._datasets:
+            print("ds interleave type", type(ds))
+            print("ds length: ", len(ds), type(ds))
+        return sum(len(ds) for ds in self._datasets)
 
 
 class Dataproc(abc.ABC, data.IterableDataset):
@@ -1151,6 +1167,10 @@ class Dataproc(abc.ABC, data.IterableDataset):
 
     def __iter__(self):
         return (self._process(sample) for sample in self._dataset)
+    
+    def __len__(self):
+        print("trying to get dataproc length!", type(self._dataset))
+        return len(self._dataset)
 
 
 class Range(data.IterableDataset):
@@ -1167,3 +1187,10 @@ class Range(data.IterableDataset):
             if self._num_samples is not None and i >= self._num_samples:
                 break
             yield sample
+            
+    def __len__(self):
+        print("trying to get length!")
+        print("range dataset type: ", type(self._dataset))
+        if self._num_samples is not None:
+            return min(len(self._dataset), self._num_samples)
+        return len(self._dataset)
