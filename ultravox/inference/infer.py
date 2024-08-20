@@ -1,6 +1,6 @@
 import copy
-import queue
 import threading
+from concurrent import futures
 from typing import Dict, List, Optional, Tuple, Union
 
 import librosa
@@ -109,14 +109,14 @@ class LocalInference(base.VoiceInference):
             self.tokenizer, skip_prompt=True, skip_special_tokens=True
         )
 
-        def thunk(q: queue.Queue):
+        def thunk(f: futures.Future):
             result = self._generate(
                 inputs, max_tokens, temperature, streamer, self.past_key_values
             )
-            q.put(result)
+            f.set_result(result)
 
-        result_queue: queue.Queue = queue.Queue()
-        thread = threading.Thread(target=thunk, args=(result_queue,))
+        future = futures.Future()
+        thread = threading.Thread(target=thunk, args=(future,))
         thread.start()
         output_text = ""
         output_token_len = 0
@@ -126,7 +126,7 @@ class LocalInference(base.VoiceInference):
                 output_token_len += 1
                 yield base.InferenceChunk(chunk)
         thread.join()
-        output = result_queue.get()
+        output = future.result()
         if self.conversation_mode:
             audio_token_len = inputs.get("audio_token_len", [0])[0]
             past_messages = self._build_past_messages(
