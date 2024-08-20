@@ -46,10 +46,7 @@ def add_text(chatbot: gr.Chatbot, text: str) -> gr.Chatbot:
 
 def add_audio(chatbot: gr.Chatbot, audio: str, text: str) -> gr.Chatbot:
     # We want to keep the prompt (mixed audio/text instruction) as is in voice mode.
-    if text:
-        return chatbot + [[text, None]] + [[(audio,), None]]
-    else:
-        return chatbot + [[(audio,), None]]
+    return chatbot + ([[text, None]] if text else []) + [[(audio,), None]]
 
 
 def process_turn(
