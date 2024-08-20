@@ -36,6 +36,12 @@ class LocalInference(base.VoiceInference):
         self.past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = (
             None
         )
+        self.data_collator = datasets.DataCollatorForSeq2SeqWithAudio(
+            tokenizer=self.tokenizer,
+            include_alt_fields=False,
+        )
+
+        assert self.tokenizer.padding_side == "left"
 
     def update_conversation(
         self,
@@ -93,6 +99,33 @@ class LocalInference(base.VoiceInference):
             )
             self.update_conversation(past_messages, output.past_key_values)
         return base.VoiceOutput(output_text, input_len, output_len)
+
+    # Note: infer_batch doesn't support conversation mode or caching yet.
+    def infer_batch(
+        self,
+        samples: List[datasets.VoiceSample],
+        max_tokens: Optional[int] = None,
+        temperature: Optional[float] = None,
+    ) -> List[base.VoiceOutput]:
+        assert not self.conversation_mode
+        inputs = [self._dataproc(s) for s in samples]
+        for input in inputs:
+            for key, val in input.items():
+                input[key] = val.squeeze(0)
+
+        tensors = self.data_collator(inputs)
+        input_len = tensors["input_ids"].shape[1]
+        output_batch = self._generate(
+            tensors, max_tokens, temperature, return_dict_in_generate=False
+        )
+        output_texts = []
+        for output in output_batch:
+            output_tokens = output[input_len:]
+            output_text = self.tokenizer.decode(output_tokens, skip_special_tokens=True)
+            output_len = len(output_tokens)
+            output_text = base.VoiceOutput(output_text, input_len, output_len)
+            output_texts.append(output_text)
+        return output_texts
 
     def infer_stream(
         self,
@@ -177,6 +210,7 @@ class LocalInference(base.VoiceInference):
         temperature: Optional[float] = None,
         streamer: Optional[transformers.TextStreamer] = None,
         past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
+        return_dict_in_generate: Optional[bool] = True,
     ):
         temperature = temperature or None
         do_sample = temperature is not None
@@ -194,5 +228,5 @@ class LocalInference(base.VoiceInference):
             eos_token_id=terminators,
             streamer=streamer,
             past_key_values=past_key_values,
-            return_dict_in_generate=True,
+            return_dict_in_generate=return_dict_in_generate,
         )
