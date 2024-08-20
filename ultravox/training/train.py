@@ -323,8 +323,9 @@ def evaluate(args: config_base.TrainConfig):
     logging.info(f"eval start time: {t_start}")
 
     if args.text_model_lora_config and args.text_model_lora_config.r:
-        # TODO: merge and model.save_pretrained in a different location?
-        raise ValueError("LoRA models are not currently supported for evaluation")
+        logging.warn(
+            "Model has unmerged LoRA config. This can lead to slower inference."
+        )
 
     logs_dir = wandb.run.dir if wandb.run else str(args.logs_dir)
 
