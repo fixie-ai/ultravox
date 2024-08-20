@@ -18,6 +18,7 @@ def tokenizer():
     tokenizer = transformers.AutoTokenizer.from_pretrained(
         "./assets/hf/Meta-Llama-3-8B-Instruct", local_files_only=True
     )
+    # Set padding_side to "left" to support batch inference.
     tokenizer.padding_side = "left"
     return tokenizer
 

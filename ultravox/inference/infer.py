@@ -44,12 +44,28 @@ class LocalInference(base.VoiceInference):
 
         assert self.tokenizer.padding_side == "left"
 
-    def batch_infer(
+    def update_conversation(
+        self,
+        past_messages: List[Dict[str, str]] = [],
+        past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
+    ):
+        self.past_messages = past_messages
+        self.past_key_values = past_key_values
+
+    def _get_sample_with_past(
+        self, sample: datasets.VoiceSample
+    ) -> datasets.VoiceSample:
+        sample = copy.copy(sample)
+        sample.add_past_messages(self.past_messages)
+        return sample
+
+    def infer_batch(
         self,
         samples: List[datasets.VoiceSample],
         max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
     ) -> List[base.VoiceOutput]:
+        assert not self.conversation_mode
         inputs = [self._dataproc(s) for s in samples]
         for input in inputs:
             for key, val in input.items():
@@ -68,21 +84,6 @@ class LocalInference(base.VoiceInference):
             output_text = base.VoiceOutput(output_text, input_len, output_len)
             output_texts.append(output_text)
         return output_texts
-
-    def update_conversation(
-        self,
-        past_messages: List[Dict[str, str]] = [],
-        past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
-    ):
-        self.past_messages = past_messages
-        self.past_key_values = past_key_values
-
-    def _get_sample_with_past(
-        self, sample: datasets.VoiceSample
-    ) -> datasets.VoiceSample:
-        sample = copy.copy(sample)
-        sample.add_past_messages(self.past_messages)
-        return sample
 
     def infer(
         self,

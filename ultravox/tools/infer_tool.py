@@ -1,19 +1,19 @@
 #!/usr/bin/env python
 import argparse
 import dataclasses
+import json
 import os
 import time
 from typing import IO, List, Optional
 
 import numpy as np
 import simple_parsing
-from torch.utils.data import DataLoader
+from torch.utils import data as data_utils
 
 from ultravox.data import datasets
 from ultravox.evaluation import eval
 from ultravox.evaluation import eval_types
 from ultravox.inference import base
-from ultravox.inference import infer
 from ultravox.tools import infer_api
 
 # There are two default modes for this tool, agent mode and ASR mode.
@@ -193,9 +193,8 @@ def dataset_infer(inference: base.VoiceInference, args: InferArgs):
         ds_args.shuffle_seed = args.seed
     ds = datasets.create_dataset(args.data_sets[0], ds_args)
 
-    if args.json and isinstance(inference, infer.LocalInference):
-        start_time = time.time()
-        dl = DataLoader(
+    if args.json:
+        dl = data_utils.DataLoader(
             datasets.Range(ds, args.num_samples),
             batch_size=args.batch_size,
             collate_fn=lambda x: x,
@@ -208,28 +207,27 @@ def dataset_infer(inference: base.VoiceInference, args: InferArgs):
                 output.append(
                     {
                         "index": sample_index,
-                        "question_text": sample.audio_transcript,
+                        "question": sample.audio_transcript,
                         "expected_answer": sample.messages[-1]["content"],
                     }
                 )
                 sample.messages = sample.messages[:-1]
                 sample_index += 1
 
-            output_batch = inference.batch_infer(
+            output_batch = inference.infer_batch(
                 current_batch,
                 max_tokens=args.max_tokens,
                 temperature=args.temperature,
             )
+            assert len(output) == len(output_batch)
             for i, output_text in enumerate(output_batch):
-                output[i]["output_text"] = output_text
-            print(output)
-        print("Total time", time.time() - start_time)
+                output[i]["generated_answer"] = output_text
+            print(json.dumps(output))
 
     else:
         scores: List[float] = []
         for i, sample in enumerate(datasets.Range(ds, args.num_samples)):
-            # Store the original question and answer for JSON output.
-            question_text = sample.audio_transcript
+            # Store the answer for JSON output.
             expected_answer = sample.messages[-1]["content"]
             # Drop any assistant response from the sample.
             sample.messages = sample.messages[:-1]
