@@ -199,31 +199,27 @@ def dataset_infer(inference: base.VoiceInference, args: InferArgs):
             batch_size=args.batch_size,
             collate_fn=lambda x: x,
         )
-        current_batch = []
         sample_index = 0
-        for current_batch in dl:
-            output = []
-            for sample in current_batch:
-                output.append(
-                    {
-                        "index": sample_index,
-                        "question": sample.audio_transcript,
-                        "expected_answer": sample.messages[-1]["content"],
-                    }
-                )
-                sample.messages = sample.messages[:-1]
-                sample_index += 1
-
+        for input_batch in dl:
+            expected_answers = [
+                sample.messages.pop()["content"] for sample in input_batch
+            ]
             output_batch = inference.infer_batch(
-                current_batch,
+                input_batch,
                 max_tokens=args.max_tokens,
                 temperature=args.temperature,
             )
-            assert len(output) == len(output_batch)
-            for i, output_val in enumerate(output_batch):
-                output[i]["generated_answer"] = output_val.text
-            print(json.dumps(output))
-
+            for sample, generated, expected in zip(
+                input_batch, output_batch, expected_answers
+            ):
+                output = {
+                    "index": sample_index,
+                    "question": sample.audio_transcript,
+                    "expected_answer": expected,
+                    "generated_answer": generated.text,
+                }
+                sample_index += 1
+                print(json.dumps(output))
     else:
         scores: List[float] = []
         for i, sample in enumerate(datasets.Range(ds, args.num_samples)):
