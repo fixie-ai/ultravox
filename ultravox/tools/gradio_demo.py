@@ -147,7 +147,7 @@ with gr.Blocks() as demo:
         [chatbot, prompt, max_new_tokens, temperature],
         [chatbot],
     )
-    audio.stop_recording(add_audio, [chatbot, audio], [chatbot], queue=False).then(
+    audio.stop_recording(add_audio, [chatbot, audio, prompt], [chatbot], queue=False).then(
         process_audio,
         [chatbot, prompt, audio, max_new_tokens, temperature],
         [chatbot],
