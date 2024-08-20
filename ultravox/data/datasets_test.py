@@ -61,6 +61,16 @@ class FakeDataproc(datasets.Dataproc):
         return -sample
 
 
+class FakeInterleave(datasets.InterleaveDataset):
+    def __init__(self, datasets):
+        super().__init__(datasets)
+
+
+class FakeRange(datasets.Range):
+    def __init__(self, dataset, num_samples):
+        super().__init__(dataset, num_samples)
+
+
 def test_dataproc():
     ds = FakeIterableDataset(5)
     s = FakeDataproc(ds)
@@ -295,3 +305,14 @@ def test_get_messages():
         {"role": "user", "content": "B"},
         {"role": "assistant", "content": "C"},
     ]
+
+
+def test_get_dataset_len():
+    ds_1 = FakeRange(FakeIterableDataset(5), 5)
+    ds_2 = FakeRange(FakeIterableDataset(10), 10)
+
+    ds_interleave = datasets.InterleaveDataset([ds_1, ds_2])
+    assert len(ds_interleave) == 15
+
+    ds_dp = FakeDataproc(ds_interleave)
+    assert len(ds_dp) == 15
