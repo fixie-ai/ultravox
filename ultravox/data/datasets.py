@@ -1159,7 +1159,6 @@ class Dataproc(abc.ABC, data.IterableDataset):
         return (self._process(sample) for sample in self._dataset)
 
     def __len__(self):
-        print("trying to get dataproc length!", type(self._dataset))
         return len(self._dataset)
 
 
