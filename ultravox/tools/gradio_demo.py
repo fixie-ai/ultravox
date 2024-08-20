@@ -6,9 +6,9 @@ import simple_parsing
 
 from ultravox.data import datasets
 from ultravox.inference import base as infer_base
-from ultravox.inference import ultravox_infer
+from ultravox.tools import gradio_helper
 
-demo_instruction: str = """Enter your prompt here (audio will be inserted at the end or at <|audio|>).
+DEMO_INSTRUCTION: str = """Enter your prompt here (audio will be inserted at the end or at <|audio|>).
 
 Text mode: Shift+Enter to submit.
 Voice mode: Click the recording button to start, then click again to stop and submit.
@@ -29,14 +29,11 @@ class DemoConfig:
     temperature: float = 0
 
 
-if gr.NO_RELOAD:
-    args = simple_parsing.parse(config_class=DemoConfig)
-    inference = ultravox_infer.UltravoxInference(
-        args.model_path,
-        device=args.device,
-        data_type=args.data_type,
-        conversation_mode=True,
-    )
+args = simple_parsing.parse(config_class=DemoConfig)
+# This script will get loaded from both the python runtime as well as gradio's reloader,
+# even when gr.NO_RELOAD is used. To avoid model re-init, we use a helper singleton
+# to manage the inference object.
+inference = gradio_helper.get_inference(args)
 
 
 def add_text(chatbot: gr.Chatbot, text: str) -> gr.Chatbot:
@@ -119,7 +116,7 @@ with gr.Blocks() as demo:
             prompt = gr.Textbox(
                 show_label=False,
                 lines=5,
-                placeholder=demo_instruction,
+                placeholder=DEMO_INSTRUCTION,
                 value=args.default_prompt,
                 container=True,
             )

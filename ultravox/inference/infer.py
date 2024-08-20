@@ -190,7 +190,6 @@ class LocalInference(base.VoiceInference):
             do_sample=do_sample,
             max_new_tokens=max_new_tokens or MAX_NEW_TOKENS,
             temperature=temperature,
-            repetition_penalty=REPETITION_PENALTY,
             pad_token_id=self.tokenizer.eos_token_id,
             eos_token_id=terminators,
             streamer=streamer,
