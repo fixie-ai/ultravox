@@ -220,8 +220,8 @@ def dataset_infer(inference: base.VoiceInference, args: InferArgs):
                 temperature=args.temperature,
             )
             assert len(output) == len(output_batch)
-            for i, output_text in enumerate(output_batch):
-                output[i]["generated_answer"] = output_text
+            for i, output_val in enumerate(output_batch):
+                output[i]["generated_answer"] = output_val.text
             print(json.dumps(output))
 
     else:
