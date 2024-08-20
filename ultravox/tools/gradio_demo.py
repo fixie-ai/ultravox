@@ -51,6 +51,7 @@ def add_audio(chatbot: gr.Chatbot, audio: str, text: str) -> gr.Chatbot:
     else:
         return chatbot + [[(audio,), None]]
 
+
 def process_turn(
     chatbot: gr.Chatbot,
     prompt: str,
@@ -147,7 +148,9 @@ with gr.Blocks() as demo:
         [chatbot, prompt, max_new_tokens, temperature],
         [chatbot],
     )
-    audio.stop_recording(add_audio, [chatbot, audio, prompt], [chatbot], queue=False).then(
+    audio.stop_recording(
+        add_audio, [chatbot, audio, prompt], [chatbot], queue=False
+    ).then(
         process_audio,
         [chatbot, prompt, audio, max_new_tokens, temperature],
         [chatbot],

@@ -60,7 +60,7 @@ class LocalInference(base.VoiceInference):
         audio_token_len: int,
         response_content: str,
     ) -> List[Dict[str, str]]:
-        messages = query_messages[:]
+        messages = copy.copy(query_messages)
         if audio_token_len > 0:
             user_content = messages[-1]["content"]
             if user_content.count("<|audio|>") != 1:
