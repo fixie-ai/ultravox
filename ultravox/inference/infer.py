@@ -105,9 +105,8 @@ class LocalInference(base.VoiceInference):
         extended_sample = self._get_sample_with_past(sample)
         inputs = self._dataproc(extended_sample)
         input_tokens = inputs["input_ids"].shape[1]
-        decode_kwargs = {"skip_special_tokens": True}
         streamer = transformers.TextIteratorStreamer(
-            self.tokenizer, skip_prompt=True, decode_kwargs=decode_kwargs
+            self.tokenizer, skip_prompt=True, skip_special_tokens=True
         )
 
         def thunk(q: queue.Queue):
