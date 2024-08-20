@@ -28,6 +28,7 @@ from ultravox.data import datasets
 from ultravox.model import data_processing
 from ultravox.model import ultravox_config
 from ultravox.model import ultravox_model
+from ultravox.model import ultravox_pipeline
 from ultravox.model import ultravox_processing
 from ultravox.model import wandb_utils
 from ultravox.training import config_base
@@ -63,7 +64,6 @@ def prepare_dataset(
     return limited_ds
 
 
-@record
 def main() -> None:
     # Disable parallelism to avoid deadlocks in DataLoader, apparently
     # multiple processes are forked when using multiple datasets.
@@ -306,7 +306,12 @@ def train(args: config_base.TrainConfig):
     if args.val_steps:
         trainer.evaluate()
     trainer.train()
-    trainer.save_model(args.output_dir)
+    if trainer.is_world_process_zero():
+        # Saving the model using pipeline to ensure its code is saved
+        pipeline = ultravox_pipeline.UltravoxPipeline(
+            model, tokenizer=text_tokenizer, device=device
+        )
+        pipeline.save_pretrained(args.output_dir)
     t_end = datetime.now()
     logging.info(f"train end time: {t_end}")
     logging.info(f"elapsed: {t_end - t_start}")
@@ -357,6 +362,14 @@ def evaluate(args: config_base.TrainConfig):
 
 
 def run_oaievalset(log_dir: str, model_dir: str, eval_set: str):
+    env = os.environ.copy()
+
+    num_gpus = max(1, torch.cuda.device_count())
+    env["EVALS_THREADS"] = str(num_gpus * 32)
+
+    # TODO: do I need to unset CUDA_VISIBLE_DEVICES?
+    # env.pop("CUDA_VISIBLE_DEVICES", None)
+
     # Run the evaluation set
     subprocess.run(
         [
@@ -368,6 +381,7 @@ def run_oaievalset(log_dir: str, model_dir: str, eval_set: str):
             f"--completion_args=model={model_dir}",
         ],
         check=True,
+        env=env,
     )
 
     # Extract the results from the log directory

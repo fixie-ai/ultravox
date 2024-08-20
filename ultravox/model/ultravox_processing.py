@@ -54,6 +54,9 @@ class UltravoxProcessor(transformers.ProcessorMixin):
         assert (
             self.audio_token_replacement is not None
         ), "The tokenizer has no EOS token. Cannot recover."
+        if tokenizer.pad_token_id is None:
+            tokenizer.pad_token_id = tokenizer.eos_token_id
+
         super().__init__(audio_processor=audio_processor, tokenizer=tokenizer)
 
     def __call__(
