@@ -36,18 +36,18 @@ args = simple_parsing.parse(config_class=DemoConfig)
 inference = gradio_helper.get_inference(args)
 
 
-def add_text(chatbot: gr.Chatbot, text: str) -> gr.Chatbot:
+def add_text(history, text: str):
     # We set the prompt to "" in anticipation of the next prompt in text mode.
-    return chatbot + [[text, None]], ""
+    return history + [[text, None]], ""
 
 
-def add_audio(chatbot: gr.Chatbot, audio: str, text: str) -> gr.Chatbot:
+def add_audio(history, audio: str, text: str):
     # We want to keep the prompt (mixed audio/text instruction) as is in voice mode.
-    return chatbot + ([[text, None]] if text else []) + [[(audio,), None]]
+    return history + ([[text, None]] if text else []) + [[(audio,), None]]
 
 
 def process_turn(
-    chatbot: gr.Chatbot,
+    history,
     prompt: str,
     audio: Optional[str] = None,
     max_new_tokens: int = 200,
@@ -60,7 +60,7 @@ def process_turn(
     else:
         # Note that prompt will be "" here, since we cleared it in add_text.
         # Instead, we can just get it from the chat history.
-        sample = datasets.VoiceSample.from_prompt(chatbot[-1][0])
+        sample = datasets.VoiceSample.from_prompt(history[-1][0])
 
     if len(sample.messages) != 1:
         raise ValueError(
@@ -72,22 +72,22 @@ def process_turn(
         max_tokens=max_new_tokens,
         temperature=temperature,
     )
-    chatbot += [[None, ""]]
+    history[-1][1] = ""
     for chunk in output:
         if isinstance(chunk, infer_base.InferenceChunk):
-            chatbot[-1][1] += chunk.text
-            yield chatbot
+            history[-1][1] += chunk.text
+            yield history
 
 
-def process_text(chatbot, prompt, max_new_tokens, temperature):
+def process_text(history, prompt, max_new_tokens, temperature):
     yield from process_turn(
-        chatbot, prompt, max_new_tokens=max_new_tokens, temperature=temperature
+        history, prompt, max_new_tokens=max_new_tokens, temperature=temperature
     )
 
 
-def process_audio(chatbot, prompt, audio, max_new_tokens, temperature):
+def process_audio(history, prompt, audio, max_new_tokens, temperature):
     yield from process_turn(
-        chatbot,
+        history,
         prompt,
         audio=audio,
         max_new_tokens=max_new_tokens,
