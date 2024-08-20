@@ -55,7 +55,7 @@ mds *FLAGS:
     poetry run python -m ultravox.tools.mds_tool {{FLAGS}}
 
 gradio *FLAGS:
-    poetry run python -m ultravox.tools.gradio_demo {{FLAGS}}
+    poetry run gradio ultravox/tools/gradio_demo.py {{FLAGS}}
 
 run *FLAGS:
     poetry run mcli run -f mcloud.yaml --follow {{FLAGS}}

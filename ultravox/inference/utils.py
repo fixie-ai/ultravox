@@ -5,9 +5,7 @@ def default_device():
     return (
         "cuda"
         if torch.cuda.is_available()
-        # until https://github.com/pytorch/pytorch/issues/77764 is resolved
-        # else "mps" if torch.backends.mps.is_available() else "cpu"
-        else "cpu"
+        else "mps" if torch.backends.mps.is_available() else "cpu"
     )
 
 
