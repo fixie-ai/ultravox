@@ -14,8 +14,6 @@ from ultravox.model import ultravox_processing
 
 SAMPLE_RATE = 16000
 MAX_NEW_TOKENS = 1024
-# Without this penalty, the model tends to repeat itself.
-REPETITION_PENALTY = 1.1
 
 
 class LocalInference(base.VoiceInference):
