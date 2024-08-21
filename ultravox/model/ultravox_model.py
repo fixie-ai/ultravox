@@ -9,18 +9,13 @@ import transformers
 import transformers.activations
 import transformers.modeling_outputs
 import transformers.models
+from transformers.models.whisper import modeling_whisper as whisper
 
 # We must use relative import in this directory to allow uploading to HF Hub
 # Even "from . import X" pattern doesn't work (undocumented and unclear why)
 from .ultravox_config import LossConfig
 from .ultravox_config import LossFunction
 from .ultravox_config import UltravoxConfig
-
-import torch
-import torch.nn as nn
-import transformers
-import transformers.modeling_outputs
-from transformers.models.whisper import modeling_whisper as whisper
 
 
 class UltravoxModel(transformers.LlamaPreTrainedModel):
