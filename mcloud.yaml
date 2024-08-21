@@ -10,8 +10,8 @@ integrations:
     git_branch: $UV_BRANCH
     pip_install: poetry==1.7.1
 command: >-
-  cd ultravox && poetry install --no-dev && poetry run torchrun --nproc_per_node=8 -m ultravox.training.train $TRAIN_ARGS --expt_name $UV_BRANCH
+  cd ultravox && poetry install --no-dev && poetry run torchrun --nproc_per_node=8 -m ultravox.training.train $TRAIN_ARGS --exp_name $UV_BRANCH
 env_variables:
   MLFLOW_TRACKING_URI: databricks
-  UV_BRANCH: zhuang.2024-08-21-ultravox.medium-1a
+  UV_BRANCH: zhuang.2024-08-21-ultravox.medium-1b
   TRAIN_ARGS: --config_path ultravox/training/configs/expt_config.yaml
