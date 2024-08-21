@@ -15,7 +15,7 @@ val_sets: ["anyinstruct", "soda", "peoplespeech"]
 batch_size: 24
 max_steps: 14400 # x8x24 = 2,764,800
 
-data_sets: []
+data_sets: ["anyinstruct"]
 data_dicts:
   - path: "fixie-ai/librispeech_asr"
     name: "clean"
