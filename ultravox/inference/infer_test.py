@@ -15,9 +15,12 @@ from ultravox.model import ultravox_processing
 # work properly for external contributions (since Llama 3 is gated).
 @pytest.fixture(scope="module")
 def tokenizer():
-    return transformers.AutoTokenizer.from_pretrained(
+    tokenizer = transformers.AutoTokenizer.from_pretrained(
         "./assets/hf/Meta-Llama-3-8B-Instruct", local_files_only=True
     )
+    # Set padding_side to "left" to support batch inference.
+    tokenizer.padding_side = "left"
+    return tokenizer
 
 
 @pytest.fixture(scope="module")
@@ -35,10 +38,12 @@ class FakeInference(infer.LocalInference):
     ):
         def fake_generate(**kwargs):
             input = kwargs.get("input_ids")
-            output = [range(25)]
+            output = transformers.generation.utils.GenerateDecoderOnlyOutput(
+                sequences=[range(25)]
+            )
             streamer = kwargs.get("streamer", None)
             if streamer:
-                for token in output[0][input.shape[1] :]:
+                for token in output.sequences[0][input.shape[1] :]:
                     streamer.on_finalized_text(tokenizer.decode(token))
                 streamer.on_finalized_text("", stream_end=True)
             return output
@@ -66,7 +71,7 @@ def test_infer_16kHz(tokenizer, audio_processor):
     inference = FakeInference(tokenizer, audio_processor)
     array = np.ones(16000, dtype=np.float32)
     sample = datasets.VoiceSample.from_prompt_and_raw(
-        "Transcribe <|audio|>", array, 16000
+        "Transcribe\n<|audio|>", array, 16000
     )
     output = inference.infer(sample)
     assert output.input_tokens == 20
@@ -89,7 +94,7 @@ def test_infer_48kHz(tokenizer, audio_processor):
     inference = FakeInference(tokenizer, audio_processor)
     array = np.ones(48000, dtype=np.float32)
     sample = datasets.VoiceSample.from_prompt_and_raw(
-        "Transcribe <|audio|>", array, 48000
+        "Transcribe\n<|audio|>", array, 48000
     )
     output = inference.infer(sample)
     assert output.input_tokens == 20
@@ -112,7 +117,7 @@ def test_infer_16kHz_stream(tokenizer, audio_processor):
     inference = FakeInference(tokenizer, audio_processor)
     array = np.ones(16000, dtype=np.float32)
     sample = datasets.VoiceSample.from_prompt_and_raw(
-        "Transcribe <|audio|>", array, 16000
+        "Transcribe\n<|audio|>", array, 16000
     )
     gen = inference.infer_stream(sample)
     text = ""

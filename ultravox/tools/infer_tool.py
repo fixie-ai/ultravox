@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-
 import argparse
 import dataclasses
 import json
@@ -9,6 +8,7 @@ from typing import IO, List, Optional
 
 import numpy as np
 import simple_parsing
+from torch.utils import data as data_utils
 
 from ultravox.data import datasets
 from ultravox.evaluation import eval
@@ -22,13 +22,13 @@ from ultravox.tools import infer_api
 # transcription of the audio content and the tool can perfom a WER calculation.
 # Remember to set the --asr flag when using an ASR input.
 DEFAULT_PROMPT = "Listen to <|audio|> and respond to it"
-DEFAULT_ASR_PROMPT = "Transcribe <|audio|>"
+DEFAULT_ASR_PROMPT = "Transcribe\n<|audio|>"
 
 
 @dataclasses.dataclass
 class InferArgs:
     # Model ID to use for the model
-    model: str = simple_parsing.field(default="fixie-ai/ultravox-v0.2", alias="-m")
+    model: str = simple_parsing.field(default="fixie-ai/ultravox-v0_2", alias="-m")
     # Path to the audio file
     audio_file: Optional[IO] = simple_parsing.field(
         default=None, type=argparse.FileType("rb"), alias="-f"
@@ -79,6 +79,8 @@ class InferArgs:
     verbose: bool = simple_parsing.field(default=False, alias="-v")
     # JSON output
     json: bool = simple_parsing.field(default=False)
+    # Batch size
+    batch_size: Optional[int] = simple_parsing.field(default=1, alias="-b")
 
     def __post_init__(self):
         if self.prompt and self.prompt.startswith("@"):
@@ -97,8 +99,9 @@ def run_tui(
     if index >= 0:
         print(f"--- Sample {index} ---")
     messages = sample.messages
+    question_message = messages[-2] if len(messages) > 1 else messages[-1]
     transcript = f' ["{sample.audio_transcript}"]' if sample.audio_transcript else ""
-    print(f"Q: {messages[0]['content']}{transcript}")
+    print(f"Q: {question_message['content']}{transcript}")
     print("A: ", end="")
     start_time = time.time()
     first_token_time = None
@@ -141,7 +144,7 @@ def run_tui(
             assert args.data_sets
             ds_name = args.data_sets[0]
             eval_sample = eval_types.Sample(
-                sample.audio_transcript or sample.messages[0]["content"],
+                sample.audio_transcript or question_message["content"],
                 expected_answer=expected_response,
                 generated_answer=text,
             )
@@ -191,25 +194,42 @@ def dataset_infer(inference: base.VoiceInference, args: InferArgs):
     if args.seed is not None:
         ds_args.shuffle_seed = args.seed
     ds = datasets.create_dataset(args.data_sets[0], ds_args)
-    scores: List[float] = []
-    for i, sample in enumerate(datasets.Range(ds, args.num_samples)):
-        # Store the original question and answer for JSON output.
-        question_text = sample.audio_transcript
-        expected_answer = sample.messages[1]["content"]
-        # Drop any assistant response from the sample.
-        sample.messages = sample.messages[:1]
-        if not args.json:
-            run_tui(i, inference, sample, args, expected_answer, scores)
-        else:
-            output = inference.infer(
-                sample, max_tokens=args.max_tokens, temperature=args.temperature
+
+    if args.json:
+        dl = data_utils.DataLoader(
+            datasets.Range(ds, args.num_samples),
+            batch_size=args.batch_size,
+            collate_fn=lambda x: x,
+        )
+        sample_index = 0
+        for input_batch in dl:
+            expected_answers = [
+                sample.messages.pop()["content"] for sample in input_batch
+            ]
+            output_batch = inference.infer_batch(
+                input_batch,
+                max_tokens=args.max_tokens,
+                temperature=args.temperature,
             )
-            obj = {
-                "question": question_text,
-                "generated_answer": output.text,
-                "expected_answer": expected_answer,
-            }
-            print(json.dumps(obj))
+            for sample, generated, expected in zip(
+                input_batch, output_batch, expected_answers
+            ):
+                output = {
+                    "index": sample_index,
+                    "question": sample.audio_transcript,
+                    "expected_answer": expected,
+                    "generated_answer": generated.text,
+                }
+                sample_index += 1
+                print(json.dumps(output))
+    else:
+        scores: List[float] = []
+        for i, sample in enumerate(datasets.Range(ds, args.num_samples)):
+            # Store the answer for JSON output.
+            expected_answer = sample.messages[-1]["content"]
+            # Drop any assistant response from the sample.
+            sample.messages = sample.messages[:-1]
+            run_tui(i, inference, sample, args, expected_answer, scores)
 
 
 def main(args: InferArgs):

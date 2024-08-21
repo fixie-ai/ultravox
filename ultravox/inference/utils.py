@@ -5,14 +5,17 @@ def default_device():
     return (
         "cuda"
         if torch.cuda.is_available()
-        # until https://github.com/pytorch/pytorch/issues/77764 is resolved
-        # else "mps" if torch.backends.mps.is_available() else "cpu"
-        else "cpu"
+        else "mps" if torch.backends.mps.is_available() else "cpu"
     )
 
 
 def default_dtype():
-    return torch.bfloat16 if torch.cuda.is_available() else torch.float32
+    # macOS Sonoma 14 enabled bfloat16 on MPS.
+    return (
+        torch.bfloat16
+        if torch.cuda.is_available() or torch.backends.mps.is_available()
+        else torch.float16
+    )
 
 
 def get_dtype(data_type: str):

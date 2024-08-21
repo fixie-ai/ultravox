@@ -1,3 +1,4 @@
+import copy
 import dataclasses
 import glob
 import logging
@@ -5,7 +6,7 @@ import os
 import re
 import sys
 from datetime import datetime
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import datasets as hf_datasets
 import safetensors.torch
@@ -14,11 +15,13 @@ import torch
 import torch.distributed
 import transformers
 import wandb
+import wandb.sdk
 from torch.distributed.elastic.multiprocessing.errors import record
 from torch.utils import data
 
 from ultravox.data import datasets
 from ultravox.inference import infer
+from ultravox.model import data_processing
 from ultravox.model import ultravox_config
 from ultravox.model import ultravox_model
 from ultravox.model import ultravox_processing
@@ -27,7 +30,7 @@ from ultravox.training import config_base
 from ultravox.training import ddp_utils
 from ultravox.training import evaluation
 
-INPUT_EXAMPLE = {"text": "Transcribe <|audio|>", "audio": b"\x00\x00" * 16000}
+INPUT_EXAMPLE = {"text": "Transcribe\n<|audio|>", "audio": b"\x00\x00" * 16000}
 OUTPUT_EXAMPLE = {"text": "Hello, world!"}
 
 
@@ -40,14 +43,18 @@ def prepare_dataset(
     data_args: datasets.VoiceDatasetArgs,
     processor: ultravox_processing.UltravoxProcessor,
     train_on_inputs: bool,
-    repeat_data: bool,
+    stop_strategy: datasets.StopStrategy,
     num_samples: Optional[int] = None,
+    include_alt_fields: bool = False,  # whether to generate tensors for text-only input (e.g., used for KD training)
 ) -> data.IterableDataset:
 
     data_sets = [datasets.create_dataset(ds, data_args) for ds in dataset_names]
-    interleave = datasets.InterleaveDataset(data_sets, repeat=repeat_data)
-    ds_with_proc = ultravox_processing.UltravoxDataproc(
-        interleave, processor=processor, train_on_inputs=train_on_inputs
+    interleave = datasets.InterleaveDataset(data_sets, stop_strategy=stop_strategy)
+    ds_with_proc = data_processing.UltravoxDataproc(
+        interleave,
+        processor=processor,
+        train_on_inputs=train_on_inputs,
+        include_alt_fields=include_alt_fields,
     )
     limited_ds = datasets.Range(ds_with_proc, num_samples=num_samples)
     return limited_ds
@@ -118,6 +125,10 @@ def main() -> None:
         # https://github.com/huggingface/transformers/issues/17116#issuecomment-1121340890
         model.audio_tower.config.layerdrop = 0.0
 
+    # loss_config needs to be passed separately just for model training
+    if args.loss_config is not None:
+        model.set_loss_config(args.loss_config)
+
     logging.info("Model and processor instantiated.")
 
     # Starting W&B. HF Trainer can also do this, but this way we can include the config.
@@ -128,6 +139,8 @@ def main() -> None:
             config=dataclasses.asdict(args),
             name=args.exp_name,
             dir="runs",
+            tags=args.run_tags,
+            save_code=True,
         )
 
     if args.model_load_dir:
@@ -139,6 +152,8 @@ def main() -> None:
                 load_path = wandb_utils.download_model_from_wandb(load_path)
         if os.path.isdir(load_path):
             load_path = os.path.join(load_path, "model*.safetensors")
+        paths = glob.glob(load_path)
+        assert len(paths) > 0, f"No model files found at {load_path}"
         for path in glob.glob(load_path):
             state_dict = safetensors.torch.load_file(path)
             mismatch = model.load_state_dict(state_dict, strict=False)
@@ -156,16 +171,23 @@ def main() -> None:
         f"Using dtype and device (world_size): {dtype}, {device} ({world_size})"
     )
     model.to(device=device, dtype=dtype)
-    # TODO: check if the whole model can now be moved to dtype instead
 
     # Prepare dataset, subsetting if needed
     train_dataset: data.IterableDataset
-    val_dataset: data.IterableDataset
+    val_datasets: Dict[str, data.IterableDataset]
+    # We use multiple validation sets here so that the results are comparable even when training set changes
+    # To make sure we can compare training and validation loss (e.g. for fine-tuning), we keep a special set
+    # called "matchtrain" that uses the same data as the training set.
+    val_sets = dict(
+        # [("matchtrain", args.data_sets)]  # FIXME: see issue https://github.com/fixie-ai/ultravox/issues/58
+        [(x, [x]) for x in args.val_sets]
+        + [(f"text_{x}", [x]) for x in args.val_sets]
+    )
     if is_master:
         train_dataset = prepare_dataset(
             dataset_names=args.data_sets,
             train_on_inputs=args.train_on_inputs,
-            repeat_data=args.repeat_data,
+            stop_strategy=args.stop_strategy,
             processor=processor,
             num_samples=args.num_samples,
             data_args=datasets.VoiceDatasetArgs(
@@ -177,22 +199,31 @@ def main() -> None:
                 use_mds=args.mds,
                 mds_batch_size=args.batch_size,
             ),
+            include_alt_fields=model.loss_config.requires_alt_fields,
         )
-        val_dataset = prepare_dataset(
-            dataset_names=args.data_sets,
-            train_on_inputs=args.train_on_inputs,
-            repeat_data=args.repeat_data,
-            processor=processor,
-            num_samples=args.val_num_samples,
-            data_args=datasets.VoiceDatasetArgs(
-                num_prompts=1,
-                data_dir=args.data_dir,
-                shuffle=False,
-                max_audio_duration_secs=16,
-                use_mds=args.mds,
-                mds_batch_size=args.batch_size,
-            ),
+        val_ds_args = datasets.VoiceDatasetArgs(
+            num_prompts=1,
+            split=datasets.DatasetSplit.VALIDATION,
+            data_dir=args.data_dir,
+            shuffle=False,
+            max_audio_duration_secs=16,
+            use_mds=args.mds,
+            mds_batch_size=args.batch_size,
         )
+        val_ds_args_text = copy.copy(val_ds_args)
+        val_ds_args_text.include_audio = False
+        val_datasets = {
+            k: prepare_dataset(
+                dataset_names=val_sets[k],
+                train_on_inputs=args.train_on_inputs,
+                stop_strategy=args.stop_strategy,
+                processor=processor,
+                num_samples=args.val_num_samples,
+                data_args=val_ds_args_text if k.startswith("text_") else val_ds_args,
+                include_alt_fields=model.loss_config.requires_alt_fields,
+            )
+            for k in val_sets
+        }
         logging.info(
             f"Loaded {args.data_sets} data sets, sample limit: {args.num_samples} (val sample limit: {args.val_num_samples})"
         )
@@ -200,17 +231,19 @@ def main() -> None:
         # When using DDP with split_batches=True, the primary process will distribute the batches to the workers
         # The point of this is to avoid unnecessary data processing/downloading in the workers.
         train_dataset = datasets.EmptyDataset()
-        val_dataset = datasets.EmptyDataset()
+        val_datasets = {k: datasets.EmptyDataset() for k in val_sets}
 
     # Set up the data loader
-    data_collator = datasets.DataCollatorForSeq2SeqWithAudio(tokenizer=text_tokenizer)
+    data_collator = datasets.DataCollatorForSeq2SeqWithAudio(
+        tokenizer=text_tokenizer,
+        include_alt_fields=model.loss_config.requires_alt_fields,
+    )
 
     logging.info(f"Config Params: {args}")
-
     trainer = transformers.Seq2SeqTrainer(
         model,
         train_dataset=train_dataset,
-        eval_dataset=val_dataset,
+        eval_dataset=val_datasets,
         data_collator=data_collator,
         tokenizer=text_tokenizer,
         args=transformers.Seq2SeqTrainingArguments(
@@ -283,11 +316,12 @@ def main() -> None:
             num_procs=args.eval_num_procs,
             num_samples=args.eval_num_samples,
             max_new_tokens=args.eval_max_new_tokens,
-            verbose=True,
+            log_dir=wandb.run.dir if wandb.run else str(args.logs_dir),
         )
         if is_master:
             trainer.log(metrics)
 
+        t_end = datetime.now()
         logging.info(f"eval end time: {t_end}")
         logging.info(f"elapsed: {t_end - t_start}")
 

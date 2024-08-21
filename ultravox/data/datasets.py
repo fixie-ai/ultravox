@@ -3,12 +3,15 @@ import base64
 import dataclasses
 import enum
 import io
+import itertools
 import logging
 import os
 import tempfile
+from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
 import datasets
+import jinja2
 import librosa
 import numpy as np
 import requests
@@ -19,6 +22,7 @@ import torch.nn.functional as F
 import transformers
 from torch.utils import data
 
+from ultravox.data import dataset_config
 from ultravox.data import text_proc
 
 SAMPLE_RATE = 16000
@@ -29,8 +33,8 @@ ANSWER_TASK = "answer"
 
 TRANSCRIBE_PROMPTS = [
     # from Gazelle
-    "Transcribe <|audio|>",
-    "Transcribe exactly what is said here <|audio|>",
+    "Transcribe\n<|audio|>",
+    "Transcribe exactly what is said here\n<|audio|>",
     "Repeat exactly what is written here: <|audio|>",
     "Write exactly what was said: <|audio|>",
     "First listen to the clip. Then, transcribe exactly what is said. <|audio|>",
@@ -69,14 +73,41 @@ logging.getLogger("streaming.base.dataset").setLevel(logging.ERROR)
 
 @dataclasses.dataclass
 class DataCollatorForSeq2SeqWithAudio(transformers.DataCollatorForSeq2Seq):
+    # when enabled, the alt_input_ids, alt_attention_mask, and alt_labels fields are used for computing the KL loss in UltravoxModel
+    include_alt_fields: bool = False
+
     def __call__(self, features, *args, **kwargs):
-        audio_features = [f.pop("audio_values") for f in features]
+        audio_values = [f.pop("audio_values", None) for f in features]
+        if self.include_alt_fields:
+            # these fields are hard-coded in the transformer data collator, so they need special handling before calling the super method
+            alt_features = [
+                {
+                    "input_ids": f.pop("alt_input_ids"),
+                    "attention_mask": f.pop("alt_attention_mask"),
+                    "labels": f.pop("alt_labels"),
+                }
+                for f in features
+            ]
+        input_ids_lens = torch.LongTensor([f["input_ids"].shape[-1] for f in features])
         batch = super().__call__(features, *args, **kwargs)
+        if self.include_alt_fields:
+            alt_batch = super().__call__(alt_features, *args, **kwargs)
+            batch["alt_input_ids"] = alt_batch["input_ids"]
+            batch["alt_attention_mask"] = alt_batch["attention_mask"]
+            batch["alt_labels"] = alt_batch["labels"]
+
         # Pad the last dimension of all audio_values to the same length, with 0s on the right.
-        max_len = max([x.shape[-1] for x in audio_features])
-        batch["audio_values"] = torch.stack(
-            [F.pad(x, (0, max_len - x.shape[-1])) for x in audio_features]
-        )
+        if audio_values and audio_values[0] is not None:
+            max_len = max([x.shape[-1] for x in audio_values])
+            batch["audio_values"] = torch.stack(
+                [F.pad(x, (0, max_len - x.shape[-1])) for x in audio_values]
+            )
+            if self.tokenizer.padding_side == "left":
+                displacement = batch["input_ids"].shape[-1] - input_ids_lens
+                batch["audio_token_start_idx"] += displacement.to(
+                    batch["audio_token_start_idx"].device
+                )
+
         return batch
 
 
@@ -168,6 +199,9 @@ class VoiceSample:
             ), f"Unexpected audio dtype: {self.audio.dtype}"
             assert self.audio.ndim == 1, f"Unexpected audio shape: {self.audio.shape}"
 
+    def add_past_messages(self, past_messages: List[Dict[str, str]]):
+        self.messages = past_messages + self.messages
+
     messages: List[Dict[str, str]]
     """List of messages, each with a "role" and "content" field."""
     audio: Optional[np.typing.NDArray[np.float32]] = None
@@ -194,6 +228,8 @@ class VoiceDatasetArgs:
     """Whether to include audio in the samples."""
     include_context: bool = True
     """Whether to include additional textual context from the dataset to the prompt."""
+    max_context_length: int = 1500
+    """Maximum length of context to include in the prompt. Otherwise, skip the sample."""
     shuffle: bool = False
     """Whether to shuffle the dataset."""
     shuffle_seed: int = 42
@@ -212,19 +248,51 @@ class VoiceDatasetArgs:
             self.split = DatasetSplit(self.split.lower())
 
 
+def _get_messages(
+    *turns: str, sys_prompt: Optional[str] = None, assistant_last: bool = True
+) -> List[Dict[str, str]]:
+    """
+    Convert a list of strings into a list of messages, alternating between user and assistant.
+    If `sys_prompt` is set, it is prepended as a system message.
+    If `assistant_last` is True, the assistant's message is the last one.
+    """
+    messages = []
+
+    if sys_prompt:
+        messages.append({"role": "system", "content": sys_prompt})
+
+    roles = ["user", "assistant"]
+
+    # Make sure the last turn is the assistant's iff assistant_last is True.
+    if (len(turns) + assistant_last) % 2 == 0:
+        roles = roles[::-1]
+
+    messages += [{"role": roles[i % 2], "content": c} for i, c in enumerate(turns)]
+
+    return messages
+
+
 class VoiceDataset(abc.ABC, data.IterableDataset):
     """
     Base class for streaming voice datasets.
     Wraps a Hugging Face dataset or MDS-formatted dataset from GCP.
     """
 
+    BASE_AUDIO_COLUMNS = ["audio"]
+
     def __init__(self, args: VoiceDatasetArgs) -> None:
         super().__init__()
         self._args = args
         self._session: Optional[requests.Session] = None
+        self._rng = np.random.default_rng(self._args.shuffle_seed)
+        self._weight = 1.0  # the default weight for the dataset
 
     def _init_dataset(self, dataset: data.Dataset) -> None:
         self._dataset = dataset
+
+    @property
+    def weight(self) -> float:
+        return self._weight
 
     def _load_audio_dataset(
         self,
@@ -258,62 +326,76 @@ class VoiceDataset(abc.ABC, data.IterableDataset):
         else:
             dataset = datasets.load_dataset(
                 path, name, split=split, trust_remote_code=True, streaming=streaming
-            ).cast_column("audio", datasets.Audio(sampling_rate=SAMPLE_RATE))
+            )
+            for column_name in self.BASE_AUDIO_COLUMNS:
+                dataset = dataset.cast_column(
+                    column_name, datasets.Audio(sampling_rate=SAMPLE_RATE)
+                )
             if shuffle:
                 dataset = dataset.shuffle(seed=self._args.shuffle_seed)
             return dataset
 
     def __iter__(self):
-        for i, row in enumerate(self._dataset):
-            sample = self._get_sample(i, row)
-            if (
-                self._args.max_audio_duration_secs is None
-                or sample.audio.shape[-1] / SAMPLE_RATE
-                <= self._args.max_audio_duration_secs
-            ):
-                yield sample
+        for _, row in enumerate(self._dataset):
+            sample = self._get_sample(row)
+            if sample is not None:
+                if (
+                    self._args.max_audio_duration_secs is None
+                    or sample.audio is None
+                    or sample.audio.shape[-1] / SAMPLE_RATE
+                    <= self._args.max_audio_duration_secs
+                ):
+                    yield sample
 
     @abc.abstractmethod
-    def _get_sample(self, idx: int, row: transformers.BatchFeature) -> VoiceSample:
-        pass
+    def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
+        """
+        Converts a row from the dataset into a VoiceSample.
+        Returns None if the sample should be skipped.
+        """
 
-    def _get_answer_prompt(self, idx: int) -> str:
+    def _choice(self, prompts: List[str]) -> str:
+        return self._rng.choice(prompts[: self._args.num_prompts])
+
+    def _get_answer_prompt(self) -> str:
         if self._args.prompt:
             return self._args.prompt
-        prompt_idx = idx % min(self._args.num_prompts, len(ANSWER_PROMPTS))
-        return ANSWER_PROMPTS[prompt_idx]
+        return self._choice(ANSWER_PROMPTS)
 
-    def _get_transcribe_prompt(self, idx: int) -> str:
+    def _get_transcribe_prompt(self) -> str:
         if self._args.prompt:
             return self._args.prompt
-        prompt_idx = idx % min(self._args.num_prompts, len(TRANSCRIBE_PROMPTS))
-        return TRANSCRIBE_PROMPTS[prompt_idx]
+        return self._choice(TRANSCRIBE_PROMPTS)
 
     def _get_answer_messages(
-        self, idx: int, question: str, answer: str, context: Optional[str] = None
+        self, question: str, answer: str, context: Optional[str] = None
     ) -> List[Dict[str, str]]:
-        prompt = self._get_answer_prompt(idx) if self._args.include_audio else question
+        prompt = self._get_answer_prompt() if self._args.include_audio else question
         user_content = f"{context}\n\n{prompt}" if context else prompt
-        return [
-            {"role": "user", "content": user_content},
-            {"role": "assistant", "content": answer},
-        ]
+        return _get_messages(user_content, answer)
 
-    def _get_transcribe_messages(self, idx: int, text: str) -> List[Dict[str, str]]:
-        return [
-            {"role": "user", "content": self._get_transcribe_prompt(idx)},
-            {"role": "assistant", "content": text},
-        ]
+    def _get_transcribe_messages(self, text: str) -> List[Dict[str, str]]:
+        prompt = self._get_transcribe_prompt()
+        if not self._args.include_audio:
+            prompt = prompt.replace("<|audio|>", text)
+        return _get_messages(prompt, text)
 
-    def _get_audio(self, row: transformers.BatchFeature) -> np.ndarray:
+    def _get_audio(
+        self, row: transformers.BatchFeature, column_name: str = "audio"
+    ) -> np.ndarray:
+        if column_name not in self.BASE_AUDIO_COLUMNS:
+            raise ValueError(
+                f"Unknown audio column: {column_name}. This is likely a bug and the audio might not be resampled to {SAMPLE_RATE} Hz."
+            )
+
         # Hugging Face datasets have an Audio object, with array and sampling_rate fields.
         # For MDS, this object is flattened into audio_array and audio_sampling_rate fields.
-        if "audio" in row:
-            audio = row["audio"]["array"]
-            sampling_rate = row["audio"]["sampling_rate"]
-        elif "audio_array" in row:
-            audio = row["audio_array"]
-            sampling_rate = row["audio_sampling_rate"]
+        if column_name in row:
+            audio = row[column_name]["array"]
+            sampling_rate = row[column_name]["sampling_rate"]
+        elif f"{column_name}_array" in row:
+            audio = row[f"{column_name}_array"]
+            sampling_rate = row[f"{column_name}_sampling_rate"]
         else:
             raise ValueError("No audio field found in row.")
         assert sampling_rate == SAMPLE_RATE
@@ -334,14 +416,13 @@ class VoiceDataset(abc.ABC, data.IterableDataset):
 
     def _get_transcribe_sample(
         self,
-        idx: int,
         row: transformers.BatchFeature,
         tcol: str = "text",
         tproc: Optional[Callable[[str], str]] = None,
     ) -> VoiceSample:
         text = tproc(row[tcol]) if tproc else row[tcol]
         return self._make_sample(
-            self._get_transcribe_messages(idx, text),
+            self._get_transcribe_messages(text),
             self._get_audio(row),
             audio_transcript=text,
         )
@@ -368,8 +449,8 @@ class LibriSpeechDummyDataset(VoiceDataset):
         )
         self._init_dataset(dataset)
 
-    def _get_sample(self, idx: int, row: transformers.BatchFeature) -> VoiceSample:
-        return self._get_transcribe_sample(idx, row, tproc=text_proc.format_asr_text)
+    def _get_sample(self, row: transformers.BatchFeature) -> VoiceSample:
+        return self._get_transcribe_sample(row, tproc=text_proc.format_asr_text)
 
 
 class EmptyDataset(data.IterableDataset):
@@ -388,15 +469,13 @@ class AnyInstructDataset(VoiceDataset):
 
     def __init__(self, args: VoiceDatasetArgs) -> None:
         # TODO(juberti): convert to MDS
-        # The last 7 samples are missing audio files, so we exclude them.
-        NUM_SAMPLES = 108193 - 7
         super().__init__(args)
         dataset = datasets.load_dataset(
             "json",
             "anyinstruct",
             data_files="https://huggingface.co/datasets/fnlp/AnyInstruct/resolve/main/speech_conv/metadata.jsonl",
             split="train",
-        ).select(range(NUM_SAMPLES))
+        )
         dataset = dataset.train_test_split(
             test_size=0.01, seed=args.shuffle_seed, shuffle=True
         )
@@ -419,10 +498,10 @@ class AnyInstructAnswerDataset(AnyInstructDataset):
     def __init__(self, args: VoiceDatasetArgs) -> None:
         super().__init__(args)
 
-    def _get_sample(self, idx: int, row: transformers.BatchFeature) -> VoiceSample:
+    def _get_sample(self, row: transformers.BatchFeature) -> VoiceSample:
         chat = row["chat"]
         return self._make_sample(
-            self._get_answer_messages(idx, chat[0]["message"], chat[1]["message"]),
+            self._get_answer_messages(chat[0]["message"], chat[1]["message"]),
             self._load_anyinstruct_audio(chat[0]["speech"]),
             audio_transcript=chat[0]["message"],
         )
@@ -432,10 +511,10 @@ class AnyInstructInputDataset(AnyInstructDataset):
     def __init__(self, args: VoiceDatasetArgs) -> None:
         super().__init__(args)
 
-    def _get_sample(self, idx: int, row: transformers.BatchFeature) -> VoiceSample:
+    def _get_sample(self, row: transformers.BatchFeature) -> VoiceSample:
         audio_transcript = row["chat"][0]["message"]
         return self._make_sample(
-            self._get_transcribe_messages(idx, audio_transcript),
+            self._get_transcribe_messages(audio_transcript),
             self._load_anyinstruct_audio(row["chat"][0]["speech"]),
             audio_transcript=audio_transcript,
         )
@@ -445,10 +524,10 @@ class AnyInstructOutputDataset(AnyInstructDataset):
     def __init__(self, args: VoiceDatasetArgs) -> None:
         super().__init__(args)
 
-    def _get_sample(self, idx: int, row: transformers.BatchFeature) -> VoiceSample:
+    def _get_sample(self, row: transformers.BatchFeature) -> VoiceSample:
         audio_transcript = row["chat"][1]["message"]
         return self._make_sample(
-            self._get_transcribe_messages(idx, audio_transcript),
+            self._get_transcribe_messages(audio_transcript),
             self._load_anyinstruct_audio(row["chat"][1]["speech"]),
             audio_transcript=audio_transcript,
         )
@@ -462,25 +541,84 @@ class BoolQDataset(VoiceDataset):
         )
         self._init_dataset(dataset)
 
-    def _get_sample(self, idx: int, row: transformers.BatchFeature) -> VoiceSample:
+    def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
         question = row["question"]
         answer = "True" if row["answer"] else "False"
         context = row["passage"] if self._args.include_context else None
         return self._make_sample(
-            self._get_answer_messages(idx, question, answer, context),
+            self._get_answer_messages(question, answer, context),
             self._get_audio(row),
             audio_transcript=row["question"],
         )
 
 
 class BoolQInputDataset(BoolQDataset):
-    def _get_sample(self, idx: int, row: transformers.BatchFeature) -> VoiceSample:
-        return self._get_transcribe_sample(idx, row, tcol="question")
+    def _get_sample(self, row: transformers.BatchFeature) -> VoiceSample:
+        return self._get_transcribe_sample(row, tcol="question")
 
 
-class BoolQWithExtendedAnswerDataset(BoolQDataset):
+class QAVoiceDatasetMixin(VoiceDataset):
     SEPARATORS = ["\n\n", "\n", "\n----\n"]
-    BOOLQ_PASSAGE_PROMPTS = [
+    QUERY_PREFIX = ["Question: ", "Question:\n", "Q: ", "Q:\n", "Query: ", "Query:\n"]
+    CONTEXT_PREFIX = [
+        "Passage: ",
+        "Passage:\n",
+        "Context: ",
+        "Context:\n",
+        "Background: ",
+        "Background:\n",
+    ]
+    ANSWER_PREFIX = [
+        "Answer: ",
+        "A: ",
+        "",
+        "The answer is: ",
+        "Result: ",
+        "Conclusion: ",
+    ]
+    # In most cases there is no extra prompt-suffix needed
+    PROMPT_SUFFIXES = [""]
+
+    # TODO: combine `_get_query_prompt` and `_get_answer_messages` into a single method
+    # and use this mixin for all non-ASR datasets.
+    def _get_query_prompt(self, question_str: str, context: str) -> Optional[str]:
+        """
+        Creates a random prompt for a QA sample with a passage and question.
+
+        Example prompt:
+            Passage: {context}
+            Question: {question}
+            {optional-prompt-suffix}
+        """
+        if len(context) > self._args.max_context_length:
+            # Skip samples with long context
+            return None
+
+        if self._args.prompt:
+            prompt = self._args.prompt
+        else:
+            prompt = self._choice(self.PROMPT_SUFFIXES)
+
+        # Separate either with 1 or 2 newlines
+        separator = self._choice(self.SEPARATORS)
+
+        query_prompt = self._choice(self.QUERY_PREFIX)
+        question = "<|audio|>" if self._args.include_audio else question_str
+        prompt = f"{query_prompt}{question}{separator}{prompt}"
+
+        if self._args.include_context:
+            context_prompt = self._choice(self.CONTEXT_PREFIX)
+            prompt = f"{context_prompt}{context}{separator}{prompt}"
+
+        return prompt.strip()
+
+
+class BoolQWithExtendedAnswerDataset(BoolQDataset, QAVoiceDatasetMixin):
+    """
+    A version of BoolQ that includes the context in the prompt and a longer explanation in the answer.
+    """
+
+    PROMPT_SUFFIXES = [
         "Provide a short explanation, then respond with True/False on the last line",
         "Explain briefly, concluding with True/False on a new line."
         "Write a quick explanation, and finish with True/False on the last line"
@@ -493,81 +631,121 @@ class BoolQWithExtendedAnswerDataset(BoolQDataset):
         "Present a concise explanation, ending with a True/False answer on the final line",
         "Start with a brief explanation, and then answer with True/False at the end.",
     ]
-    QUERY_PROMPTS = ["Question: ", "Question:\n", "Q: ", "Q:\n", "Query: ", "Query:\n"]
-    CONTEXT_PROMPTS = [
-        "Passage: ",
-        "Passage:\n",
-        "Context: ",
-        "Context:\n",
-        "Background: ",
-        "Background:\n",
-    ]
-    ANSWER_PROMPTS = [
-        "Answer: ",
-        "A: ",
-        "",
-        "The answer is: ",
-        "Result: ",
-        "Conclusion: ",
-    ]
 
-    def _get_query_prompt(self, idx: int) -> str:
+    def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
         """
-        Creates a random prompt for a BoolQ sample with a passage and question.
-        Example prompt:
-            Passage: {context}
-
+        Example conversation:
+            <|user|> Passage: {context}
             Question: {question}
-
-            Provide a short explanation, then respond with True/False on the last line.
+            Provide a short explanation, then respond with True/False on the last line
+            <|assistant|> {short_explanation}
+            Answer: {answer}
         """
-        if self._args.prompt:
-            return self._args.prompt
-        prompt_idx = idx % min(self._args.num_prompts, len(self.BOOLQ_PASSAGE_PROMPTS))
-        prompt = self.BOOLQ_PASSAGE_PROMPTS[prompt_idx]
-
-        # Separate either with 1 or 2 newlines, depending on idx
-        # 13, 17, 19 are prime numbers (to avoid a pattern)
-        separator = self.SEPARATORS[
-            idx % 13 % min(self._args.num_prompts, len(self.SEPARATORS))
-        ]
-
-        query_prompt = self.QUERY_PROMPTS[
-            idx % 17 % min(self._args.num_prompts, len(self.QUERY_PROMPTS))
-        ]
-        prompt = f"{query_prompt}{{question}}{separator}{prompt}"
-
-        if self._args.include_context:
-            context_prompt = self.CONTEXT_PROMPTS[
-                idx % 19 % min(self._args.num_prompts, len(self.CONTEXT_PROMPTS))
-            ]
-            prompt = f"{context_prompt}{{context}}{separator}{prompt}"
-
-        return prompt
-
-    def _get_sample(self, idx: int, row: transformers.BatchFeature) -> VoiceSample:
         answer = "True" if row["answer"] else "False"
-        answer_prompt = self.ANSWER_PROMPTS[
-            idx % 23 % min(self._args.num_prompts, len(self.ANSWER_PROMPTS))
-        ]
-        query_prompt = self._get_query_prompt(idx)
-        user_content = query_prompt.format(
-            question="<|audio|>" if self._args.include_audio else row["question"],
-            context=row["passage"],
+        answer_prompt = self._choice(self.ANSWER_PREFIX)
+        user_message = self._get_query_prompt(
+            question_str=row["question"], context=row["passage"]
         )
-        messages = [
-            {"role": "user", "content": user_content},
-            {
-                "role": "assistant",
-                "content": f"{row['explanation']}\n{answer_prompt}{answer}",
-            },
-        ]
+        if user_message is None:
+            # Skips samples with long context
+            return None
+
+        messages = _get_messages(
+            user_message, f"{row['explanation']}\n{answer_prompt}{answer}"
+        )
 
         return self._make_sample(
             messages, self._get_audio(row), audio_transcript=row["question"]
         )
 
 
+class HeySQuADHumanDataset(QAVoiceDatasetMixin):
+    """
+    HeySQuAD is a large-scale Spoken Question Answering (SQA) dataset which includes 76k human-spoken questions,
+    97k machine-generated questions, and their corresponding textual answers from the SQuAD QA dataset.
+    https://arxiv.org/abs/2304.13689
+
+    This dataset is the human-spoken version of HeySQuAD.
+    """
+
+    def __init__(self, args: VoiceDatasetArgs) -> None:
+        super().__init__(args)
+        dataset = self._load_audio_dataset(
+            "fixie-ai/HeySQuAD_human", split=args.split.value
+        )
+        self._init_dataset(dataset)
+
+    def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
+        """
+        Example conversation
+            <|user|> Context: {context}
+            Question: {question}
+            <|assistant|> {answer}
+        """
+        if row["is_impossible"] or not row["answers"]:
+            # Skip samples with no answer
+            return None
+
+        prompt = self._get_query_prompt(
+            question_str=row["question"], context=row["context"]
+        )
+        if prompt is None:
+            # Skips samples with long context
+            return None
+
+        messages = _get_messages(prompt, row["answers"][0]["text"])
+        return self._make_sample(
+            messages, self._get_audio(row), audio_transcript=row["question"]
+        )
+
+
+class SlueSQA5Dataset(QAVoiceDatasetMixin):
+    """
+    SLUE-SQA-5 Dataset contains question texts, question audio, answer text, document text, and document audio from these datasets:
+      * SQuAD1.1 (for questions whose question_id starts with 'squad-')
+      * Natural Questions (for questions whose question_id starts with 'nq-')
+      * TriviaQA (for questions whose question_id starts with 'triviaqa-')
+    The following datasets are supposed to be included, but I haven't found them everywhere:
+      * WebQuestions (for questions whose question_id starts with 'wq-')
+      * CuratedTREC (for questions whose question_id starts with 'trec-')
+      * Spoken Wikipedia
+
+
+    Splits: train, validation, test, verified_test
+    """
+
+    BASE_AUDIO_COLUMNS = ["question_audio", "document_audio"]
+
+    def __init__(self, args: VoiceDatasetArgs) -> None:
+        super().__init__(args)
+        dataset = self._load_audio_dataset(
+            "asapp/slue-phase-2", "sqa5", split=args.split.value
+        )
+        self._init_dataset(dataset)
+
+    def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
+        """
+        Example conversation
+            <|user|> Context: {context}
+            Question: {question}
+            <|assistant|> {answer}
+        """
+        prompt = self._get_query_prompt(
+            question_str=row["raw_question_text"], context=row["raw_document_text"]
+        )
+        if prompt is None:
+            # Skips samples with long context
+            return None
+
+        messages = _get_messages(prompt, row["answer_spans"]["answer"][0])
+        return self._make_sample(
+            messages,
+            self._get_audio(row, "question_audio"),
+            audio_transcript=row["raw_question_text"],
+        )
+
+
+# TODO: this dataset can be replaced with GenericVoiceDataset and will be removed/updated in the future.
 class LibriSpeechDataset(VoiceDataset):
     """
     LibriSpeech is a corpus of approximately 1000 hours of 16kHz read
@@ -598,10 +776,11 @@ class LibriSpeechDataset(VoiceDataset):
             ds = ds.shuffle(seed=self._args.shuffle_seed)
         self._init_dataset(ds)
 
-    def _get_sample(self, idx: int, row: transformers.BatchFeature) -> VoiceSample:
-        return self._get_transcribe_sample(idx, row, tproc=text_proc.format_asr_text)
+    def _get_sample(self, row: transformers.BatchFeature) -> VoiceSample:
+        return self._get_transcribe_sample(row, tproc=text_proc.format_asr_text)
 
 
+# TODO: this dataset can be replaced with GenericVoiceDataset and will be removed/updated in the future.
 class GigaSpeechDataset(VoiceDataset):
     """
     GigaSpeech is an evolving, multi-domain English speech recognition corpus
@@ -617,10 +796,11 @@ class GigaSpeechDataset(VoiceDataset):
         )
         self._init_dataset(dataset)
 
-    def _get_sample(self, idx, row) -> VoiceSample:
-        return self._get_transcribe_sample(idx, row, tproc=text_proc.format_asr_text)
+    def _get_sample(self, row) -> VoiceSample:
+        return self._get_transcribe_sample(row, tproc=text_proc.format_asr_text)
 
 
+# TODO: this dataset can be replaced with GenericVoiceDataset and will be removed/updated in the future.
 class VoxPopuliDataset(VoiceDataset):
     """
     VoxPopuli is a large-scale multilingual speech corpus for representation learning,
@@ -636,10 +816,11 @@ class VoxPopuliDataset(VoiceDataset):
         )
         self._init_dataset(dataset)
 
-    def _get_sample(self, idx, row) -> VoiceSample:
-        return self._get_transcribe_sample(idx, row, tcol="raw_text")
+    def _get_sample(self, row) -> VoiceSample:
+        return self._get_transcribe_sample(row, tcol="raw_text")
 
 
+# TODO: this dataset can be replaced with GenericVoiceDataset and will be removed/updated in the future.
 class CommonVoiceDataset(VoiceDataset):
     """
     The Common Voice dataset consists of a unique MP3 and corresponding text file
@@ -651,17 +832,100 @@ class CommonVoiceDataset(VoiceDataset):
     NOTE: requires HF login
     """
 
-    def __init__(self, args: VoiceDatasetArgs) -> None:
+    def __init__(self, args: VoiceDatasetArgs, lang: str = "en") -> None:
         super().__init__(args)
         dataset = self._load_audio_dataset(
-            "mozilla-foundation/common_voice_16_1", "en", split=args.split.value
+            "mozilla-foundation/common_voice_16_1", lang, split=args.split.value
         )
         self._init_dataset(dataset)
 
-    def _get_sample(self, idx, row) -> VoiceSample:
-        return self._get_transcribe_sample(idx, row, tcol="sentence")
+    def _get_sample(self, row) -> VoiceSample:
+        return self._get_transcribe_sample(row, tcol="sentence")
 
 
+# TODO: this dataset can be replaced with GenericVoiceDataset and will be removed/updated in the future.
+class CoVoST2Dataset(VoiceDataset):
+    """
+    CoVoST 2 is a large-scale multilingual speech translation corpus covering translations from 21 languages into English
+    and from English into 15 languages. The dataset is created using Mozilla's open-source Common Voice 4 database of
+    crowdsourced voice recordings. There are 2,900 hours of speech represented in the corpus.
+
+    The original Hugging Face dataset link: https://huggingface.co/datasets/facebook/covost2
+    Since this dataset requires audio files to be downloaded separately, a new dataset is created with the audio files:
+    https://huggingface.co/datasets/fixie-ai/covost2
+
+    Due to the scale of the dataset and the audio files being repeated, only a portion of the dataset was converted.
+    See [this issue](https://github.com/fixie-ai/ultravox/issues/50) for more information.
+
+    Supported subsets (En -> X):
+        'en_de', 'en_tr', 'en_fa', 'en_sv-SE', 'en_mn', 'en_zh-CN', 'en_cy',
+        'en_ca', 'en_sl', 'en_et', 'en_id', 'en_ar', 'en_ta', 'en_lv', 'en_ja'
+    Supported subsets (X -> En):
+        'fr_en', 'zh-CN_en', 'es_en'
+    """
+
+    CODE_TO_LANG = {
+        "en": "English",
+        "de": "German",
+        "tr": "Turkish",
+        "fa": "Persian",
+        "sv-SE": "Swedish",
+        "mn": "Mongolian",
+        "zh-CN": "Chinese",
+        "cy": "Welsh",
+        "ca": "Catalan",
+        "sl": "Slovenian",
+        "et": "Estonian",
+        "id": "Indonesian",
+        "ar": "Arabic",
+        "ta": "Tamil",
+        "lv": "Latvian",
+        "ja": "Japanese",
+        "fr": "French",
+        "es": "Spanish",
+    }
+
+    # We currently don't use this dataset for training, so mainly the first prompt it ever used.
+    # The "no explanation" part is important, specially for evaluations, but it's not repeated
+    # in all prompts to avoid being too repetitive in training.
+    TRANSLATE_PROMPTS = [
+        "Translate the following into {target}, without any explanation: <|audio|>",
+        "Translate the following into {target} language, no explanation needed: <|audio|>",
+        "Please convert the following into {target}. Be concise.\n<|audio|>",
+        "Could you translate this to {target} language? No commentary necessary.\n<|audio|>",
+        "Translate the text below to {target}.\n<|audio|>",
+        "Translate the subsequent text into {target} language. <|audio|>",
+        "Can you translate this into the {target} language?\n<|audio|>",
+        "Transform the following to {target}: <|audio|>",
+    ]
+
+    def __init__(self, args: VoiceDatasetArgs, subset: str) -> None:
+        super().__init__(args)
+        dataset = self._load_audio_dataset(
+            "fixie-ai/covost2", subset, split=args.split.value
+        )
+        langs = subset.split("_")
+        assert len(langs) == 2, f"Invalid subset: {subset}"
+        self.source_lang = self.CODE_TO_LANG[langs[0]]
+        self.target_lang = self.CODE_TO_LANG[langs[1]]
+        self._init_dataset(dataset)
+
+    def _get_sample(self, row) -> VoiceSample:
+        prompt = self._choice(self.TRANSLATE_PROMPTS).format(target=self.target_lang)
+
+        transcript = row["sentence"]
+        translation = row["translation"]
+        if not self._args.include_audio:
+            prompt = prompt.replace("<|audio|>", transcript)
+
+        return self._make_sample(
+            _get_messages(prompt, translation),
+            self._get_audio(row),
+            audio_transcript=transcript,
+        )
+
+
+# TODO: this dataset can be replaced with GenericVoiceDataset and will be removed/updated in the future.
 class PeopleSpeechDataset(VoiceDataset):
     """
     The People's Speech Dataset is among the world's largest English speech
@@ -677,8 +941,114 @@ class PeopleSpeechDataset(VoiceDataset):
         )
         self._init_dataset(dataset)
 
-    def _get_sample(self, idx, row) -> VoiceSample:
-        return self._get_transcribe_sample(idx, row, tcol="text")
+    def _get_sample(self, row) -> VoiceSample:
+        return self._get_transcribe_sample(row, tcol="text")
+
+
+class SodaDataset(VoiceDataset):
+    BASE_AUDIO_COLUMNS = ["audio_second_last_turn"]
+
+    SYS_PROMPTS = [
+        "Follow the flow of the conversation and respond just like a human would in the same situation.",
+        "Engage in the conversation naturally, responding as a human would.",
+        "Follow the dialogue and reply like a person in that situation.",
+        "Participate in the chat and answer as if you were a human.",
+        "Interact smoothly and respond just like a person would.",
+        "Stay in the moment and reply as a human would in the conversation.",
+        "Flow with the discussion and respond naturally, as a person would.",
+        "Keep the dialogue going and answer like a human would.",
+        "Follow along and reply in a way a person would in the chat.",
+        "Stay engaged in the conversation and respond like a human.",
+        "Maintain the flow of the chat and answer just as a person would.",
+    ]
+
+    def __init__(self, args: VoiceDatasetArgs) -> None:
+        super().__init__(args)
+        dataset = self._load_audio_dataset(
+            "fixie-ai/soda-audio", split=args.split.value
+        )
+        self._init_dataset(dataset)
+
+    def _get_sample(self, row) -> VoiceSample:
+        turns = row["dialogue"]
+        # Make sure the last turn is the assistant's
+        roles = ["user", "assistant"] if len(turns) % 2 == 0 else ["assistant", "user"]
+
+        sys_prompt = self._choice(self.SYS_PROMPTS)
+
+        messages = _get_messages(*turns[:-1], sys_prompt=sys_prompt)
+
+        messages[-1]["content"] = row["alt_last_turn"]
+        if self._args.include_audio:
+            messages[-2]["content"] = "<|audio|>"
+
+        return self._make_sample(
+            messages,
+            audio=self._get_audio(row, "audio_second_last_turn"),
+            audio_transcript=turns[-2],
+        )
+
+
+class GenericVoiceDataset(VoiceDataset):
+    def __init__(
+        self, args: VoiceDatasetArgs, config: dataset_config.DataDictConfig
+    ) -> None:
+        super().__init__(args)
+
+        dataset = datasets.concatenate_datasets(
+            [
+                self._load_audio_dataset(
+                    config.path,
+                    name=config.name,
+                    split=s,
+                    streaming=config.streaming,
+                    shuffle=False,
+                )
+                for s in config.splits
+            ]
+        )
+
+        # shuffling is only supported on huggingface datasets for now, not MDS
+        if self._args.shuffle:
+            dataset = dataset.shuffle(seed=self._args.shuffle_seed)
+
+        if config.num_samples:
+            dataset = Range(dataset, config.num_samples)
+
+        self._weight = config.weight
+
+        self.user_template = config.user_template
+        self.assistant_template = config.assistant_template
+        self.transcript_template = config.transcript_template
+
+        self._init_dataset(dataset)
+
+    def _get_sample(self, row) -> VoiceSample:
+        try:
+            user_content = jinja2.Template(
+                self.user_template, undefined=jinja2.StrictUndefined
+            ).render(**row, text_proc=text_proc, dataset=self)
+            assistant_content = jinja2.Template(
+                self.assistant_template, undefined=jinja2.StrictUndefined
+            ).render(**row, text_proc=text_proc, dataset=self)
+            transcript = jinja2.Template(
+                self.transcript_template, undefined=jinja2.StrictUndefined
+            ).render(**row, text_proc=text_proc, dataset=self)
+        except jinja2.TemplateError as e:
+            print(f"Error rendering template: {e}")
+            print(f"user_template: {self.user_template}")
+            print(f"assistant_template: {self.assistant_template}")
+            print(f"transcript_template: {self.transcript_template}")
+            print(f"sample keys: {list(row.keys())}")
+            raise ValueError(
+                f"Template rendering failed. Make sure all keys in the template exist in the sample."
+            ) from e
+
+        return self._make_sample(
+            _get_messages(user_content, assistant_content),
+            self._get_audio(row),
+            audio_transcript=transcript,
+        )
 
 
 def create_dataset(name: str, args: VoiceDatasetArgs) -> data.IterableDataset:
@@ -689,54 +1059,90 @@ def create_dataset(name: str, args: VoiceDatasetArgs) -> data.IterableDataset:
         "boolq": BoolQDataset,
         "boolq_in": BoolQInputDataset,
         "boolq_extended": BoolQWithExtendedAnswerDataset,
+        "heysquad_human": HeySQuADHumanDataset,
+        "slue_sqa5": SlueSQA5Dataset,
         "gigaspeech": GigaSpeechDataset,
         "librispeech": LibriSpeechDataset,
         "voxpopuli": VoxPopuliDataset,
         "commonvoice": CommonVoiceDataset,
+        "covost2": CoVoST2Dataset,
         "peoplespeech": PeopleSpeechDataset,
+        "soda": SodaDataset,
         "dummy": LibriSpeechDummyDataset,
     }
-    return DATASET_MAP[name](args)
+    if isinstance(name, dataset_config.DataDictConfig):
+        return GenericVoiceDataset(args, name)
+    else:
+        name, *ext = name.split(":")
+        return DATASET_MAP[name](args, *ext)
+
+
+class StopStrategy(str, Enum):
+    FIRST_EXHAUSTED = "first_exhausted"
+    LAST_EXHAUSTED = "last_exhausted"
+    NEVER_STOP = "never_stop"
 
 
 class InterleaveDataset(data.IterableDataset):
-    """Interleaves multiple IterableDataset objects."""
+    """Interleaves multiple IterableDataset objects based on normalized weights."""
 
     def __init__(
-        self, datasets: Sequence[data.IterableDataset], repeat: bool = False
+        self,
+        datasets: Sequence[data.IterableDataset],
+        stop_strategy: StopStrategy = StopStrategy.LAST_EXHAUSTED,
+        seed: Optional[int] = 42,
+        static: bool = False,
     ) -> None:
         """
         Args:
-            datasets: a list of IterableDataset objects
-            repeat: whether to repeat the datasets indefinitely.
-                This matters most when the datasets have different lengths.
-                Let's say you have two datasets, A and B which have 5 and 3 samples respectively.
-
-                `repeat=False`: [A0, B0, A1, B1, A2, B2, A3, A4]
-                `repeat=True` : [A0, B0, A1, B1, A2, B2, A3, B0, A4, B1, A0, ...]
-
-                NOTE: with `repeat=True`, `__iter__` never stops.
+            datasets: A list of data.IterableDataset objects.
+            stop_strategy: Strategy for stopping iteration.
+            seed: Optional seed for reproducibility.
+            static: If true, the datasets are interleaved in a static order with equal weights.
         """
         super().__init__()
         self._datasets = datasets
-        self._repeat = repeat
+        self._rng = np.random.default_rng(seed)
+        self._static = static
+
+        self._stop_strategy = stop_strategy
+
+        weights = [getattr(ds, "weight", 1) for ds in datasets]
+        total_weight = sum(weights)
+        self._normalized_probs = [w / total_weight for w in weights]
 
     def __iter__(self):
-        iters = [iter(ds) for ds in self._datasets]
-        iter_index = 0
+        # If no datasets are provided, return an empty iterator
+        if not self._datasets:
+            return
 
-        while len(iters):
-            it = iters[iter_index]
+        iters = [iter(ds) for ds in self._datasets]
+        exhausted = [False] * len(iters)
+
+        if self._static:
+            static_iter = itertools.cycle(range(len(self._datasets)))
+
+        while True:
+            if self._static:
+                iter_index = next(static_iter)
+            else:
+                iter_index = self._rng.choice(len(iters), p=self._normalized_probs)
+
             try:
-                val = next(it)
-                iter_index = (iter_index + 1) % len(iters)
-                yield val
+                yield next(iters[iter_index])
             except StopIteration:
-                if not self._repeat:
-                    iters.pop(iter_index)
-                    iter_index %= max(1, len(iters))
-                else:
-                    iters[iter_index] = iter(self._datasets[iter_index])
+                exhausted[iter_index] = True
+
+                # Check if stopping condition is met
+                if self._stop_strategy == StopStrategy.FIRST_EXHAUSTED or (
+                    self._stop_strategy == StopStrategy.LAST_EXHAUSTED
+                    and all(exhausted)
+                ):
+                    break
+
+                # Recreate the iterator if stopping condition is not met and yield the next sample
+                iters[iter_index] = iter(self._datasets[iter_index])
+                yield next(iters[iter_index])
 
 
 class Dataproc(abc.ABC, data.IterableDataset):

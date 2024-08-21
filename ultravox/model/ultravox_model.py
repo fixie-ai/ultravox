@@ -10,14 +10,15 @@ import transformers.activations
 import transformers.modeling_outputs
 import transformers.models
 
-from ultravox.model import ultravox_config
-from ultravox.model import whisper_model_modified
+# We must use relative import in this directory to allow uploading to HF Hub
+# Even "from . import X" pattern doesn't work (undocumented and unclear why)
+from .ultravox_config import LossConfig
+from .ultravox_config import LossFunction
+from .ultravox_config import UltravoxConfig
+from .whisper_model_modified import WhisperEncoder as ModifiedWhisperEncoder
 
 
-class UltravoxModel(
-    transformers.LlamaPreTrainedModel,
-    transformers.GenerationMixin,
-):
+class UltravoxModel(transformers.LlamaPreTrainedModel):
     """
     The Ultravox model which consists of an audio encoder and a language model.
 
@@ -31,11 +32,19 @@ class UltravoxModel(
         config: Model configuration class with all the parameters of the model.
     """
 
-    config_class = ultravox_config.UltravoxConfig
-    config: ultravox_config.UltravoxConfig  # for type hinting
+    config_class = UltravoxConfig
+    config: UltravoxConfig  # for type hinting
     _no_split_modules = ["Wav2Vec2Model", "WhisperEncoder", "LlamaDecoderLayer"]
+    # We minimize the weights in state_dict in order to reduce the size of the checkpoint
+    # The issue is that load_pretrained() uses state_dict() keys to know what keys are expected
+    # As such we have to tell is to ignore some keys that are not always in the model
+    _keys_to_ignore_on_load_unexpected = ["audio_tower.*", "language_model.*"]
+    # Usually we load encoder weights from a pretrained model, so we don't want to load the decoder weights
+    # Technically we never hit this issue because these keys are already removed from state_dict() however,
+    # but there's no harm in keeping it here for when we change that behavior.
+    _keys_to_ignore_on_load_missing = ["audio_tower.*"]
 
-    def __init__(self, config: ultravox_config.UltravoxConfig):
+    def __init__(self, config: UltravoxConfig):
         super().__init__(config)
 
         self.keep_params: Set[str] = set()
@@ -45,6 +54,7 @@ class UltravoxModel(
         self.multi_modal_projector = UltravoxProjector(config)
         self.language_model = self._create_language_model(config)
 
+        self.loss_config = LossConfig()
         self.post_init()
 
     def get_input_embeddings(self):
@@ -68,6 +78,9 @@ class UltravoxModel(
     def tie_weights(self):
         return self.language_model.tie_weights()
 
+    def set_loss_config(self, loss_config: LossConfig):
+        self.loss_config = loss_config
+
     def _setup_cache(
         self, cache_cls, max_batch_size: int, max_cache_len: Optional[int] = None
     ):
@@ -90,6 +103,42 @@ class UltravoxModel(
         self.vocab_size = model_embeds.num_embeddings
         return model_embeds
 
+    def _compute_kl_loss(
+        self,
+        lm_output: transformers.modeling_outputs.CausalLMOutputWithPast,
+        labels: Optional[torch.Tensor] = None,
+        past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
+        alt_input_ids: Optional[torch.Tensor] = None,
+        alt_attention_mask: Optional[torch.Tensor] = None,
+        alt_labels: Optional[torch.Tensor] = None,
+        **kwargs,
+    ):
+        # disable gradient computation for the teacher model
+        with torch.no_grad():
+            # compute the teacher (text-only) model's distribution
+            alt_inputs_embeds = self.get_input_embeddings().forward(alt_input_ids)
+            alt_lm_output = self.language_model.forward(
+                inputs_embeds=alt_inputs_embeds,
+                labels=alt_labels,
+                attention_mask=alt_attention_mask,
+                past_key_values=past_key_values,
+                **kwargs,
+            )
+        # compute the KL divergence loss between the two models
+        kl_loss = F.kl_div(
+            F.log_softmax(
+                lm_output.logits[labels != -100] / self.loss_config.kl_temperature,
+                dim=-1,
+            ),
+            F.softmax(
+                alt_lm_output.logits[alt_labels != -100]
+                / self.loss_config.kl_temperature,
+                dim=-1,
+            ),
+            reduction="batchmean",
+        )
+        return {"loss": kl_loss}
+
     def forward(
         self,
         input_ids: torch.Tensor,
@@ -99,7 +148,11 @@ class UltravoxModel(
         attention_mask: Optional[torch.Tensor] = None,
         audio_token_start_idx: Optional[torch.Tensor] = None,
         audio_token_len: Optional[torch.Tensor] = None,
-        past_key_values: Optional[Tuple] = None,
+        past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
+        # the alt_* fields are needed for KL divergence loss
+        alt_input_ids: Optional[torch.Tensor] = None,
+        alt_attention_mask: Optional[torch.Tensor] = None,
+        alt_labels: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> Union[Tuple, transformers.modeling_outputs.CausalLMOutputWithPast]:
         """
@@ -155,8 +208,25 @@ class UltravoxModel(
             past_key_values=past_key_values,
             **kwargs,
         )
-
-        return lm_output
+        if self.training:
+            if self.loss_config.loss_function == LossFunction.CrossEntropy:
+                return lm_output
+            elif self.loss_config.loss_function == LossFunction.KL_Divergence:
+                return self._compute_kl_loss(
+                    lm_output=lm_output,
+                    labels=labels,
+                    past_key_values=past_key_values,
+                    alt_input_ids=alt_input_ids,
+                    alt_attention_mask=alt_attention_mask,
+                    alt_labels=alt_labels,
+                    **kwargs,
+                )
+            else:
+                raise ValueError(
+                    f"Unsupported loss function: {self.loss_config.loss_function}"
+                )
+        else:
+            return lm_output
 
     def prepare_inputs_for_generation(
         self,
@@ -164,9 +234,10 @@ class UltravoxModel(
         audio_values: Optional[torch.FloatTensor] = None,
         audio_token_start_idx: Optional[torch.Tensor] = None,
         audio_token_len: Optional[torch.Tensor] = None,
-        past_key_values: Optional[Tuple] = None,
+        past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
         attention_mask: Optional[torch.Tensor] = None,
         inputs_embeds: Optional[torch.Tensor] = None,
+        cache_position: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> Dict[str, Any]:
         model_input = self.language_model.prepare_inputs_for_generation(
@@ -174,25 +245,33 @@ class UltravoxModel(
             past_key_values=past_key_values,
             attention_mask=attention_mask,
             inputs_embeds=inputs_embeds,
+            cache_position=cache_position,
             **kwargs,
         )
 
-        if past_key_values is None and audio_values is not None:
-            # We only want to use audio features in the 1st generation step
+        # include audio information in model_input only when it is needed during prefilling
+        # audio_token_start_idx should always be relative to the current cache position
+        prefill_start_idx = 0 if cache_position is None else cache_position[0]
+        if (
+            audio_values is not None
+            and audio_token_start_idx is not None
+            and prefill_start_idx <= torch.max(audio_token_start_idx)
+        ):
             model_input["audio_values"] = audio_values
-            model_input["audio_token_start_idx"] = audio_token_start_idx
+            model_input["audio_token_start_idx"] = (
+                audio_token_start_idx - prefill_start_idx
+            )
             model_input["audio_token_len"] = audio_token_len
 
         return model_input
 
     @classmethod
-    def _create_audio_tower(cls, config: ultravox_config.UltravoxConfig) -> Union[
-        transformers.Wav2Vec2Model,
-        transformers.models.whisper.modeling_whisper.WhisperEncoder,
-    ]:
+    def _create_audio_tower(
+        cls, config: UltravoxConfig
+    ) -> Union[transformers.Wav2Vec2Model, ModifiedWhisperEncoder]:
         if config.audio_model_id is not None:
             if "whisper" in config.audio_model_id is not None:
-                audio_tower = whisper_model_modified.WhisperEncoder.from_pretrained(
+                audio_tower = ModifiedWhisperEncoder.from_pretrained(
                     config.audio_model_id
                 )
             else:
@@ -201,9 +280,14 @@ class UltravoxModel(
                 )
         else:
             if "whisper" in config.audio_config._name_or_path:
-                audio_tower = whisper_model_modified.WhisperEncoder(config.audio_config)
+                audio_tower = ModifiedWhisperEncoder(config.audio_config)
             else:
-                audio_tower = transformers.AutoModel.from_config(config.audio_config)
+                with transformers.modeling_utils.no_init_weights():
+                    # we only ever use from_config if the weights are retrained, hence initializing is not
+                    # required. This makes the model quite creation faster since init on CPU is quite slow.
+                    audio_tower = transformers.AutoModel.from_config(
+                        config.audio_config
+                    )
 
         if isinstance(
             audio_tower,
@@ -219,16 +303,19 @@ class UltravoxModel(
 
     @classmethod
     def _create_language_model(
-        cls, config: ultravox_config.UltravoxConfig
+        cls, config: UltravoxConfig
     ) -> transformers.LlamaForCausalLM:
         if config.text_model_id is not None:
             language_model = transformers.AutoModelForCausalLM.from_pretrained(
                 config.text_model_id, attn_implementation=config._attn_implementation
             )
         else:
-            language_model = transformers.AutoModelForCausalLM.from_config(
-                config.text_config, attn_implementation=config._attn_implementation
-            )
+            with transformers.modeling_utils.no_init_weights():
+                # we only ever use from_config if the weights are retrained, hence initializing is not
+                # required. This makes the model quite creation faster since init on CPU is quite slow.
+                language_model = transformers.AutoModelForCausalLM.from_config(
+                    config.text_config, attn_implementation=config._attn_implementation
+                )
 
         language_model = apply_lora(language_model, config.text_model_lora_config)
         return language_model
@@ -319,6 +406,19 @@ class UltravoxModel(
         )
 
 
+def is_cache_empty(
+    past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]]
+) -> bool:
+    """
+    Check if the cache is empty.
+    """
+    if past_key_values is None:
+        return True
+    if isinstance(past_key_values, tuple):
+        return all(len(c) == 0 for c in past_key_values)
+    return past_key_values.get_seq_length() == 0
+
+
 def apply_lora(model: torch.nn.Module, lora_config: dict) -> torch.nn.Module:
     """
     Applies LoRA finetuning to the model. If the `r` parameter is set to 0, the model is frozen instead.
@@ -373,7 +473,7 @@ class SwiGLU(nn.Module):
 
 
 class UltravoxProjector(nn.Sequential):
-    def __init__(self, config: ultravox_config.UltravoxConfig):
+    def __init__(self, config: UltravoxConfig):
         super().__init__()
         self.hidden_dim = config.hidden_size
         self._pad_and_stack = StackAudioFrames(config.stack_factor)
@@ -396,8 +496,10 @@ class UltravoxProjector(nn.Sequential):
         return hidden_states
 
 
-transformers.AutoModelForCausalLM.register(
-    ultravox_config.UltravoxConfig, UltravoxModel
-)
+UltravoxConfig.register_for_auto_class()
+UltravoxModel.register_for_auto_class()
+
+transformers.AutoConfig.register("ultravox", UltravoxConfig)
+transformers.AutoModel.register(UltravoxConfig, UltravoxModel)
 
 transformers.activations.ACT2FN["swiglu"] = SwiGLU

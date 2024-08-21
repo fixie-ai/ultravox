@@ -1,0 +1,7 @@
+[
+    {%- for message in messages[:-1] -%}
+        {%- if message['role'] == 'user' -%}
+            {{ json_dump(message['content']) }},
+        {%- endif -%}
+    {%- endfor -%}
+]

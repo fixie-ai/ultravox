@@ -1,5 +1,7 @@
 import re
 
+import sacrebleu
+
 from ultravox.evaluation import eval_types
 
 
@@ -21,3 +23,17 @@ def match_last_word(sample: eval_types.Sample) -> eval_types.ExactMatchResult:
     return eval_types.ExactMatchResult(
         score=last_word == expected_tf, reason="exact_match check"
     )
+
+
+def bleu(sample: eval_types.Sample) -> eval_types.BleuResult:
+    """
+    Compute BLEU score for a single sample.
+
+    Note: BLEU is supposed to be computed on a corpus level, not on a single sample.
+    As such, reported values here might not be easily comparable to other metrics.
+    """
+    score = sacrebleu.sentence_bleu(
+        hypothesis=sample.generated_answer,
+        references=[sample.expected_answer],
+    ).score
+    return eval_types.BleuResult(score=score)

@@ -1,5 +1,9 @@
 import os
+import sys
 
+# Temporary fix for an issue where importing NLTK breaks PyTorch multiprocessing on MacOS.
+# For more details, see: https://github.com/nltk/nltk/issues/2949
+sys.modules["tkinter"] = None  # type: ignore
 import nltk  # needed for truecase
 import truecase
 

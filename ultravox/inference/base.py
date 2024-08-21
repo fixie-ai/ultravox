@@ -1,6 +1,6 @@
 import abc
 import dataclasses
-from typing import Generator, Optional
+from typing import Generator, List, Optional
 
 from ultravox.data import datasets
 
@@ -39,6 +39,15 @@ class VoiceInference(abc.ABC):
         temperature: Optional[float] = None,
     ) -> VoiceOutput:
         pass
+
+    # Unoptimized batch inference. Used as a fallback if the derived class doesn't implement it.
+    def infer_batch(
+        self,
+        samples: List[datasets.VoiceSample],
+        max_tokens: Optional[int] = None,
+        temperature: Optional[float] = None,
+    ) -> List[VoiceOutput]:
+        return [self.infer(sample, max_tokens, temperature) for sample in samples]
 
     def infer_stream(
         self,
