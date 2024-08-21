@@ -10,7 +10,12 @@ def default_device():
 
 
 def default_dtype():
-    return torch.bfloat16 if torch.cuda.is_available() else torch.float32
+    # MPS got bfloat16 support in macOS Sonoma 14.
+    return (
+        torch.bfloat16
+        if torch.cuda.is_available() or torch.backends.mps.is_available()
+        else torch.float32
+    )
 
 
 def get_dtype(data_type: str):
