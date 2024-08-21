@@ -339,6 +339,7 @@ def evaluate(args: config_base.TrainConfig):
         log_dir=os.path.join(logs_dir, "oaieval/audio"),
         model_dir=str(args.output_dir),
         eval_set="audio-core",
+        num_samples=args.eval_num_samples,
     )
     audio_metrics = {f"eval_audio_{k}": v for k, v in audio_metrics.items()}
     # TODO: it would be best to do trainer.log, but then we'd risk keeping parts of the model
@@ -351,6 +352,7 @@ def evaluate(args: config_base.TrainConfig):
         log_dir=os.path.join(logs_dir, "oaieval/text"),
         model_dir=str(args.output_dir),
         eval_set="transcript-core",
+        num_samples=args.eval_num_samples,
     )
     text_metrics = {f"eval_text_{k}": v for k, v in text_metrics.items()}
     if wandb.run:
@@ -361,28 +363,30 @@ def evaluate(args: config_base.TrainConfig):
     logging.info(f"elapsed: {t_end - t_start}")
 
 
-def run_oaievalset(log_dir: str, model_dir: str, eval_set: str):
+def run_oaievalset(
+    log_dir: str, model_dir: str, eval_set: str, num_samples: Optional[int] = None
+):
     env = os.environ.copy()
 
-    num_gpus = max(1, torch.cuda.device_count())
-    env["EVALS_THREADS"] = str(num_gpus * 32)
+    # num_gpus = max(1, torch.cuda.device_count())
+    env["EVALS_THREADS"] = "64"
 
-    # TODO: do I need to unset CUDA_VISIBLE_DEVICES?
-    # env.pop("CUDA_VISIBLE_DEVICES", None)
+    # TODO: currently running this on a single GPU is faster than multiple GPUs :facepalm:
+    env["CUDA_VISIBLE_DEVICES"] = "0"
+
+    command = [
+        "oaievalset",
+        "--record_dir",
+        log_dir,
+        "generation/gpu/ultravox-dev",
+        eval_set,
+        f"--completion_args=model={model_dir}",
+    ]
+    if num_samples:
+        command.append(f"--max_samples={num_samples}")
 
     # Run the evaluation set
-    subprocess.run(
-        [
-            "oaievalset",
-            "--record_dir",
-            log_dir,
-            "generation/gpu/ultravox-dev",
-            eval_set,
-            f"--completion_args=model={model_dir}",
-        ],
-        check=True,
-        env=env,
-    )
+    subprocess.run(command, check=True, env=env)
 
     # Extract the results from the log directory
     df = make_table.extract_results(pathlib.Path(log_dir))
