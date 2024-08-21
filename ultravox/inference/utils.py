@@ -10,11 +10,11 @@ def default_device():
 
 
 def default_dtype():
-    # MPS got bfloat16 support in macOS Sonoma 14.
+    # macOS Sonoma 14 enabled bfloat16 on MPS.
     return (
         torch.bfloat16
         if torch.cuda.is_available() or torch.backends.mps.is_available()
-        else torch.float32
+        else torch.float16
     )
 
 
