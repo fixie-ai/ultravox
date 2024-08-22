@@ -3,7 +3,8 @@
 # Make sure to accept the license agreement on huggingface hub
 text_model: "meta-llama/Meta-Llama-3.1-8B-Instruct"
 audio_model: "openai/whisper-medium"
-
+model_load_dir: "wandb://fixie/ultravox/model-zhuang.2024-08-21-ultravox.medium-1d:v7"
+do_train: False
 
 loss_config:
   # Choose from ["KL_Divergence", "CrossEntropy"], default is "KL_Divergence"
