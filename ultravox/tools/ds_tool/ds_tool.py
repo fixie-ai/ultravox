@@ -136,7 +136,7 @@ class TextGenerationTask:
         # using a Jinja template for some added flexibility, template can include variables and functions
         # e.g., {{ text }} or {{ text_proc.format_asr_text(text) }}
         try:
-            # Filter out the audio before the sample is passed into the jinja template
+            # Filter out the audio before the sample is passed into the jinja template, or it will get loaded into memory.
             filtered_sample = {
                 k: sample[k] for k in sample.keys() if k not in exclude_fields
             }
