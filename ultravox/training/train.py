@@ -305,7 +305,7 @@ def train(args: config_base.TrainConfig):
     if args.val_steps:
         trainer.evaluate()
     trainer.train()
-    if trainer.is_world_process_zero():
+    if is_master:
         # Saving the model using pipeline to ensure its code is saved
         pipeline = ultravox_pipeline.UltravoxPipeline(
             model, tokenizer=text_tokenizer, device=device
