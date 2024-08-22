@@ -341,9 +341,6 @@ class VoiceDataset(abc.ABC, data.IterableDataset):
                 ):
                     yield sample
 
-    def __len__(self):
-        return len(self._dataset)
-
     @abc.abstractmethod
     def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
         """
@@ -991,7 +988,6 @@ class GenericVoiceDataset(VoiceDataset):
         self, args: VoiceDatasetArgs, config: dataset_config.DataDictConfig
     ) -> None:
         super().__init__(args)
-
         dataset = datasets.concatenate_datasets(
             [
                 self._load_audio_dataset(
@@ -1009,7 +1005,12 @@ class GenericVoiceDataset(VoiceDataset):
         if self._args.shuffle:
             dataset = dataset.shuffle(seed=self._args.shuffle_seed)
 
+        self.total_samples = config.total_samples
         if config.num_samples:
+            if self.total_samples and self.total_samples < config.num_samples:
+                raise ValueError(
+                    f"Total samples {self.total_samples} is less than the requested number of samples {config.num_samples}"
+                )
             dataset = Range(dataset, config.num_samples)
 
         self._weight = config.weight
@@ -1046,6 +1047,12 @@ class GenericVoiceDataset(VoiceDataset):
             self._get_audio(row),
             audio_transcript=transcript,
         )
+
+    def __len__(self):
+        try:
+            return len(self._dataset)
+        except:
+            return self.total_samples
 
 
 def create_dataset(name: str, args: VoiceDatasetArgs) -> data.IterableDataset:
@@ -1142,6 +1149,7 @@ class InterleaveDataset(data.IterableDataset):
                 yield next(iters[iter_index])
 
     def __len__(self):
+        # TODO: Implement the length method for different stop strategies
         return sum(len(ds) for ds in self._datasets)
 
 
