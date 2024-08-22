@@ -147,11 +147,9 @@ class TextGenerationTask:
         except jinja2.TemplateError as e:
             error_message = str(e)
             if "The formatted text is empty." in error_message:
-                # This is the specific error we raised for empty text
                 print("Formatted text is empty. Setting output to None.")
                 sample[self.new_column_name] = None
             else:
-                # For other template errors, we'll keep the original error handling
                 print(f"Error rendering template: {e}")
                 print(f"template: {self.template}")
                 print(f"sample keys: {list(filtered_sample.keys())}")
