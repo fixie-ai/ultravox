@@ -64,6 +64,7 @@ class UltravoxDataproc(datasets.Dataproc):
 
         # Extract input_ids, attention_mask, and audio_values from the processed inputs
         input_ids = inputs["input_ids"].squeeze_(0)
+        # print(f"input_ids size: {input_ids.size(0)}")
         inputs["attention_mask"].squeeze_(0)
         if "audio_values" in inputs:
             inputs["audio_values"].squeeze_(0)
@@ -91,32 +92,27 @@ class UltravoxDataproc(datasets.Dataproc):
             input_token_len = len(input_ids) - output_token_len
             labels[:input_token_len] = -100
 
+        inputs['labels'] = labels
         # If include_alt_fields is True, also include alt_input_ids, alt_attention_mask, and alt_labels
         if self.include_alt_fields:
-            # sample.audio_transcript should never be None but currently not gauranteed, need to be investigated.
-            alt_text = text.replace("<|audio|>", sample.audio_transcript or "")
-
-            alt_inputs = self.processor(
-                text=alt_text,
-                return_tensors="pt",
-            )
-            alt_input_ids = alt_inputs["input_ids"].squeeze_(0)
-            alt_inputs["attention_mask"].squeeze_(0)
-
-            alt_labels = alt_input_ids.clone()
-            if not self.train_on_inputs and sample.messages[-1]["role"] == "assistant":
-                alt_input_token_len = (
-                    input_token_len + len(alt_input_ids) - len(input_ids)
-                )
-                alt_labels[:alt_input_token_len] = -100
-
-            inputs["alt_input_ids"] = alt_input_ids
-            inputs["alt_attention_mask"] = alt_inputs["attention_mask"]
-            inputs["alt_labels"] = alt_labels
+            if 'alt_input_ids' in inputs:
+                alt_input_ids = inputs['alt_input_ids'].squeeze_(0)
+                # print(f"alt_input_ids size: {alt_input_ids.size(0)}")
+                inputs["alt_attention_mask"].squeeze_(0)
+                alt_labels = alt_input_ids.clone()
+                if not self.train_on_inputs and sample.messages[-1]["role"] == "assistant":
+                    alt_input_token_len = (
+                        input_token_len + len(alt_input_ids) - len(input_ids)
+                    )
+                    alt_labels[:alt_input_token_len] = -100
+                inputs["alt_labels"] = alt_labels
+            else:
+                inputs["alt_input_ids"] = inputs["input_ids"]
+                inputs["alt_attention_mask"] = inputs["attention_mask"]
+                inputs["alt_labels"] = inputs["labels"]
 
         return {
-            # input_ids, attention_mask, audio_values, audio_token_start_idx, audio_token_len
+            # input_ids, attention_mask, labels, audio_values, audio_token_start_idx, audio_token_len
             # if include_alt_fields is True, also include alt_input_ids, alt_attention_mask, alt_labels
             **inputs,
-            "labels": labels,
         }

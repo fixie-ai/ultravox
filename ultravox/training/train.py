@@ -123,6 +123,10 @@ def train(args: config_base.TrainConfig):
     with ddp_utils.run_on_master_first(is_master):
         model = ultravox_model.UltravoxModel(config)
 
+    # loss_config needs to be passed separately just for model training
+    if args.loss_config is not None:
+        model.set_loss_config(args.loss_config)
+
     audio_processor = transformers.AutoProcessor.from_pretrained(args.audio_model)
     processor = ultravox_processing.UltravoxProcessor(audio_processor=audio_processor, tokenizer=text_tokenizer, adapter=model.adapter)
 
@@ -135,10 +139,6 @@ def train(args: config_base.TrainConfig):
         # layerdrop causes issues when training with DDP
         # https://github.com/huggingface/transformers/issues/17116#issuecomment-1121340890
         model.audio_tower.config.layerdrop = 0.0
-
-    # loss_config needs to be passed separately just for model training
-    if args.loss_config is not None:
-        model.set_loss_config(args.loss_config)
 
     logging.info("Model and processor instantiated.")
 
