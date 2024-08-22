@@ -41,11 +41,11 @@ TRANSCRIBE_PROMPTS = [
     # from https://arxiv.org/pdf/2402.08846
     "Transcribe speech to text: <|audio|>",
     # from GPT-4
-    "Capture every word from <|audio|> verbatim",
-    "Convert speech to text from <|audio|>",
-    "Listen and transcribe the complete text from <|audio|>",
-    "Record in writing what is spoken in <|audio|>",
-    "Transcribe the spoken words from <|audio|> with exact wording and punctuation",
+    "Capture every word from the audio verbatim\n<|audio|>",
+    "Convert speech to text from audio\n<|audio|>",
+    "Listen and transcribe the complete text from audio\n<|audio|>",
+    "Record in writing what is spoken in audio\n<|audio|>",
+    "Transcribe the spoken words from audio with exact wording and punctuation\n<|audio|>",
 ]
 ANSWER_PROMPTS = [
     # from Gazelle
