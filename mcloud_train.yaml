@@ -6,7 +6,7 @@ compute:
   cluster: r14z3p1
 integrations:
   - integration_type: git_repo
-    git_repo: zhuang211/ultravox
+    git_repo: zqhuang211/ultravox
     git_branch: $UV_BRANCH
     pip_install: poetry==1.7.1
 command: >-
