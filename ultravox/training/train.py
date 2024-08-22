@@ -303,6 +303,8 @@ def main() -> None:
         # Merge LoRA weights for better inference performance.
         # Note: this is irreversible and changes model saving format
         model.merge_and_unload()
+        # padding_side="left" is required for (batch) inference
+        text_tokenizer.padding_side = "left"
         inference = infer.LocalInference(
             model=model,
             processor=processor,
