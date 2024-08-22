@@ -47,6 +47,7 @@ class TtsTask:
         num_proc: int,
         writer_batch_size: int,
         exclude_fields: List[str],
+        include_filter: bool = False,
     ) -> datasets.Dataset:
         print(f'TTS mapping "{self.template}" to "{self.audio_column_name}"...')
         ds_split = ds_split.map(
@@ -107,36 +108,26 @@ class TextGenerationTask:
             with open(self.template[1:], "r") as template_file:
                 self.template = template_file.read()
 
-    def filter_split(
-        self,
-        ds_split: datasets.Dataset,
-        num_proc: int,
-        writer_batch_size: int,
-        column_to_check_filter: str = "text",
-    ) -> datasets.Dataset:
-        print(
-            f'Filtering out samples with an empty "{column_to_check_filter}" after text_proc.format_asr_text'
-        )
-        return ds_split.filter(
-            lambda x: (
-                True
-                if text_proc.format_asr_text(x[column_to_check_filter]) != ""
-                else False
-            ),
-            num_proc=num_proc,
-            writer_batch_size=writer_batch_size,
-        )
-
     def map_split(
         self,
         ds_split: datasets.Dataset,
         num_proc: int,
         writer_batch_size: int,
         exclude_fields: List[str],
+        include_filter: bool = False,
     ) -> datasets.Dataset:
         print(f'Generating "{self.new_column_name}" with template:\n{self.template}')
-        return ds_split.map(
+        ds_mapped = ds_split.map(
             lambda sample: self._map_sample(sample, set(exclude_fields)),
+            num_proc=num_proc,
+            writer_batch_size=writer_batch_size,
+        )
+        if not include_filter:
+            return ds_mapped
+
+        # Filter out samples where new_column_name is None
+        return ds_mapped.filter(
+            lambda sample: (True if sample[self.new_column_name] != None else False),
             num_proc=num_proc,
             writer_batch_size=writer_batch_size,
         )
@@ -145,8 +136,7 @@ class TextGenerationTask:
         # using a Jinja template for some added flexibility, template can include variables and functions
         # e.g., {{ text }} or {{ text_proc.format_asr_text(text) }}
         try:
-            # We need to filter out the audio before the sample is passed into the jinja template
-            # or it will get loaded into memory and spike usage.
+            # Filter out the audio before the sample is passed into the jinja template
             filtered_sample = {
                 k: sample[k] for k in sample.keys() if k not in exclude_fields
             }
@@ -155,12 +145,19 @@ class TextGenerationTask:
             ).render(**filtered_sample, json_dump=json.dumps, text_proc=text_proc)
 
         except jinja2.TemplateError as e:
-            print(f"Error rendering template: {e}")
-            print(f"template: {self.template}")
-            print(f"sample keys: {list(filtered_sample.keys())}")
-            raise ValueError(
-                f"Template rendering failed. Make sure all keys in the template exist in the sample."
-            ) from e
+            error_message = str(e)
+            if "The formatted text is empty." in error_message:
+                # This is the specific error we raised for empty text
+                print("Formatted text is empty. Setting output to None.")
+                sample[self.new_column_name] = None
+            else:
+                # For other template errors, we'll keep the original error handling
+                print(f"Error rendering template: {e}")
+                print(f"template: {self.template}")
+                print(f"sample keys: {list(filtered_sample.keys())}")
+                raise ValueError(
+                    f"Template rendering failed. Make sure all keys in the template exist in the sample."
+                ) from e
 
         if self.json_mode:
             turns = yaml.safe_load(rendered)
@@ -214,9 +211,8 @@ class DatasetToolArgs:
     private: bool = simple_parsing.field(default=False)
     token: Optional[str] = None
 
-    column_to_check_filter: Optional[str] = simple_parsing.field(
-        default=None, alias="-f"
-    )
+    # Task-specific parameters
+    include_filter: bool = simple_parsing.field(default=False, alias="-f")
 
     task: Union[TtsTask, TextGenerationTask] = simple_parsing.subgroups(
         {"tts": TtsTask, "textgen": TextGenerationTask},  # type: ignore
@@ -253,16 +249,12 @@ def main(args: DatasetToolArgs):
         if args.num_samples:
             ds_split = ds_split.select(range(args.num_samples))
         data_dict[split] = args.task.map_split(
-            ds_split, args.num_workers, args.writer_batch_size, args.exclude_fields
+            ds_split,
+            args.num_workers,
+            args.writer_batch_size,
+            args.exclude_fields,
+            args.include_filter,
         )
-        # Filter out samples where column_to_check is empty after text_proc.format_asr_text
-        if isinstance(args.task, TextGenerationTask) and args.column_to_check_filter:
-            data_dict[split] = args.task.filter_split(
-                data_dict[split],
-                args.num_workers,
-                args.writer_batch_size,
-                args.column_to_check_filter,
-            )
 
     hub_args: Dict[str, Any] = {
         "config_name": args.upload_subset or "default",
