@@ -47,7 +47,6 @@ class TtsTask:
         num_proc: int,
         writer_batch_size: int,
         exclude_fields: List[str],
-        include_filter: bool = False,
     ) -> datasets.Dataset:
         print(f'TTS mapping "{self.template}" to "{self.audio_column_name}"...')
         ds_split = ds_split.map(
@@ -96,6 +95,8 @@ class TextGenerationTask:
     max_tokens: int = 128
     temperature: float = 0
 
+    template_failures: int = 0
+
     def __post_init__(self):
         # The OAI client is separate from the task to avoid pickling issues when multiprocessing.
         global chat_client
@@ -114,7 +115,6 @@ class TextGenerationTask:
         num_proc: int,
         writer_batch_size: int,
         exclude_fields: List[str],
-        include_filter: bool = False,
     ) -> datasets.Dataset:
         print(f'Generating "{self.new_column_name}" with template:\n{self.template}')
         ds_mapped = ds_split.map(
@@ -122,7 +122,7 @@ class TextGenerationTask:
             num_proc=num_proc,
             writer_batch_size=writer_batch_size,
         )
-        if not include_filter:
+        if self.template_failures == 0:
             return ds_mapped
 
         # Filter out samples where new_column_name is None
@@ -149,6 +149,7 @@ class TextGenerationTask:
             if "The formatted text is empty." in error_message:
                 print("Formatted text is empty. Setting output to None.")
                 sample[self.new_column_name] = None
+                self.template_failures += 1
             else:
                 print(f"Error rendering template: {e}")
                 print(f"template: {self.template}")
@@ -209,9 +210,6 @@ class DatasetToolArgs:
     private: bool = simple_parsing.field(default=False)
     token: Optional[str] = None
 
-    # Task-specific parameters
-    include_filter: bool = simple_parsing.field(default=False, alias="-f")
-
     task: Union[TtsTask, TextGenerationTask] = simple_parsing.subgroups(
         {"tts": TtsTask, "textgen": TextGenerationTask},  # type: ignore
         default_factory=TtsTask,
@@ -251,7 +249,6 @@ def main(args: DatasetToolArgs):
             args.num_workers,
             args.writer_batch_size,
             args.exclude_fields,
-            args.include_filter,
         )
 
     hub_args: Dict[str, Any] = {
