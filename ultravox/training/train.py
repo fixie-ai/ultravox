@@ -21,7 +21,6 @@ import transformers
 import wandb
 import wandb.sdk
 from evals.elsuite.audio import make_table
-from torch.distributed.elastic.multiprocessing.errors import record
 from torch.utils import data
 
 from ultravox.data import datasets
