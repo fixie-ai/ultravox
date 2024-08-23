@@ -212,7 +212,10 @@ class DatasetToolArgs:
     token: Optional[str] = None
 
     # Chunk processing parameters
-    max_samples_per_chunk: int = simple_parsing.field(default=100000)
+    max_dynamic_chunks: int = simple_parsing.field(default=10)
+    min_samples_per_chunk: int = simple_parsing.field(
+        default=10000
+    )  # 10k samples recommended
 
     task: Union[TtsTask, TextGenerationTask] = simple_parsing.subgroups(
         {"tts": TtsTask, "textgen": TextGenerationTask},  # type: ignore
@@ -234,76 +237,63 @@ class DatasetChunkProcessor:
     def __init__(self, args: DatasetToolArgs):
         self.args = args
 
-    def process_and_upload_split(self, split_name: str, ds_split: datasets.Dataset):
-        total_chunks = math.ceil(len(ds_split) / self.args.max_samples_per_chunk)
-        print(f"Processing and uploading {total_chunks} chunks for split {split_name}")
-        for i in range(0, len(ds_split), self.args.max_samples_per_chunk):
+    def dynamic_chunk(self, split_name: str, ds_split: datasets.Dataset):
+        failed_chunk_ranges = self._process_and_upload_split(
+            split_name, ds_split, [(0, len(ds_split))]
+        )
+
+        while len(failed_chunk_ranges) > 0:
+            new_failed_ranges = []
+            for start, end in failed_chunk_ranges:
+                print(f"Retrying failed chunk range [{start}, {end})")
+                new_failed_ranges.extend(
+                    self._process_and_upload_split(split_name, ds_split, [(start, end)])
+                )
+            failed_chunk_ranges = new_failed_ranges
+
+    def _process_and_upload_split(
+        self,
+        split_name: str,
+        ds_split: datasets.Dataset,
+        start_index: int,
+        end_index: int,
+    ):
+        range = end_index - start_index
+        if range < self.args.min_samples_per_chunk:
+            total_chunks = 1
+            chunk_size = range
+            print(
+                f"Chunk range [{start_index}, {end_index}) is too small to split further. Processing and uploading as a single chunk."
+            )
+        else:
+            total_chunks = self.args.max_dynamic_chunks
+            chunk_size = math.ceil(range / total_chunks)
+        failed_chunk_ranges = []
+        print(
+            f"Processing and uploading {self.args.max_dynamic_chunks} chunks for range [{start_index}, {end_index})"
+        )
+        for i in range(start_index, end_index, chunk_size):
             chunk_start = i
-            chunk_end = min(i + self.args.max_samples_per_chunk, len(ds_split))
+            chunk_end = min(i + chunk_size, start_index + range)
 
             ds_chunk = ds_split.select(range(chunk_start, chunk_end))
-            ds_chunk_name = f"chunk-{i:05d}-of-{total_chunks:05d}.parquet"
-            ds_chunk_upload_success_cache_path = os.path.join(
-                self.cache_dir,
-                self.args.dataset_name,
-                self.args.upload_subset,
-                split_name,
-                "upload_success",
-                ds_chunk_name,
-            )
-            ds_chunk_upload_failed_cache_path = os.path.join(
-                self.cache_dir,
-                self.args.dataset_name,
-                self.args.upload_subset,
-                split_name,
-                "upload_failed",
-                ds_chunk_name,
-            )
+            ds_chunk_name = f"chunk-range-{chunk_start}-{chunk_end}.parquet"
             ds_chunk_hub_path = os.path.join(
                 self.args.upload_subset, split_name, ds_chunk_name
             )
-            if not os.path.exists(ds_chunk_upload_success_cache_path):
-                try:
-                    print(f"Processing chunk {i}")
-                    ds_chunk_processed = self._process(ds_chunk)
-                except Exception as e:
-                    print(f"Failed to process chunk {i}: {e}. Skipping this chunk.")
-                    continue
+            try:
+                print(f"Processing chunk {ds_chunk_name}")
+                ds_chunk_processed = self._process(ds_chunk)
+                self.upload(ds_chunk_processed, ds_chunk_hub_path)
 
-                try:
-                    print(f"Uploading chunk {i} to hub")
-                    self.upload(ds_chunk_processed, ds_chunk_hub_path)
-                except Exception as e:
-                    print(
-                        f"Failed to upload chunk {i} to hub: {e}. You can retry uploading later."
-                    )
-                    ds_chunk_processed.to_parquet(ds_chunk_upload_failed_cache_path)
-                    continue
-
-                ds_chunk_processed.to_parquet(ds_chunk_upload_success_cache_path)
-
-            elif os.path.exists(ds_chunk_upload_failed_cache_path):
-                try:
-                    print(
-                        "Attempting to re-upload chunk",
-                        ds_chunk_upload_failed_cache_path,
-                    )
-                    ds_chunk_processed = datasets.Dataset.from_parquet(
-                        ds_chunk_upload_failed_cache_path
-                    )
-                    self.upload(ds_chunk_processed, ds_chunk_hub_path)
-                    print(f"Successfully Uploaded chunk {i} to hub")
-                    ds_chunk_processed.to_parquet(ds_chunk_upload_success_cache_path)
-
-                except Exception as e:
-                    print(
-                        f"Failed to upload chunk {i} to hub: {e}. You can retry uploading later."
-                    )
-
-            else:
-                print(
-                    f"Chunk {i} already succesfully processed and uploaded. Skipping."
-                )
+            except Exception as e:
+                print(f"Failed to upload chunk {ds_chunk_name}: {e}. Retrying later.")
+                failed_chunk_ranges.append((chunk_start, chunk_end))
+        successful_chunks = self.args.max_dynamic_chunks - len(failed_chunk_ranges)
+        print(
+            f"Finished processing and uploading {successful_chunks}/{self.args.max_dynamic_chunks} chunks for range [{start_index}, {end_index})"
+        )
+        return failed_chunk_ranges
 
     def _process(self, ds_chunk: datasets.Dataset) -> datasets.Dataset:
         return self.args.task.map_split(
