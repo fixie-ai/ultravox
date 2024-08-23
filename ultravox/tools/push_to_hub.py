@@ -47,7 +47,7 @@ def main(args: UploadToHubArgs):
 
     print("Model uploaded. Testing model...")
     loaded_pipe = transformers.pipeline(
-        model="fixie-ai/ultravox-v0_2", trust_remote_code=True
+        model=args.hf_upload_model, trust_remote_code=True
     )
     ds = datasets.BoolQDataset(datasets.VoiceDatasetArgs())
     sample = next(iter(ds))
