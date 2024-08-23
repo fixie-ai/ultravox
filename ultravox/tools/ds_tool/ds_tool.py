@@ -235,7 +235,7 @@ class DatasetToolArgs:
 class DatasetChunkProcessor:
     args: DatasetToolArgs
     cache_dir: str = ".cache/ds_tool/processed_datasets"
-    chunks_not_uploaded: Tuple[int, int] = []
+    chunks_not_uploaded: List[Tuple[int, int]] = []
     total_samples_processed: Dict[str, int] = {}
 
     def __init__(self, args: DatasetToolArgs):
