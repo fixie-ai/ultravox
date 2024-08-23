@@ -1,5 +1,6 @@
 import dataclasses
 import json
+import math
 import os
 from typing import Any, Dict, List, Optional, Union
 
@@ -189,7 +190,7 @@ class TextGenerationTask:
 class DatasetToolArgs:
     # HF source dataset parameters
     dataset_name: str = simple_parsing.field(alias="-d")
-    dataset_subset: Optional[str] = simple_parsing.field(default=None, alias="-S")
+    dataset_subset: Optional[str] = simple_parsing.field(default="default", alias="-S")
     dataset_split: Optional[str] = simple_parsing.field(default=None, alias="-s")
 
     # Local processing parameters
@@ -210,6 +211,9 @@ class DatasetToolArgs:
     private: bool = simple_parsing.field(default=False)
     token: Optional[str] = None
 
+    # Chunk processing parameters
+    max_samples_per_chunk: int = simple_parsing.field(default=100000)
+
     task: Union[TtsTask, TextGenerationTask] = simple_parsing.subgroups(
         {"tts": TtsTask, "textgen": TextGenerationTask},  # type: ignore
         default_factory=TtsTask,
@@ -221,6 +225,104 @@ class DatasetToolArgs:
             self.upload_subset = self.dataset_subset
         if self.dataset_split and not self.upload_split:
             self.upload_split = self.dataset_split
+
+
+class DatasetChunkProcessor:
+    args: DatasetToolArgs
+    cache_dir: str = ".cache/ds_tool/processed_datasets"
+
+    def __init__(self, args: DatasetToolArgs):
+        self.args = args
+
+    def process_and_upload_split(self, split_name: str, ds_split: datasets.Dataset):
+        total_chunks = math.ceil(len(ds_split) / self.args.max_samples_per_chunk)
+        print(f"Processing and uploading {total_chunks} chunks for split {split_name}")
+        for i in range(0, len(ds_split), self.args.max_samples_per_chunk):
+            chunk_start = i
+            chunk_end = min(i + self.args.max_samples_per_chunk, len(ds_split))
+
+            ds_chunk = ds_split.select(range(chunk_start, chunk_end))
+            ds_chunk_name = f"chunk-{i:05d}-of-{total_chunks:05d}.parquet"
+            ds_chunk_upload_success_cache_path = os.path.join(
+                self.cache_dir,
+                self.args.dataset_name,
+                self.args.upload_subset,
+                split_name,
+                "upload_success",
+                ds_chunk_name,
+            )
+            ds_chunk_upload_failed_cache_path = os.path.join(
+                self.cache_dir,
+                self.args.dataset_name,
+                self.args.upload_subset,
+                split_name,
+                "upload_failed",
+                ds_chunk_name,
+            )
+            ds_chunk_hub_path = os.path.join(
+                self.args.upload_subset, split_name, ds_chunk_name
+            )
+            if not os.path.exists(ds_chunk_upload_success_cache_path):
+                try:
+                    print(f"Processing chunk {i}")
+                    ds_chunk_processed = self._process(ds_chunk)
+                except Exception as e:
+                    print(f"Failed to process chunk {i}: {e}. Skipping this chunk.")
+                    continue
+
+                try:
+                    print(f"Uploading chunk {i} to hub")
+                    self.upload(ds_chunk_processed, ds_chunk_hub_path)
+                except Exception as e:
+                    print(
+                        f"Failed to upload chunk {i} to hub: {e}. You can retry uploading later."
+                    )
+                    ds_chunk_processed.to_parquet(ds_chunk_upload_failed_cache_path)
+                    continue
+
+                ds_chunk_processed.to_parquet(ds_chunk_upload_success_cache_path)
+
+            elif os.path.exists(ds_chunk_upload_failed_cache_path):
+                try:
+                    print(
+                        "Attempting to re-upload chunk",
+                        ds_chunk_upload_failed_cache_path,
+                    )
+                    ds_chunk_processed = datasets.Dataset.from_parquet(
+                        ds_chunk_upload_failed_cache_path
+                    )
+                    self.upload(ds_chunk_processed, ds_chunk_hub_path)
+                    print(f"Successfully Uploaded chunk {i} to hub")
+                    ds_chunk_processed.to_parquet(ds_chunk_upload_success_cache_path)
+
+                except Exception as e:
+                    print(
+                        f"Failed to upload chunk {i} to hub: {e}. You can retry uploading later."
+                    )
+
+            else:
+                print(
+                    f"Chunk {i} already succesfully processed and uploaded. Skipping."
+                )
+
+    def _process(self, ds_chunk: datasets.Dataset) -> datasets.Dataset:
+        return self.args.task.map_split(
+            ds_chunk,
+            self.args.num_workers,
+            self.args.writer_batch_size,
+            self.args.exclude_fields,
+        )
+
+    def _upload(self, ds_chunk_processed: datasets.Dataset, data_dir: str):
+        print(f"Uploading chunk to hub: {data_dir}")
+        hub_args: Dict[str, Any] = {
+            "config_name": self.args.dataset_subset,
+            "token": self.args.token or os.environ.get("HF_TOKEN"),
+            "private": self.args.private,
+            "data_dir": data_dir,
+            "num_shards": self.args.num_shards,
+        }
+        ds_chunk_processed.push_to_hub(self.args.dataset_name, **hub_args)
 
 
 def main(args: DatasetToolArgs):
@@ -236,47 +338,18 @@ def main(args: DatasetToolArgs):
     if len(data_dict) > 1 and args.upload_split:
         raise ValueError("Cannot upload multiple splits to a single split")
 
-    for split, ds_split in data_dict.items():
+    ds_chunk_proc = DatasetChunkProcessor(args)
+
+    for split_name, ds_split in data_dict.items():
         print(
-            f"Processing dataset: {ds_name}, subset {args.dataset_subset}, split {args.dataset_split}, containing {len(ds_split)} samples"
+            f"Processing dataset: {args.dataset_name}, subset {args.dataset_subset}, split {split_name}, containing {len(ds_split)} samples"
         )
         if args.shuffle:
             ds_split = ds_split.shuffle(seed=args.shuffle_seed)
         if args.num_samples:
             ds_split = ds_split.select(range(args.num_samples))
-        data_dict[split] = args.task.map_split(
-            ds_split,
-            args.num_workers,
-            args.writer_batch_size,
-            args.exclude_fields,
-        )
 
-    hub_args: Dict[str, Any] = {
-        "config_name": args.upload_subset or "default",
-        "token": args.token or os.environ.get("HF_TOKEN"),
-        "revision": args.upload_branch,
-        "private": args.private,
-    }
-
-    if args.num_shards is not None:
-        hub_args["num_shards"] = args.num_shards
-
-    try:
-        if args.dataset_split:
-            data_dict[args.dataset_split].push_to_hub(
-                args.upload_name, split=args.upload_split, **hub_args
-            )
-        else:
-            data_dict.push_to_hub(args.upload_name, **hub_args)
-    except Exception as e:
-        print(f"Failed to push to hub: {e}")
-
-        # If the push fails or upload_name is not specified, save the data locally.
-        for split in data_dict.keys():
-            output_name = f"{split}-00000-of-00001.parquet"
-            data_dict[split].to_parquet(output_name)
-            print(f"Saved to {output_name}")
-            print(f"Sample {0} of {split}: {data_dict[split][0]}")
+        ds_chunk_proc.process_and_upload_split(split_name, ds_split)
 
 
 if __name__ == "__main__":
