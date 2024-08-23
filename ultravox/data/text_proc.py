@@ -7,6 +7,15 @@ sys.modules["tkinter"] = None  # type: ignore
 import nltk  # needed for truecase
 import truecase
 
+
+class GarbageUtteranceError(ValueError):
+    pass
+
+
+class EmptyTranscriptError(ValueError):
+    pass
+
+
 # only in master thread per node to avoid
 # other threads overwriting the downloaded .zip
 if int(os.environ.get("LOCAL_RANK", 0)) == 0:
@@ -31,15 +40,17 @@ def format_asr_text(text: str) -> str:
     remaining_words = []
     for word in text.split():
         if word in GIGASPEECH_GARBAGE_UTTERANCE_TAGS:
-            return ""
+            raise GarbageUtteranceError(f"Garbage utterance tag found: {word}")
         if word in GIGASPEECH_PUNCTUATIONS:
             word = GIGASPEECH_PUNCTUATIONS[word]
         remaining_words.append(word)
 
     text = " ".join(remaining_words)
     text = truecase.get_true_case(text)
-
-    return text.strip()
+    text_stripped = text.strip()
+    if len(text_stripped) == 0:
+        raise EmptyTranscriptError("Empty transcript after processing")
+    return text_stripped
 
 
 CONVERSATIONAL_FILLER = [
