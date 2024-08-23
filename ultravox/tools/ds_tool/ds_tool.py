@@ -149,10 +149,12 @@ class TextGenerationTask:
                 print("Formatted text is empty. Setting output to None.")
                 sample[self.new_column_name] = None
                 self.template_failures += 1
+                return sample
             elif isinstance(e, text_proc.EmptyTranscriptError):
                 print("Empty transcript after processing. Setting output to None.")
                 sample[self.new_column_name] = None
                 self.template_failures += 1
+                return sample
             elif isinstance(e, jinja2.TemplateError):
                 print(f"Error rendering template: {e}")
                 print(f"template: {self.template}")
