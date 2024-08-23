@@ -7,6 +7,7 @@ import itertools
 import logging
 import os
 import tempfile
+import warnings
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
@@ -1189,3 +1190,28 @@ class Range(data.IterableDataset):
         return (
             self._num_samples if self._num_samples is not None else len(self._dataset)
         )
+
+
+class SizedIterableDataset(data.IterableDataset):
+    """
+    A wrapper for an IterableDataset that provides a length method and verifies the count.
+    """
+
+    def __init__(self, dataset: data.IterableDataset, estimated_length: int) -> None:
+        self._dataset = dataset
+        self._estimated_length = estimated_length
+
+    def __iter__(self):
+        self._actual_length = 0
+        for item in self._dataset:
+            self._actual_length += 1
+            yield item
+
+        if self._actual_length != self._estimated_length:
+            warnings.warn(
+                f"Mismatch between estimated length ({self._estimated_length}) "
+                f"and actual length ({self._actual_length})"
+            )
+
+    def __len__(self):
+        return self._estimated_length
