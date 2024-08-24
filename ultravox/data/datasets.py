@@ -267,7 +267,32 @@ def _get_messages(
     return messages
 
 
-class VoiceDataset(abc.ABC, data.IterableDataset):
+class SizedIterableDataset(data.IterableDataset):
+    """
+    A wrapper for a Dataset that provides a length method and verifies the count.
+    """
+
+    def __init__(self, dataset: data.Dataset, estimated_length: int) -> None:
+        self._dataset = dataset
+        self._estimated_length = estimated_length
+
+    def __iter__(self):
+        self._actual_length = 0
+        for item in self._dataset:
+            self._actual_length += 1
+            yield item
+
+        if self._actual_length != self._estimated_length:
+            warnings.warn(
+                f"Mismatch between estimated length ({self._estimated_length}) "
+                f"and actual length ({self._actual_length}) for dataset of type {type(self._dataset)}"
+            )
+
+    def __len__(self):
+        return self._estimated_length
+
+
+class VoiceDataset(abc.ABC, SizedIterableDataset):
     """
     Base class for streaming voice datasets.
     Wraps a Hugging Face dataset or MDS-formatted dataset from GCP.
@@ -276,13 +301,14 @@ class VoiceDataset(abc.ABC, data.IterableDataset):
     BASE_AUDIO_COLUMNS = ["audio"]
 
     def __init__(self, args: VoiceDatasetArgs) -> None:
-        super().__init__()
+        abc.ABC.__init__(self)
         self._args = args
         self._session: Optional[requests.Session] = None
         self._rng = np.random.default_rng(self._args.shuffle_seed)
         self._weight = 1.0  # the default weight for the dataset
 
-    def _init_dataset(self, dataset: data.Dataset) -> None:
+    def _init_dataset(self, dataset: SizedIterableDataset) -> None:
+        SizedIterableDataset.__init__(self, dataset, len(dataset))
         self._dataset = dataset
 
     @property
@@ -341,6 +367,9 @@ class VoiceDataset(abc.ABC, data.IterableDataset):
                     <= self._args.max_audio_duration_secs
                 ):
                     yield sample
+
+    def __len__(self):
+        return len(self._dataset)
 
     @abc.abstractmethod
     def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
@@ -442,6 +471,7 @@ class LibriSpeechDummyDataset(VoiceDataset):
             split="validation",
             streaming=False,  # not supported by the dummy dataset
         )
+        dataset = SizedIterableDataset(dataset, 73)
         self._init_dataset(dataset)
 
     def _get_sample(self, row: transformers.BatchFeature) -> VoiceSample:
@@ -479,6 +509,7 @@ class AnyInstructDataset(VoiceDataset):
         dataset = dataset.to_iterable_dataset(num_shards=16)
         if args.shuffle:
             dataset = dataset.shuffle(seed=args.shuffle_seed)
+        dataset = SizedIterableDataset(dataset, 0)
         self._init_dataset(dataset)
 
     def _load_anyinstruct_audio(self, filename: str):
@@ -534,6 +565,7 @@ class BoolQDataset(VoiceDataset):
         dataset = self._load_audio_dataset(
             "fixie-ai/boolq-audio", split=args.split.value
         )
+        dataset = SizedIterableDataset(dataset, 0)
         self._init_dataset(dataset)
 
     def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
@@ -668,6 +700,7 @@ class HeySQuADHumanDataset(QAVoiceDatasetMixin):
         dataset = self._load_audio_dataset(
             "fixie-ai/HeySQuAD_human", split=args.split.value
         )
+        dataset = SizedIterableDataset(dataset, 0)
         self._init_dataset(dataset)
 
     def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
@@ -716,6 +749,7 @@ class SlueSQA5Dataset(QAVoiceDatasetMixin):
         dataset = self._load_audio_dataset(
             "asapp/slue-phase-2", "sqa5", split=args.split.value
         )
+        dataset = SizedIterableDataset(dataset, 0)
         self._init_dataset(dataset)
 
     def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
@@ -769,6 +803,7 @@ class LibriSpeechDataset(VoiceDataset):
             )
         if self._args.shuffle:
             ds = ds.shuffle(seed=self._args.shuffle_seed)
+        ds = SizedIterableDataset(ds, 0)
         self._init_dataset(ds)
 
     def _get_sample(self, row: transformers.BatchFeature) -> VoiceSample:
@@ -789,6 +824,7 @@ class GigaSpeechDataset(VoiceDataset):
         dataset = self._load_audio_dataset(
             "speechcolab/gigaspeech", "xl", split=args.split.value
         )
+        dataset = SizedIterableDataset(dataset, 0)
         self._init_dataset(dataset)
 
     def _get_sample(self, row) -> VoiceSample:
@@ -809,6 +845,7 @@ class VoxPopuliDataset(VoiceDataset):
         dataset = self._load_audio_dataset(
             "facebook/voxpopuli", "en", split=args.split.value
         )
+        dataset = SizedIterableDataset(dataset, 0)
         self._init_dataset(dataset)
 
     def _get_sample(self, row) -> VoiceSample:
@@ -832,6 +869,7 @@ class CommonVoiceDataset(VoiceDataset):
         dataset = self._load_audio_dataset(
             "mozilla-foundation/common_voice_16_1", lang, split=args.split.value
         )
+        dataset = SizedIterableDataset(dataset, 0)
         self._init_dataset(dataset)
 
     def _get_sample(self, row) -> VoiceSample:
@@ -903,6 +941,7 @@ class CoVoST2Dataset(VoiceDataset):
         assert len(langs) == 2, f"Invalid subset: {subset}"
         self.source_lang = self.CODE_TO_LANG[langs[0]]
         self.target_lang = self.CODE_TO_LANG[langs[1]]
+        dataset = SizedIterableDataset(dataset, 0)
         self._init_dataset(dataset)
 
     def _get_sample(self, row) -> VoiceSample:
@@ -934,6 +973,7 @@ class PeopleSpeechDataset(VoiceDataset):
         dataset = self._load_audio_dataset(
             "MLCommons/peoples_speech", "clean", split=args.split.value
         )
+        dataset = SizedIterableDataset(dataset, 0)
         self._init_dataset(dataset)
 
     def _get_sample(self, row) -> VoiceSample:
@@ -962,6 +1002,7 @@ class SodaDataset(VoiceDataset):
         dataset = self._load_audio_dataset(
             "fixie-ai/soda-audio", split=args.split.value
         )
+        dataset = SizedIterableDataset(dataset, 0)
         self._init_dataset(dataset)
 
     def _get_sample(self, row) -> VoiceSample:
@@ -1001,17 +1042,16 @@ class GenericVoiceDataset(VoiceDataset):
                 for s in config.splits
             ]
         )
+        if not config.total_samples:
+            raise ValueError("total_samples must be set in the dataset config")
+
+        dataset = SizedIterableDataset(dataset, config.total_samples)
 
         # shuffling is only supported on huggingface datasets for now, not MDS
         if self._args.shuffle:
             dataset = dataset.shuffle(seed=self._args.shuffle_seed)
 
-        self.total_samples = config.total_samples
         if config.num_samples:
-            if self.total_samples and self.total_samples < config.num_samples:
-                raise ValueError(
-                    f"Total samples {self.total_samples} is less than the requested number of samples {config.num_samples}"
-                )
             dataset = Range(dataset, config.num_samples)
 
         self._weight = config.weight
@@ -1049,14 +1089,8 @@ class GenericVoiceDataset(VoiceDataset):
             audio_transcript=transcript,
         )
 
-    def __len__(self):
-        try:
-            return len(self._dataset)
-        except:
-            return self.total_samples
 
-
-def create_dataset(name: str, args: VoiceDatasetArgs) -> data.IterableDataset:
+def create_dataset(name: str, args: VoiceDatasetArgs) -> SizedIterableDataset:
     DATASET_MAP: Dict[str, Any] = {
         "anyinstruct": AnyInstructAnswerDataset,
         "anyinstruct_in": AnyInstructInputDataset,
@@ -1088,12 +1122,12 @@ class StopStrategy(str, Enum):
     NEVER_STOP = "never_stop"
 
 
-class InterleaveDataset(data.IterableDataset):
+class InterleaveDataset(SizedIterableDataset):
     """Interleaves multiple IterableDataset objects based on normalized weights."""
 
     def __init__(
         self,
-        datasets: Sequence[data.IterableDataset],
+        datasets: Sequence[SizedIterableDataset],
         stop_strategy: StopStrategy = StopStrategy.LAST_EXHAUSTED,
         seed: Optional[int] = 42,
         static: bool = False,
@@ -1104,8 +1138,12 @@ class InterleaveDataset(data.IterableDataset):
             stop_strategy: Strategy for stopping iteration.
             seed: Optional seed for reproducibility.
             static: If true, the datasets are interleaved in a static order with equal weights.
+
+        Note: This class inherits from SizedIterableDataset for type compatibility,
+        but implements its functionality independently. It does not call
+        super().__init__() as it operates on multiple datasets rather than a single one,
+        and it doesn't rely on the parent's implementation.
         """
-        super().__init__()
         self._datasets = datasets
         self._rng = np.random.default_rng(seed)
         self._static = static
@@ -1154,10 +1192,11 @@ class InterleaveDataset(data.IterableDataset):
         return sum(len(ds) for ds in self._datasets)
 
 
-class Dataproc(abc.ABC, data.IterableDataset):
+class Dataproc(abc.ABC, SizedIterableDataset):
     """Base class to preprocess a dataset of VoiceSamples."""
 
-    def __init__(self, dataset: data.IterableDataset) -> None:
+    def __init__(self, dataset: SizedIterableDataset) -> None:
+        super().__init__(dataset, len(dataset))
         self._dataset = dataset
 
     @abc.abstractmethod
@@ -1167,51 +1206,35 @@ class Dataproc(abc.ABC, data.IterableDataset):
     def __iter__(self):
         return (self._process(sample) for sample in self._dataset)
 
-    def __len__(self):
-        return len(self._dataset)
 
-
-class Range(data.IterableDataset):
+class Range(SizedIterableDataset):
     """Limits the number of samples from another dataset."""
 
     def __init__(
-        self, dataset: data.IterableDataset, num_samples: Optional[int] = None
+        self, dataset: SizedIterableDataset, num_samples: Optional[int] = None
     ) -> None:
+        super().__init__(dataset, len(dataset))
         self._dataset = dataset
         self._num_samples = num_samples
 
+        if self._num_samples is not None and self._num_samples > len(self._dataset):
+            # Issuing a warning here instead of raising an error to accomodate for specific classes of VoiceDataset
+            # Once we migrate entirely to GenericVoiceDataset, we can raise an error here.
+            warnings.warn("num_samples is greater than total_samples.")
+
     def __iter__(self):
-        for i, sample in enumerate(self._dataset):
-            if self._num_samples is not None and i >= self._num_samples:
+        count = 0
+        limit = (
+            self._num_samples if self._num_samples is not None else len(self._dataset)
+        )
+
+        for item in self._dataset:
+            if count >= limit:
                 break
-            yield sample
+            yield item
+            count += 1
 
     def __len__(self):
         return (
             self._num_samples if self._num_samples is not None else len(self._dataset)
         )
-
-
-class SizedIterableDataset(data.IterableDataset):
-    """
-    A wrapper for an IterableDataset that provides a length method and verifies the count.
-    """
-
-    def __init__(self, dataset: data.IterableDataset, estimated_length: int) -> None:
-        self._dataset = dataset
-        self._estimated_length = estimated_length
-
-    def __iter__(self):
-        self._actual_length = 0
-        for item in self._dataset:
-            self._actual_length += 1
-            yield item
-
-        if self._actual_length != self._estimated_length:
-            warnings.warn(
-                f"Mismatch between estimated length ({self._estimated_length}) "
-                f"and actual length ({self._actual_length})"
-            )
-
-    def __len__(self):
-        return self._estimated_length
