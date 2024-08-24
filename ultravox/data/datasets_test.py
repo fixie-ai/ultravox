@@ -65,6 +65,7 @@ class FakeDataproc(datasets.Dataproc):
 def test_dataproc():
     ds = FakeSizedIterableDataset(5)
     s = FakeDataproc(ds)
+    assert len(s) == 5
     assert list(s) == [0, -1, -2, -3, -4]
 
 
@@ -162,11 +163,13 @@ def test_range():
     s = datasets.Range(ds, 100)
     assert list(s) == [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
     s = datasets.Range(ds)
+    assert len(s) == 10
     assert list(s) == [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
 
 def test_transcribe_dataset():
     ds = FakeTranscribeDataset(5)
+    assert len(ds) == 5
     sample = next(iter(ds))
     assert isinstance(sample, datasets.VoiceSample)
     assert sample.messages == [
@@ -298,5 +301,6 @@ def test_get_messages():
     ]
 
 
-def test_generic_dataset_len():
+def test_sized_iterable_dataset_len():
+    # TODO: Make sure the wrong dataset size warning is raised
     pass
