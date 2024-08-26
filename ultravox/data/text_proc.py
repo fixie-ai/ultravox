@@ -8,11 +8,7 @@ import nltk  # needed for truecase
 import truecase
 
 
-class GarbageUtteranceError(ValueError):
-    pass
-
-
-class EmptyTranscriptError(ValueError):
+class FormatASRError(ValueError):
     pass
 
 
@@ -40,7 +36,7 @@ def format_asr_text(text: str) -> str:
     remaining_words = []
     for word in text.split():
         if word in GIGASPEECH_GARBAGE_UTTERANCE_TAGS:
-            raise GarbageUtteranceError(f"Garbage utterance tag found: {word}")
+            raise FormatASRError(f"Garbage utterance tag found: {word}")
         if word in GIGASPEECH_PUNCTUATIONS:
             word = GIGASPEECH_PUNCTUATIONS[word]
         remaining_words.append(word)
@@ -49,7 +45,7 @@ def format_asr_text(text: str) -> str:
     text = truecase.get_true_case(text)
     text_stripped = text.strip()
     if len(text_stripped) == 0:
-        raise EmptyTranscriptError("Empty transcript after processing")
+        raise FormatASRError("Empty text after processing")
     return text_stripped
 
 

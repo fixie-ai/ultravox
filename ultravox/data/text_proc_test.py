@@ -17,5 +17,5 @@ def test_format_asr_text(text, expected):
 
 
 def test_garbage_utterance():
-    with pytest.raises(text_proc.GarbageUtteranceError):
+    with pytest.raises(text_proc.FormatASRError):
         text_proc.format_asr_text("<NOISE> OH WHAT WAS THAT?")
