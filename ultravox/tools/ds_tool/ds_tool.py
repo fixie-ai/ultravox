@@ -96,8 +96,6 @@ class TextGenerationTask:
     max_tokens: int = 128
     temperature: float = 0
 
-    template_failures: int = 0
-
     def __post_init__(self):
         # The OAI client is separate from the task to avoid pickling issues when multiprocessing.
         global chat_client
@@ -123,8 +121,6 @@ class TextGenerationTask:
             num_proc=num_proc,
             writer_batch_size=writer_batch_size,
         )
-        if self.template_failures == 0:
-            return ds_mapped
 
         # Filter out samples where new_column_name is None
         return ds_mapped.filter(
@@ -148,12 +144,10 @@ class TextGenerationTask:
             if isinstance(e, text_proc.GarbageUtteranceError):
                 print("Formatted text is empty. Setting output to None.")
                 sample[self.new_column_name] = None
-                self.template_failures += 1
                 return sample
             elif isinstance(e, text_proc.EmptyTranscriptError):
                 print("Empty transcript after processing. Setting output to None.")
                 sample[self.new_column_name] = None
-                self.template_failures += 1
                 return sample
             elif isinstance(e, jinja2.TemplateError):
                 print(f"Error rendering template: {e}")
@@ -342,7 +336,7 @@ class DatasetChunkProcessor:
     def _upload(self, ds_chunk_processed: datasets.Dataset, data_dir: str, split_name):
         print(f"Uploading chunk to hub: {data_dir}")
         hub_args: Dict[str, Any] = {
-            "config_name": self.args.dataset_subset,
+            "config_name": self.args.upload_subset,
             "token": self.args.token or os.environ.get("HF_TOKEN"),
             "private": self.args.private,
             "data_dir": data_dir,
