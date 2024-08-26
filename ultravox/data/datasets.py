@@ -449,8 +449,11 @@ class LibriSpeechDummyDataset(VoiceDataset):
         )
         self._init_dataset(dataset)
 
-    def _get_sample(self, row: transformers.BatchFeature) -> VoiceSample:
-        return self._get_transcribe_sample(row, tproc=text_proc.format_asr_text)
+    def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
+        try:
+            return self._get_transcribe_sample(row, tproc=text_proc.format_asr_text)
+        except text_proc.FormatASRError:
+            return None
 
 
 class EmptyDataset(data.IterableDataset):
@@ -776,8 +779,11 @@ class LibriSpeechDataset(VoiceDataset):
             ds = ds.shuffle(seed=self._args.shuffle_seed)
         self._init_dataset(ds)
 
-    def _get_sample(self, row: transformers.BatchFeature) -> VoiceSample:
-        return self._get_transcribe_sample(row, tproc=text_proc.format_asr_text)
+    def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
+        try:
+            return self._get_transcribe_sample(row, tproc=text_proc.format_asr_text)
+        except text_proc.FormatASRError:
+            return None
 
 
 # TODO: this dataset can be replaced with GenericVoiceDataset and will be removed/updated in the future.
@@ -796,8 +802,11 @@ class GigaSpeechDataset(VoiceDataset):
         )
         self._init_dataset(dataset)
 
-    def _get_sample(self, row) -> VoiceSample:
-        return self._get_transcribe_sample(row, tproc=text_proc.format_asr_text)
+    def _get_sample(self, row) -> Optional[VoiceSample]:
+        try:
+            return self._get_transcribe_sample(row, tproc=text_proc.format_asr_text)
+        except text_proc.FormatASRError:
+            return None
 
 
 # TODO: this dataset can be replaced with GenericVoiceDataset and will be removed/updated in the future.
