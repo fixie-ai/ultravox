@@ -116,13 +116,12 @@ class TextGenerationTask:
         writer_batch_size: int,
         exclude_fields: List[str],
     ) -> datasets.Dataset:
-        # print(f'Generating "{self.new_column_name}" with template:\n{self.template}')
+        print(f'Generating "{self.new_column_name}" with template:\n{self.template}')
         ds_mapped = ds_split.map(
             lambda sample: self._map_sample(sample, set(exclude_fields)),
             num_proc=num_proc,
             writer_batch_size=writer_batch_size,
         )
-        print("Finished generating text samples:", len(ds_mapped))
 
         # Filter out samples where new_column_name is None
         return ds_mapped.filter(
@@ -185,7 +184,7 @@ class TextGenerationTask:
 class DatasetToolArgs:
     # HF source dataset parameters
     dataset_name: str = simple_parsing.field(alias="-d")
-    dataset_subset: Optional[str] = simple_parsing.field(None, alias="-S")
+    dataset_subset: Optional[str] = simple_parsing.field(default=None, alias="-S")
     dataset_split: Optional[str] = simple_parsing.field(default=None, alias="-s")
 
     # Local processing parameters
