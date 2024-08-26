@@ -10,6 +10,9 @@ import jinja2
 import openai
 import simple_parsing
 import yaml
+from tenacity import retry
+from tenacity import stop_after_attempt
+from tenacity import wait_fixed
 
 from ultravox.data import text_proc
 from ultravox.tools.ds_tool import caching
@@ -142,7 +145,8 @@ class TextGenerationTask:
                 self.template, undefined=jinja2.StrictUndefined
             ).render(**filtered_sample, json_dump=json.dumps, text_proc=text_proc)
         except text_proc.FormatASRError as e:
-            print(f"Format ASR Error {e}")
+            print(f"Format ASR Error {e}. Filtering out sample.")
+            # Setting this to an empty string instead of None to avoid typing issues.
             sample[self.new_column_name] = ""
             return sample
         except jinja2.TemplateError as e:
@@ -231,25 +235,7 @@ class DatasetChunkProcessor:
     def __init__(self, args: DatasetToolArgs):
         self.args = args
 
-    def process_and_upload_split(self, split_name: str, ds_split: datasets.Dataset):
-        failed_chunk_ranges = self._split_chunk_and_upload(
-            split_name, ds_split, 0, len(ds_split)
-        )
-
-        while len(failed_chunk_ranges) > 0:
-            new_failed_ranges = []
-            for start, end in failed_chunk_ranges:
-                print(f"Retrying failed chunk range [{start}, {end})")
-                new_failed_ranges.extend(
-                    self._split_chunk_and_upload(split_name, ds_split, start, end)
-                )
-            failed_chunk_ranges = new_failed_ranges
-        print(f"Could not upload chunks: {self.chunks_not_uploaded}")
-        print(
-            f"Finished processing and uploading all chunks for split {split_name}. Total samples processed: {self.total_samples_processed}"
-        )
-
-    def _split_chunk_and_upload(
+    def process_and_upload_split_rescursive(
         self,
         split_name: str,
         ds_split: datasets.Dataset,
@@ -300,6 +286,7 @@ class DatasetChunkProcessor:
                         "Finished processing chunk with length", len(ds_chunk_processed)
                     )
                     if len(ds_chunk_processed) > 0:
+                        # Note: The caching is after the upload to avoid caching failed upload chunks.
                         self._upload(ds_chunk_processed, ds_chunk_hub_path, split_name)
                         ds_chunk_processed.to_parquet(ds_chunk_cache_path)
                     else:
@@ -322,7 +309,20 @@ class DatasetChunkProcessor:
         print(
             f"Finished processing and uploading {successful_chunks}/{self.args.max_chunk_split} chunks for range [{start_index}, {end_index})"
         )
-        return failed_chunk_ranges
+        while len(failed_chunk_ranges) > 0:
+            new_failed_ranges = []
+            for start, end in failed_chunk_ranges:
+                print(f"Retrying failed chunk range [{start}, {end})")
+                new_failed_ranges.extend(
+                    self.process_and_upload_split_rescursive(
+                        split_name, ds_split, start, end
+                    )
+                )
+            failed_chunk_ranges = new_failed_ranges
+        print(f"Could not upload chunks: {self.chunks_not_uploaded}")
+        print(
+            f"Finished processing and uploading all chunks for split {split_name}. Total samples processed: {self.total_samples_processed}"
+        )
 
     def _process(self, ds_chunk: datasets.Dataset) -> datasets.Dataset:
         return self.args.task.map_split(
@@ -332,6 +332,7 @@ class DatasetChunkProcessor:
             self.args.exclude_fields,
         )
 
+    @retry(wait=wait_fixed(3), stop=stop_after_attempt(2))
     def _upload(self, ds_chunk_processed: datasets.Dataset, data_dir: str, split_name):
         print(f"Uploading chunk to hub: {data_dir}")
         hub_args: Dict[str, Any] = {
@@ -369,7 +370,9 @@ def main(args: DatasetToolArgs):
         if args.num_samples:
             ds_split = ds_split.select(range(args.num_samples))
 
-        ds_chunk_proc.process_and_upload_split(split_name, ds_split)
+        ds_chunk_proc.process_and_upload_split_rescursive(
+            split_name, ds_split, 0, len(ds_split)
+        )
 
     # Note: After running this script, you need to manually update the README.md file with the new dataset information.
     # 1. Change the configs section path to point to upload_subset/split_name/**
