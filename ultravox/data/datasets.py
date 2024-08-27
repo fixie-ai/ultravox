@@ -355,9 +355,6 @@ class VoiceDataset(SizedIterableDataset):
                 ):
                     yield sample
             actual_length += 1
-            print(
-                "printing actual length and estimated length", actual_length, len(self)
-            )
             if actual_length > len(self):
                 warnings.warn(
                     f"The estimated length {self._estimated_length} has been exceeded for type {type(self._dataset)}. Make sure to update."
@@ -1117,7 +1114,7 @@ class InterleaveDataset(SizedIterableDataset):
     ) -> None:
         """
         Args:
-            datasets: A list of data.IterableDataset objects.
+            datasets: A list of SizedIterableDataset objects.
             stop_strategy: Strategy for stopping iteration.
             seed: Optional seed for reproducibility.
             static: If true, the datasets are interleaved in a static order with equal weights.
