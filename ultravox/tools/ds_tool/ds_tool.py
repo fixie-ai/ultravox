@@ -146,7 +146,7 @@ class TextGenerationTask:
             ).render(**filtered_sample, json_dump=json.dumps, text_proc=text_proc)
         except text_proc.FormatASRError as e:
             print(f"Format ASR Error {e}. Filtering out sample.")
-            # Setting this to an empty string instead of None to avoid typing issues.
+            # Setting this to "" instead of None because of hf dataset type errors associated with setting the value to None.
             sample[self.new_column_name] = ""
             return sample
         except jinja2.TemplateError as e:
