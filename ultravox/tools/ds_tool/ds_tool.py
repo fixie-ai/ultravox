@@ -128,7 +128,7 @@ class TextGenerationTask:
 
         # Filter out samples where new_column_name is None
         return ds_mapped.filter(
-            lambda sample: sample[self.new_column_name] != "",
+            lambda sample: sample[self.new_column_name] != None,
             num_proc=num_proc,
             writer_batch_size=writer_batch_size,
         )
@@ -146,8 +146,7 @@ class TextGenerationTask:
             ).render(**filtered_sample, json_dump=json.dumps, text_proc=text_proc)
         except text_proc.FormatASRError as e:
             print(f"Format ASR Error {e}. Filtering out sample.")
-            # Setting this to "" instead of None because of hf dataset type errors associated with setting the value to None.
-            sample[self.new_column_name] = ""
+            sample[self.new_column_name] = None
             return sample
         except jinja2.TemplateError as e:
             print(f"Error rendering template: {e}")
