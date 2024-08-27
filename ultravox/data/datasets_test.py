@@ -8,6 +8,7 @@ import torch
 from torch.utils import data
 from transformers.feature_extraction_utils import BatchFeature
 
+from ultravox.data import dataset_config
 from ultravox.data import datasets
 
 
@@ -17,11 +18,18 @@ class FakeSizedIterableDataset(datasets.SizedIterableDataset):
     def __init__(self, n, start=0, weight=1, estimated_length=None):
         self.data = range(start, start + n)
         self._weight = weight
-        super().__init__(self.data, n if estimated_length is None else estimated_length)
+        self._estimated_length = estimated_length
 
     @property
     def weight(self) -> float:
         return self._weight
+
+    def __iter__(self):
+        for sample in self.data:
+            yield sample
+
+    def __len__(self):
+        return self._estimated_length
 
 
 class FakeHuggingFaceIterableDataset(hf_datasets.IterableDataset):
@@ -46,9 +54,23 @@ class FakeTranscribeDataset(datasets.VoiceDataset):
     def __init__(self, n: int, args: Optional[datasets.VoiceDatasetArgs] = None):
         super().__init__(args or datasets.VoiceDatasetArgs())
 
-        self._init_dataset(
-            datasets.SizedIterableDataset(FakeHuggingFaceIterableDataset(n), n)
-        )
+        self._init_dataset(FakeHuggingFaceIterableDataset(n), n)
+
+    def _get_sample(self, row: BatchFeature) -> datasets.VoiceSample:
+        return self._get_transcribe_sample(row)
+
+
+class FakeGenericDataset(datasets.VoiceDataset):
+    """Fake version of GenericDataset."""
+
+    def __init__(
+        self,
+        n: int,
+        config: dataset_config.DataDictConfig,
+        args: Optional[datasets.VoiceDatasetArgs] = None,
+    ):
+        super().__init__(args or datasets.VoiceDatasetArgs())
+        self._init_dataset(FakeHuggingFaceIterableDataset(n), config.total_samples)
 
     def _get_sample(self, row: BatchFeature) -> datasets.VoiceSample:
         return self._get_transcribe_sample(row)
@@ -62,27 +84,15 @@ class FakeDataproc(datasets.Dataproc):
         return -sample
 
 
-def test_sized_iterable_dataset_len():
-    ds = FakeSizedIterableDataset(5, estimated_length=10)
-    with pytest.warns(UserWarning, match="Mismatch between estimated length"):
-        list(ds)
-    assert len(ds) == 10
-
-    ds = FakeSizedIterableDataset(5, estimated_length=5)
-    assert len(ds) == 5
-
-
 def test_dataproc():
     ds = FakeSizedIterableDataset(5)
     s = FakeDataproc(ds)
-    assert len(s) == 5
     assert list(s) == [0, -1, -2, -3, -4]
 
 
 def test_interleaved_first_exhausted():
     ds1 = FakeSizedIterableDataset(5)
     s = datasets.InterleaveDataset([ds1])
-    assert len(s) == 5
     assert list(s) == [0, 1, 2, 3, 4]
     ds2 = FakeSizedIterableDataset(9)
     ds3 = FakeSizedIterableDataset(3)
@@ -91,13 +101,11 @@ def test_interleaved_first_exhausted():
         stop_strategy=datasets.StopStrategy.FIRST_EXHAUSTED,
         static=True,
     )
-    assert len(s) == 17
     # static=True disables random sampling of datasets, so the order is deterministic
     # stop_strategy=first_exhausted will stop interleave when the first dataset is exhausted
     assert list(s) == [0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3]
     s = datasets.InterleaveDataset([])
     assert list(s) == []
-    assert len(s) == 0
 
 
 def test_interleaved_last_exhausted():
@@ -170,7 +178,7 @@ def test_interleaved_with_multiprocessing():
 
 
 def test_range():
-    ds = FakeSizedIterableDataset(10)
+    ds = FakeSizedIterableDataset(10, estimated_length=10)
     s = datasets.Range(ds, 5)
     assert len(s) == 5
     assert list(s) == [0, 1, 2, 3, 4]
@@ -313,3 +321,20 @@ def test_get_messages():
         {"role": "user", "content": "B"},
         {"role": "assistant", "content": "C"},
     ]
+
+
+def test_voice_dataset_size():
+    mock_config = dataset_config.DataDictConfig(path="mock_path", total_samples=5)
+    ds = FakeGenericDataset(10, mock_config)
+    assert len(ds) == 5
+
+    pattern = r"(has been exceeded|Mismatch between estimated length)"
+    with pytest.warns(UserWarning, match=pattern):
+        list(ds)
+
+    mock_config = dataset_config.DataDictConfig(path="mock_path", total_samples=10)
+    ds = FakeGenericDataset(5, mock_config)
+    assert len(ds) == 10
+
+    with pytest.warns(UserWarning, match="Mismatch between estimated length"):
+        list(ds)
