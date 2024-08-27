@@ -17,6 +17,7 @@ from tenacity import wait_fixed
 from ultravox.data import text_proc
 from ultravox.tools.ds_tool import caching
 from ultravox.tools.ds_tool import tts
+import ultravox.tools.ds_tool.chunked_dataset as chunked_dataset
 
 tts_client: caching.CachingTtsWrapper
 chat_client: caching.CachingChatWrapper
@@ -352,6 +353,7 @@ def main(args: DatasetToolArgs):
     data_dict: datasets.DatasetDict = datasets.load_dataset(
         ds_name, args.dataset_subset, split=args.dataset_split
     )
+    data_dict = chunked_dataset.convert_to_chunked_dataset(data_dict)
 
     if isinstance(data_dict, datasets.Dataset):
         data_dict = datasets.DatasetDict({args.upload_split: data_dict})
