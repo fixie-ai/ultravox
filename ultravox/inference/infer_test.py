@@ -15,9 +15,12 @@ from ultravox.model import ultravox_processing
 # work properly for external contributions (since Llama 3 is gated).
 @pytest.fixture(scope="module")
 def tokenizer():
-    return transformers.AutoTokenizer.from_pretrained(
+    tokenizer = transformers.AutoTokenizer.from_pretrained(
         "./assets/hf/Meta-Llama-3-8B-Instruct", local_files_only=True
     )
+    # Set padding_side to "left" to support batch inference.
+    tokenizer.padding_side = "left"
+    return tokenizer
 
 
 @pytest.fixture(scope="module")

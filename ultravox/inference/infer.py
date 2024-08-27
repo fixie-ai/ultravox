@@ -1,5 +1,6 @@
 import copy
 import threading
+from concurrent import futures
 from typing import Dict, List, Optional, Tuple, Union
 
 import librosa
@@ -13,8 +14,6 @@ from ultravox.model import ultravox_processing
 
 SAMPLE_RATE = 16000
 MAX_NEW_TOKENS = 1024
-# Without this penalty, the model tends to repeat itself.
-REPETITION_PENALTY = 1.1
 
 
 class LocalInference(base.VoiceInference):
@@ -37,6 +36,12 @@ class LocalInference(base.VoiceInference):
         self.past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = (
             None
         )
+        self.data_collator = datasets.DataCollatorForSeq2SeqWithAudio(
+            tokenizer=self.tokenizer,
+            include_alt_fields=False,
+        )
+
+        assert self.tokenizer.padding_side == "left"
 
     def update_conversation(
         self,
@@ -53,6 +58,25 @@ class LocalInference(base.VoiceInference):
         sample.add_past_messages(self.past_messages)
         return sample
 
+    def _build_past_messages(
+        self,
+        query_messages: List[Dict[str, str]],
+        audio_token_len: int,
+        response_content: str,
+    ) -> List[Dict[str, str]]:
+        messages = copy.copy(query_messages)
+        if audio_token_len > 0:
+            user_content = messages[-1]["content"]
+            if user_content.count("<|audio|>") != 1:
+                raise ValueError(
+                    f"Expected 1 audio placeholder, found {user_content.count('<|audio|>')}"
+                )
+            messages[-1]["content"] = user_content.replace(
+                "<|audio|>", self.tokenizer.eos_token * audio_token_len
+            )
+        messages.append({"role": "assistant", "content": response_content})
+        return messages
+
     def infer(
         self,
         sample: datasets.VoiceSample,
@@ -68,55 +92,81 @@ class LocalInference(base.VoiceInference):
         output_tokens = output.sequences[0][input_len:]
         output_text = self.tokenizer.decode(output_tokens, skip_special_tokens=True)
         output_len = len(output_tokens)
-
         if self.conversation_mode:
-            past_messages = copy.deepcopy(extended_sample.messages)
-            audio_token_len = (
-                0 if "audio_token_len" not in inputs else inputs["audio_token_len"][0]
+            audio_token_len = inputs.get("audio_token_len", [0])[0]
+            past_messages = self._build_past_messages(
+                extended_sample.messages, audio_token_len, output_text
             )
-            if audio_token_len > 0:
-                user_content = past_messages[-1]["content"]
-                if user_content.count("<|audio|>") != 1:
-                    raise ValueError(
-                        f"Expected 1 audio placeholder, found {user_content.count('<|audio|>')}"
-                    )
-                past_messages[-1]["content"] = user_content.replace(
-                    "<|audio|>", self.tokenizer.eos_token * audio_token_len
-                )
-            past_messages.append({"role": "assistant", "content": output_text})
             self.update_conversation(past_messages, output.past_key_values)
-
         return base.VoiceOutput(output_text, input_len, output_len)
 
-    # streaming is not supported in conversation mode yet, to be implemented
+    # Note: infer_batch doesn't support conversation mode or caching yet.
+    def infer_batch(
+        self,
+        samples: List[datasets.VoiceSample],
+        max_tokens: Optional[int] = None,
+        temperature: Optional[float] = None,
+    ) -> List[base.VoiceOutput]:
+        assert not self.conversation_mode
+        inputs = [self._dataproc(s) for s in samples]
+        for input in inputs:
+            for key, val in input.items():
+                input[key] = val.squeeze(0)
+
+        tensors = self.data_collator(inputs)
+        input_len = tensors["input_ids"].shape[1]
+        output_batch = self._generate(
+            tensors, max_tokens, temperature, return_dict_in_generate=False
+        )
+        output_texts = []
+        for output in output_batch:
+            output_tokens = output[input_len:]
+            output_text = self.tokenizer.decode(output_tokens, skip_special_tokens=True)
+            output_len = len(output_tokens)
+            output_text = base.VoiceOutput(output_text, input_len, output_len)
+            output_texts.append(output_text)
+        return output_texts
+
     def infer_stream(
         self,
         sample: datasets.VoiceSample,
         max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
     ) -> base.InferenceGenerator:
-        inputs = self._dataproc(sample)
+        extended_sample = self._get_sample_with_past(sample)
+        inputs = self._dataproc(extended_sample)
         input_tokens = inputs["input_ids"].shape[1]
-        decode_kwargs = {"skip_special_tokens": True}
         streamer = transformers.TextIteratorStreamer(
-            self.tokenizer, skip_prompt=True, decode_kwargs=decode_kwargs
+            self.tokenizer, skip_prompt=True, skip_special_tokens=True
         )
 
-        thread_args = (
-            inputs,
-            max_tokens,
-            temperature,
-            streamer,
+        def thunk(f: futures.Future):
+            result = self._generate(
+                inputs, max_tokens, temperature, streamer, self.past_key_values
+            )
+            f.set_result(result)
+
+        future: futures.Future[transformers.GenerateDecoderOnlyOutput] = (
+            futures.Future()
         )
-        thread = threading.Thread(target=self._generate, args=thread_args)
+        thread = threading.Thread(target=thunk, args=(future,))
         thread.start()
-        output_tokens = 0
+        output_text = ""
+        output_token_len = 0
         for chunk in streamer:
             if chunk:
+                output_text += chunk
+                output_token_len += 1
                 yield base.InferenceChunk(chunk)
-                output_tokens += 1
-        yield base.InferenceStats(input_tokens, output_tokens)
         thread.join()
+        output = future.result()
+        if self.conversation_mode:
+            audio_token_len = inputs.get("audio_token_len", [0])[0]
+            past_messages = self._build_past_messages(
+                extended_sample.messages, audio_token_len, output_text
+            )
+            self.update_conversation(past_messages, output.past_key_values)
+        yield base.InferenceStats(input_tokens, output_token_len)
 
     def _dataproc(self, sample: datasets.VoiceSample):
         text_input = self.tokenizer.apply_chat_template(
@@ -162,6 +212,7 @@ class LocalInference(base.VoiceInference):
         temperature: Optional[float] = None,
         streamer: Optional[transformers.TextStreamer] = None,
         past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
+        return_dict_in_generate: Optional[bool] = True,
     ):
         temperature = temperature or None
         do_sample = temperature is not None
@@ -175,10 +226,9 @@ class LocalInference(base.VoiceInference):
             do_sample=do_sample,
             max_new_tokens=max_new_tokens or MAX_NEW_TOKENS,
             temperature=temperature,
-            repetition_penalty=REPETITION_PENALTY,
             pad_token_id=self.tokenizer.eos_token_id,
             eos_token_id=terminators,
             streamer=streamer,
             past_key_values=past_key_values,
-            return_dict_in_generate=True,
+            return_dict_in_generate=return_dict_in_generate,
         )

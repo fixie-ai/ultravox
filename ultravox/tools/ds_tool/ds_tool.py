@@ -95,6 +95,8 @@ class TextGenerationTask:
     max_tokens: int = 128
     temperature: float = 0
 
+    template_failures: int = 0
+
     def __post_init__(self):
         # The OAI client is separate from the task to avoid pickling issues when multiprocessing.
         global chat_client
@@ -115,8 +117,17 @@ class TextGenerationTask:
         exclude_fields: List[str],
     ) -> datasets.Dataset:
         print(f'Generating "{self.new_column_name}" with template:\n{self.template}')
-        return ds_split.map(
+        ds_mapped = ds_split.map(
             lambda sample: self._map_sample(sample, set(exclude_fields)),
+            num_proc=num_proc,
+            writer_batch_size=writer_batch_size,
+        )
+        if self.template_failures == 0:
+            return ds_mapped
+
+        # Filter out samples where new_column_name is None
+        return ds_mapped.filter(
+            lambda sample: (True if sample[self.new_column_name] != None else False),
             num_proc=num_proc,
             writer_batch_size=writer_batch_size,
         )
@@ -125,22 +136,27 @@ class TextGenerationTask:
         # using a Jinja template for some added flexibility, template can include variables and functions
         # e.g., {{ text }} or {{ text_proc.format_asr_text(text) }}
         try:
-            # We need to filter out the audio before the sample is passed into the jinja template
-            # or it will get loaded into memory and spike usage.
+            # Filter out the audio before the sample is passed into the jinja template, or it will get loaded into memory.
             filtered_sample = {
                 k: sample[k] for k in sample.keys() if k not in exclude_fields
             }
-
             rendered = jinja2.Template(
                 self.template, undefined=jinja2.StrictUndefined
             ).render(**filtered_sample, json_dump=json.dumps, text_proc=text_proc)
+
         except jinja2.TemplateError as e:
-            print(f"Error rendering template: {e}")
-            print(f"template: {self.template}")
-            print(f"sample keys: {list(filtered_sample.keys())}")
-            raise ValueError(
-                f"Template rendering failed. Make sure all keys in the template exist in the sample."
-            ) from e
+            error_message = str(e)
+            if "The formatted text is empty." in error_message:
+                print("Formatted text is empty. Setting output to None.")
+                sample[self.new_column_name] = None
+                self.template_failures += 1
+            else:
+                print(f"Error rendering template: {e}")
+                print(f"template: {self.template}")
+                print(f"sample keys: {list(filtered_sample.keys())}")
+                raise ValueError(
+                    f"Template rendering failed. Make sure all keys in the template exist in the sample."
+                ) from e
 
         if self.json_mode:
             turns = yaml.safe_load(rendered)
@@ -157,6 +173,7 @@ class TextGenerationTask:
             max_tokens=self.max_tokens,
             temperature=self.temperature,
         )
+
         return sample
 
 
@@ -228,7 +245,10 @@ def main(args: DatasetToolArgs):
         if args.num_samples:
             ds_split = ds_split.select(range(args.num_samples))
         data_dict[split] = args.task.map_split(
-            ds_split, args.num_workers, args.writer_batch_size, args.exclude_fields
+            ds_split,
+            args.num_workers,
+            args.writer_batch_size,
+            args.exclude_fields,
         )
 
     hub_args: Dict[str, Any] = {

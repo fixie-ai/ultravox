@@ -41,11 +41,11 @@ TRANSCRIBE_PROMPTS = [
     # from https://arxiv.org/pdf/2402.08846
     "Transcribe speech to text: <|audio|>",
     # from GPT-4
-    "Capture every word from <|audio|> verbatim",
-    "Convert speech to text from <|audio|>",
-    "Listen and transcribe the complete text from <|audio|>",
-    "Record in writing what is spoken in <|audio|>",
-    "Transcribe the spoken words from <|audio|> with exact wording and punctuation",
+    "Capture every word from the audio verbatim\n<|audio|>",
+    "Convert speech to text from audio\n<|audio|>",
+    "Listen and transcribe the complete text from audio\n<|audio|>",
+    "Record in writing what is spoken in audio\n<|audio|>",
+    "Transcribe the spoken words from audio with exact wording and punctuation\n<|audio|>",
 ]
 ANSWER_PROMPTS = [
     # from Gazelle
@@ -88,6 +88,7 @@ class DataCollatorForSeq2SeqWithAudio(transformers.DataCollatorForSeq2Seq):
                 }
                 for f in features
             ]
+        input_ids_lens = torch.LongTensor([f["input_ids"].shape[-1] for f in features])
         batch = super().__call__(features, *args, **kwargs)
         if self.include_alt_fields:
             alt_batch = super().__call__(alt_features, *args, **kwargs)
@@ -101,6 +102,11 @@ class DataCollatorForSeq2SeqWithAudio(transformers.DataCollatorForSeq2Seq):
             batch["audio_values"] = torch.stack(
                 [F.pad(x, (0, max_len - x.shape[-1])) for x in audio_values]
             )
+            if self.tokenizer.padding_side == "left":
+                displacement = batch["input_ids"].shape[-1] - input_ids_lens
+                batch["audio_token_start_idx"] += displacement.to(
+                    batch["audio_token_start_idx"].device
+                )
 
         return batch
 

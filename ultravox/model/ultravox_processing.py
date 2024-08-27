@@ -4,6 +4,8 @@ import numpy as np
 import torch
 import transformers
 
+from .ultravox_config import UltravoxConfig
+
 
 class UltravoxProcessor(transformers.ProcessorMixin):
     """
@@ -58,6 +60,29 @@ class UltravoxProcessor(transformers.ProcessorMixin):
             tokenizer.pad_token_id = tokenizer.eos_token_id
 
         super().__init__(audio_processor=audio_processor, tokenizer=tokenizer)
+
+    @classmethod
+    def from_pretrained(cls, pretrained_model_name_or_path, **kwargs):
+        config: UltravoxConfig = transformers.AutoConfig.from_pretrained(
+            pretrained_model_name_or_path, **kwargs
+        )
+        audio_processor = transformers.AutoProcessor.from_pretrained(
+            config.audio_model_id
+            or config.audio_config._name_or_path
+            or "facebook/wav2vec2-base-960h"
+        )
+
+        tokenizer = transformers.AutoTokenizer.from_pretrained(
+            pretrained_model_name_or_path, **kwargs
+        )
+        tokenizer.padding_side = "left"
+        tokenizer.pad_token = tokenizer.eos_token
+
+        return cls(
+            audio_processor=audio_processor,
+            tokenizer=tokenizer,
+            stack_factor=config.stack_factor,
+        )
 
     def __call__(
         self,
@@ -178,3 +203,6 @@ class UltravoxProcessor(transformers.ProcessorMixin):
         tokenizer_input_names = self.tokenizer.model_input_names
         audio_processor_input_names = self.audio_processor.model_input_names
         return list(set(tokenizer_input_names + audio_processor_input_names))
+
+
+transformers.AutoProcessor.register(UltravoxConfig, UltravoxProcessor)

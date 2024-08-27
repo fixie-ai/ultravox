@@ -9,7 +9,8 @@ A fast multimodal LLM for real-time voice
 </h3>
 
 _Latest News_
-* 2024/08 — [Ultravox 0.3](https://github.com/fixie-ai/ultravox/discussions/78) available
+* 2024/08 — [Ultravox 0.4](https://github.com/fixie-ai/ultravox/releases/tag/v0.4) available
+* 2024/08 — [Ultravox 0.3](https://github.com/fixie-ai/ultravox/releases/tag/v0.3) available
 * 2024/08 — Preview of Ultravox APIs available, more information [here](https://fixie-ai.github.io/ultradox/)
 
 ---
