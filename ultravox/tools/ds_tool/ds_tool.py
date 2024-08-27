@@ -287,6 +287,7 @@ class DatasetChunkProcessor:
                     )
                     if len(ds_chunk_processed) > 0:
                         # Note: The caching is after the upload to avoid caching failed upload chunks.
+                        # Saved chunks indicate they have been uploaded to HF.
                         self._upload(ds_chunk_processed, ds_chunk_hub_path, split_name)
                         ds_chunk_processed.to_parquet(ds_chunk_cache_path)
                     else:
