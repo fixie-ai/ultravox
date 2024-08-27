@@ -14,10 +14,10 @@ from ultravox.data import datasets
 class FakeSizedIterableDataset(datasets.SizedIterableDataset):
     """Fake version of datasets.SizedIterableDataset"""
 
-    def __init__(self, n, start=0, weight=1):
+    def __init__(self, n, start=0, weight=1, estimated_length=None):
         self.data = range(start, start + n)
         self._weight = weight
-        super().__init__(self.data, n)
+        super().__init__(self.data, n if estimated_length is None else estimated_length)
 
     @property
     def weight(self) -> float:
@@ -62,6 +62,16 @@ class FakeDataproc(datasets.Dataproc):
         return -sample
 
 
+def test_sized_iterable_dataset_len():
+    ds = FakeSizedIterableDataset(5, estimated_length=10)
+    with pytest.warns(UserWarning, match="Mismatch between estimated length"):
+        list(ds)
+    assert len(ds) == 10
+
+    ds = FakeSizedIterableDataset(5, estimated_length=5)
+    assert len(ds) == 5
+
+
 def test_dataproc():
     ds = FakeSizedIterableDataset(5)
     s = FakeDataproc(ds)
@@ -72,6 +82,7 @@ def test_dataproc():
 def test_interleaved_first_exhausted():
     ds1 = FakeSizedIterableDataset(5)
     s = datasets.InterleaveDataset([ds1])
+    assert len(s) == 5
     assert list(s) == [0, 1, 2, 3, 4]
     ds2 = FakeSizedIterableDataset(9)
     ds3 = FakeSizedIterableDataset(3)
@@ -80,11 +91,13 @@ def test_interleaved_first_exhausted():
         stop_strategy=datasets.StopStrategy.FIRST_EXHAUSTED,
         static=True,
     )
+    assert len(s) == 17
     # static=True disables random sampling of datasets, so the order is deterministic
     # stop_strategy=first_exhausted will stop interleave when the first dataset is exhausted
     assert list(s) == [0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3]
     s = datasets.InterleaveDataset([])
     assert list(s) == []
+    assert len(s) == 0
 
 
 def test_interleaved_last_exhausted():
@@ -159,6 +172,7 @@ def test_interleaved_with_multiprocessing():
 def test_range():
     ds = FakeSizedIterableDataset(10)
     s = datasets.Range(ds, 5)
+    assert len(s) == 5
     assert list(s) == [0, 1, 2, 3, 4]
     s = datasets.Range(ds, 100)
     assert list(s) == [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
@@ -299,8 +313,3 @@ def test_get_messages():
         {"role": "user", "content": "B"},
         {"role": "assistant", "content": "C"},
     ]
-
-
-def test_sized_iterable_dataset_len():
-    # TODO: Make sure the wrong dataset size warning is raised
-    pass
