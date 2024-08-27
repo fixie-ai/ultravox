@@ -334,28 +334,27 @@ def evaluate(args: config_base.TrainConfig):
     logs_dir = wandb.run.dir if wandb.run else str(args.logs_dir)
 
     # Run audio-based evaluations and log to W&B
-    audio_metrics = run_oaievalset(
+    audio_metrics_df = run_oaievalset(
         log_dir=os.path.join(logs_dir, "oaieval/audio"),
         model_dir=str(args.output_dir),
         eval_set="audio-core",
         num_samples=args.eval_num_samples,
     )
-    audio_metrics = {f"eval_audio_{k}": v for k, v in audio_metrics.items()}
     # TODO: it would be best to do trainer.log, but then we'd risk keeping parts of the model
     # in GPU memory, which could cause OOM errors.
     if wandb.run:
-        wandb.run.log(audio_metrics)
+        wandb.run.log({"eval_audio": wandb.Table(data=audio_metrics_df)})
 
-    # Run text-only evaluations and log to W&B
-    text_metrics = run_oaievalset(
-        log_dir=os.path.join(logs_dir, "oaieval/text"),
-        model_dir=str(args.output_dir),
-        eval_set="transcript-core",
-        num_samples=args.eval_num_samples,
-    )
-    text_metrics = {f"eval_text_{k}": v for k, v in text_metrics.items()}
-    if wandb.run:
-        wandb.run.log(text_metrics)
+    if args.eval_text_only:
+        # Run text-only evaluations and log to W&B
+        text_metrics_df = run_oaievalset(
+            log_dir=os.path.join(logs_dir, "oaieval/text"),
+            model_dir=str(args.output_dir),
+            eval_set="transcript-core",
+            num_samples=args.eval_num_samples,
+        )
+        if wandb.run:
+            wandb.run.log({"eval_text": wandb.Table(data=text_metrics_df)})
 
     t_end = datetime.now()
     logging.info(f"eval end time: {t_end}")
@@ -364,7 +363,7 @@ def evaluate(args: config_base.TrainConfig):
 
 def run_oaievalset(
     log_dir: str, model_dir: str, eval_set: str, num_samples: Optional[int] = None
-):
+) -> pd.DataFrame:
     env = os.environ.copy()
 
     # num_gpus = max(1, torch.cuda.device_count())
@@ -388,12 +387,22 @@ def run_oaievalset(
     subprocess.run(command, check=True, env=env)
 
     # Extract the results from the log directory
-    df = make_table.extract_results(pathlib.Path(log_dir))
-    pd.set_option("display.precision", 2)  # Adjust precision as needed
-    logging.info(f"Eval Results:\n{df}")
-    metrics = df.set_index("eval")["score"].to_dict()
+    subprocess.run(
+        [
+            "python",
+            "-m",
+            "evals.elsuite.audio.make_table",
+            "--out_dir",
+            log_dir,
+            "--log_dir",
+            log_dir,
+        ],
+        check=True,
+    )
 
-    return metrics
+    df = pd.read_csv(os.path.join(log_dir, "results.csv"))
+
+    return df
 
 
 if __name__ == "__main__":
