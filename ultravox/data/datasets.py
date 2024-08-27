@@ -309,7 +309,6 @@ class VoiceDataset(abc.ABC, SizedIterableDataset):
 
     def _init_dataset(self, dataset: SizedIterableDataset) -> None:
         SizedIterableDataset.__init__(self, dataset, len(dataset))
-        self._dataset = dataset
 
     @property
     def weight(self) -> float:
@@ -367,9 +366,6 @@ class VoiceDataset(abc.ABC, SizedIterableDataset):
                     <= self._args.max_audio_duration_secs
                 ):
                     yield sample
-
-    def __len__(self):
-        return len(self._dataset)
 
     @abc.abstractmethod
     def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
