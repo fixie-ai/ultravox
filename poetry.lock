@@ -1611,7 +1611,7 @@ torch = ["torch"]
 type = "git"
 url = "https://github.com/fixie-ai/evals"
 reference = "HEAD"
-resolved_reference = "5b000a3f76c28957d5eb23ff6c76c5fa8b1ec78d"
+resolved_reference = "908a814c0881d99d4876d7000878ec0760a22311"
 
 [[package]]
 name = "evaluate"
