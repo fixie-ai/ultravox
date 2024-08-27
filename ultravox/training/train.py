@@ -4,7 +4,6 @@ import gc
 import glob
 import logging
 import os
-import pathlib
 import re
 import subprocess
 import sys
@@ -20,7 +19,6 @@ import torch.distributed
 import transformers
 import wandb
 import wandb.sdk
-from evals.elsuite.audio import make_table
 from torch.utils import data
 
 from ultravox.data import datasets
