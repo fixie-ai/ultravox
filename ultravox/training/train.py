@@ -81,8 +81,7 @@ def main() -> None:
     local_rank = int(os.environ.get("LOCAL_RANK", 0))
     is_master = local_rank == 0
 
-    if args.do_train:
-        train(args)
+    train(args)
 
     if args.do_eval and is_master:
         gc.collect()
@@ -296,22 +295,24 @@ def train(args: config_base.TrainConfig):
         ),
     )
 
-    # Training loop
-    logging.info("Starting training...")
-    t_start = datetime.now()
-    logging.info(f"train start time: {t_start}")
-    if args.val_steps:
-        trainer.evaluate()
-    trainer.train()
+    if args.do_train:
+        # Training loop
+        logging.info("Starting training...")
+        t_start = datetime.now()
+        logging.info(f"train start time: {t_start}")
+        if args.val_steps:
+            trainer.evaluate()
+        trainer.train()
+        t_end = datetime.now()
+        logging.info(f"train end time: {t_end}")
+        logging.info(f"elapsed: {t_end - t_start}")
+
     if is_master:
         # Saving the model using pipeline to ensure its code is saved
         pipeline = ultravox_pipeline.UltravoxPipeline(
             model, tokenizer=text_tokenizer, device=device
         )
         pipeline.save_pretrained(args.output_dir)
-    t_end = datetime.now()
-    logging.info(f"train end time: {t_end}")
-    logging.info(f"elapsed: {t_end - t_start}")
 
 
 def evaluate(args: config_base.TrainConfig):
