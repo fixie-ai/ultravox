@@ -108,8 +108,8 @@ with gr.Blocks() as demo:
         with gr.Column(scale=1):
             reset = gr.Button("Reset")
             audio = gr.Audio(
-                label="🎤",
-                sources=["microphone"],
+label="🎤 / 📁",
+                sources=["microphone", "upload"],
                 type="filepath",
                 visible=True,
             )

@@ -105,34 +105,64 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         self.vocab_size = model_embeds.num_embeddings
         return model_embeds
     
-    def _insert_speech_placeholders(self, inputs_embeds, attention_mask, audio_start_idx, num_speech_tokens):
+    def _insert_speech_placeholders(self, inputs_embeds, attention_mask, audio_start_idx, num_speech_tokens, position_ids, cache_position):
         batch_size, seq_len, hidden_dim = inputs_embeds.shape
         
+        if position_ids is None or position_ids.shape != (batch_size, seq_len):
+            raise ValueError(f"position_ids must be provided and have shape (batch_size, seq_len). Got: {position_ids.shape if position_ids is not None else None}")
+
         # Calculate the actual length of each sample and the new length after insertion
         sample_lengths = attention_mask.sum(dim=1)
         new_sample_lengths = sample_lengths + num_speech_tokens
         new_seq_len = new_sample_lengths.max().item()
 
         # Create new tensors with expanded size
-        new_inputs_embeds = torch.zeros((batch_size, new_seq_len, hidden_dim), device=inputs_embeds.device)
+        new_inputs_embeds = torch.zeros((batch_size, new_seq_len, hidden_dim), device=inputs_embeds.device, dtype=inputs_embeds.dtype)
         new_attention_mask = torch.zeros((batch_size, new_seq_len), device=attention_mask.device, dtype=attention_mask.dtype)
+        new_position_ids = torch.zeros((batch_size, new_seq_len), device=position_ids.device, dtype=position_ids.dtype)
 
         for i in range(batch_size):
             insert_pos = audio_start_idx[i]
             insert_len = num_speech_tokens[i].item()
             original_len = sample_lengths[i].item()
+            new_len = new_sample_lengths[i].item()
 
-            # Copy the part before insertion
+            # Update inputs_embeds
             new_inputs_embeds[i, :insert_pos] = inputs_embeds[i, :insert_pos]
+            new_inputs_embeds[i, insert_pos + insert_len:new_len] = inputs_embeds[i, insert_pos:original_len]
+
+            # Update attention_mask
             new_attention_mask[i, :insert_pos] = attention_mask[i, :insert_pos]
+            new_attention_mask[i, insert_pos:insert_pos + insert_len] = 1  # Set attention mask for audio tokens
+            new_attention_mask[i, insert_pos + insert_len:new_len] = attention_mask[i, insert_pos:original_len]
 
-            # Leave space for audio embeddings (to be filled later)
+            # Update position_ids
+            new_position_ids[i, :insert_pos] = position_ids[i, :insert_pos]
+            new_position_ids[i, insert_pos:insert_pos+insert_len] = position_ids[i, insert_pos] + torch.arange(insert_len, device=position_ids.device, dtype=position_ids.dtype)
+            new_position_ids[i, insert_pos + insert_len:new_len] = position_ids[i, insert_pos:original_len] + insert_len
+
+        # Update cache_position if provided
+        new_cache_position = cache_position
+        if cache_position is not None:
+            if not isinstance(cache_position, torch.Tensor) or cache_position.dim() != 1:
+                raise ValueError(f"cache_position must be a 1-dimensional torch.Tensor. Got: {type(cache_position)}")
             
-            # Copy the part after insertion
-            new_inputs_embeds[i, insert_pos + insert_len:insert_pos + insert_len + original_len - insert_pos] = inputs_embeds[i, insert_pos:original_len]
-            new_attention_mask[i, insert_pos + insert_len:insert_pos + insert_len + original_len - insert_pos] = attention_mask[i, insert_pos:original_len]
+            # Validation check for the last position in cache_position
+            if cache_position[-1] != seq_len - 1:
+                raise ValueError(f"The last position in cache_position should be seq_len-1 ({seq_len-1}), but got {cache_position[-1]}")
+            
+            max_inserted = new_seq_len - seq_len
+            new_cache_position = torch.cat([
+                cache_position,
+                torch.arange(
+                    cache_position[-1] + 1,
+                    cache_position[-1] + 1 + max_inserted,
+                    device=cache_position.device,
+                    dtype=cache_position.dtype
+                )
+            ])
 
-        return new_inputs_embeds, new_attention_mask
+        return new_inputs_embeds, new_attention_mask, new_position_ids, new_cache_position
 
     def _compute_kl_loss(
         self,
@@ -250,13 +280,17 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
 
             audio_embeds, pred_num_tokens = self.adapter.forward(audio_tower_output, audio_token_len)
             if pred_num_tokens is not None:
-                inputs_embeds, attention_mask = self._insert_speech_placeholders(
+                inputs_embeds, attention_mask, position_ids, cache_position = self._insert_speech_placeholders(
                     inputs_embeds,
                     attention_mask,
                     audio_token_start_idx,
-                    pred_num_tokens
+                    pred_num_tokens,
+                    kwargs.get("position_ids"),
+                    kwargs.get("cache_position", None)
                 )
                 audio_token_len = pred_num_tokens
+                kwargs["position_ids"] = position_ids
+                kwargs["cache_position"] = cache_position
 
             # combine audio and text embeddings
             for i, (audio, start, length) in enumerate(

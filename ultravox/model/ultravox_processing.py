@@ -215,14 +215,14 @@ class UltravoxProcessor(transformers.ProcessorMixin):
                 tokenized_after = self.tokenizer(after_audio, add_special_tokens=False, **kwargs)
 
                 # Merge the tokenized parts using torch.cat
-                data["input_ids"] = tokenized_before.input_ids + tokenized_audio.input_ids + tokenized_after.input_ids
-                data["attention_mask"] = tokenized_before.attention_mask + tokenized_audio.attention_mask + tokenized_after.attention_mask
+                data["input_ids"] = [tokenized_before.input_ids + tokenized_audio.input_ids + tokenized_after.input_ids]
+                data["attention_mask"] = [tokenized_before.attention_mask + tokenized_audio.attention_mask + tokenized_after.attention_mask]
                 data["audio_token_start_idx"] = [len(tokenized_before.input_ids)]
 
                 # Include the tokenized transcript as alt_fields
                 if tokenized_transcript:
-                    data['alt_input_ids'] = tokenized_before.input_ids + tokenized_transcript.input_ids + tokenized_after.input_ids
-                    data['alt_attention_mask'] = tokenized_before.attention_mask + tokenized_transcript.attention_mask + tokenized_after.attention_mask
+                    data['alt_input_ids'] = [tokenized_before.input_ids + tokenized_transcript.input_ids + tokenized_after.input_ids]
+                    data['alt_attention_mask'] = [tokenized_before.attention_mask + tokenized_transcript.attention_mask + tokenized_after.attention_mask]
             else:
                 # No audio placeholder found, tokenize the entire text
                 tokenized = self.tokenizer([text], add_special_tokens=False, **kwargs)

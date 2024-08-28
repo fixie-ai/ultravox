@@ -140,7 +140,7 @@ class LocalInference(base.VoiceInference):
     ) -> base.InferenceGenerator:
         extended_sample = self._get_sample_with_past(sample)
         inputs = self._dataproc(extended_sample)
-        input_tokens = inputs["input_ids"].shape[1]
+        input_token_len = len(inputs["input_ids"])
         streamer = transformers.TextIteratorStreamer(
             self.tokenizer, skip_prompt=True, skip_special_tokens=True
         )
@@ -171,7 +171,7 @@ class LocalInference(base.VoiceInference):
                 extended_sample.messages, audio_token_len, output_text
             )
             self.update_conversation(past_messages, output.past_key_values)
-        yield base.InferenceStats(input_tokens, output_token_len)
+        yield base.InferenceStats(input_token_len, output_token_len)
 
     def _dataproc(self, sample: datasets.VoiceSample):
         text_input = self.tokenizer.apply_chat_template(
