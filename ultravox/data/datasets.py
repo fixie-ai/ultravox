@@ -1031,16 +1031,16 @@ class GenericVoiceDataset(VoiceDataset):
         if self._args.shuffle:
             dataset = dataset.shuffle(seed=self._args.shuffle_seed)
 
-        # Moving the init before Range because it expects the dataset to be a SizedIterableDataset
-        super()._init_dataset(dataset, config.total_samples)
         if config.num_samples:
-            self._dataset = Range(self, config.num_samples)
+            dataset = Range(dataset, config.num_samples, config.total_samples)
 
         self._weight = config.weight
 
         self.user_template = config.user_template
         self.assistant_template = config.assistant_template
         self.transcript_template = config.transcript_template
+
+        super()._init_dataset(dataset, config.total_samples)
 
     def _get_sample(self, row) -> VoiceSample:
         try:
@@ -1188,12 +1188,24 @@ class Range(SizedIterableDataset):
     """Limits the number of samples from another dataset."""
 
     def __init__(
-        self, dataset: SizedIterableDataset, num_samples: Optional[int] = None
+        self,
+        dataset: data.IterableDataset,
+        num_samples: Optional[int] = None,
+        total_samples: Optional[int] = None,
     ) -> None:
         self._dataset = dataset
         self._num_samples = num_samples
 
-        if self._num_samples is not None and self._num_samples > len(self._dataset):
+        if isinstance(self._dataset, SizedIterableDataset):
+            self._estimated_length = len(self._dataset)
+        else:
+            if total_samples is None:
+                raise ValueError(
+                    "total_samples must be provided for non-SizedIterableDataset."
+                )
+            self._estimated_length = total_samples
+
+        if self._num_samples is not None and self._num_samples > self._estimated_length:
             # Issuing a warning here instead of raising an error to accomodate for specific classes of VoiceDataset
             # Once we migrate entirely to GenericVoiceDataset, we can raise an error here.
             warnings.warn("num_samples is greater than total_samples.")
@@ -1206,5 +1218,7 @@ class Range(SizedIterableDataset):
 
     def __len__(self):
         return (
-            self._num_samples if self._num_samples is not None else len(self._dataset)
+            self._num_samples
+            if self._num_samples is not None
+            else self._estimated_length
         )
