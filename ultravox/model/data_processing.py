@@ -57,6 +57,7 @@ class UltravoxDataproc(datasets.Dataproc):
         inputs = self.processor(
             text=text,
             audio=audio,
+            transcript=sample.audio_transcript,
             return_tensors="pt",
             sampling_rate=sample.sample_rate,
         )
@@ -72,27 +73,22 @@ class UltravoxDataproc(datasets.Dataproc):
         # No need to shift the labels as the model does it internally
         labels = input_ids.clone()
 
-        if not self.train_on_inputs:
+        if not self.train_on_inputs and sample.messages[-1]["role"] == "assistant":
             # Mask the prompt tokens and only compute loss on the assistant message, not the prompt.
             # The idea is that the model should only be able to predict the assistant message given the user message.
             # One reason is that there's very little randomness in the prompt, so the model would be forced to memorize it.
             #
             # Example (-100 is the ignore index):
             #   Tokens: <user> Transcribe\n<|audio|> </s> <assistant> Brown fox jumps over the lazy dog </s>
-            #   Labels:  -100    -100       -100    -100 <assistant> Brown fox jumps over the lazy dog </s>
+            #   Labels: -100   -100        -100    -100   <assistant> Brown fox jumps over the lazy dog </s>
             #
             # Note: The above might look weird because I'm mixing token IDs and text, but that's just for illustration.
-            input_text = self.processor.tokenizer.apply_chat_template(
-                sample.messages[:-1], tokenize=False
-            )
 
-            # TODO: this might be slow due to calling audio_processor twice. We can compute modified input_text_len directly too.
-            # Revisit when using WhisperProcessor.
-            input_token_len = self.processor(
-                text=input_text,
-                audio=audio,
-                sampling_rate=sample.sample_rate,
-            )["input_ids"].shape[-1]
+            output_text = self.processor.tokenizer.apply_chat_template(
+                sample.messages[-1:], tokenize=False
+            )
+            output_token_len = self.processor(text=output_text)["input_ids"].shape[-1]
+            input_token_len = len(input_ids) - output_token_len
             labels[:input_token_len] = -100
 
         # If include_alt_fields is True, also include alt_input_ids, alt_attention_mask, and alt_labels
@@ -102,14 +98,13 @@ class UltravoxDataproc(datasets.Dataproc):
 
             alt_inputs = self.processor(
                 text=alt_text,
-                audio=None,
                 return_tensors="pt",
             )
             alt_input_ids = alt_inputs["input_ids"].squeeze_(0)
             alt_inputs["attention_mask"].squeeze_(0)
 
             alt_labels = alt_input_ids.clone()
-            if not self.train_on_inputs:
+            if not self.train_on_inputs and sample.messages[-1]["role"] == "assistant":
                 alt_input_token_len = (
                     input_token_len + len(alt_input_ids) - len(input_ids)
                 )

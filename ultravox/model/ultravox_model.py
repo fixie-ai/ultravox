@@ -13,10 +13,8 @@ from transformers.models.whisper import modeling_whisper as whisper
 
 # We must use relative import in this directory to allow uploading to HF Hub
 # Even "from . import X" pattern doesn't work (undocumented and unclear why)
-from .ultravox_config import LossConfig
-from .ultravox_config import LossFunction
-from .ultravox_config import UltravoxConfig
-
+from .ultravox_config import LossConfig, LossFunction, UltravoxConfig, AdapterType
+from .ultravox_adapter import UltravoxAdapter, StackingAdapter, CFormerAdapter
 
 class UltravoxModel(transformers.LlamaPreTrainedModel):
     """
@@ -51,7 +49,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         self.vocab_size = config.vocab_size
 
         self.audio_tower = self._create_audio_tower(config)
-        self.multi_modal_projector = UltravoxProjector(config)
+        self.adapter = self._create_adapter(config)
         self.language_model = self._create_language_model(config)
 
         self.loss_config = LossConfig()
@@ -79,6 +77,10 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         return self.language_model.tie_weights()
 
     def set_loss_config(self, loss_config: LossConfig):
+        if LossFunction.Input_KL in loss_config.loss_weights and self.config.adapter_type != AdapterType.CFORMER:
+            raise ValueError(
+                f"Input KL loss is only supported for CFormer adapter, not {self.config.adapter_type}."
+            )
         self.loss_config = loss_config
 
     def _setup_cache(
@@ -107,6 +109,8 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         self,
         lm_output: transformers.modeling_outputs.CausalLMOutputWithPast,
         labels: Optional[torch.Tensor] = None,
+        audio_token_start_idx: Optional[torch.Tensor] = None,
+        audio_token_len: Optional[torch.Tensor] = None,
         past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
         alt_input_ids: Optional[torch.Tensor] = None,
         alt_attention_mask: Optional[torch.Tensor] = None,
@@ -124,20 +128,43 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
                 past_key_values=past_key_values,
                 **kwargs,
             )
+        losses: Dict[LossFunction, torch.FloatTensor] = {}
         # compute the KL divergence loss between the two models
-        kl_loss = F.kl_div(
-            F.log_softmax(
-                lm_output.logits[labels != -100] / self.loss_config.kl_temperature,
-                dim=-1,
-            ),
-            F.softmax(
-                alt_lm_output.logits[alt_labels != -100]
-                / self.loss_config.kl_temperature,
-                dim=-1,
-            ),
-            reduction="batchmean",
-        )
-        return {"loss": kl_loss}
+        if LossFunction.Response_KL in self.loss_config.loss_weights:
+            loss = F.kl_div(
+                F.log_softmax(
+                    lm_output.logits[labels != -100] / self.loss_config.kl_temperature,
+                    dim=-1,
+                ),
+                F.softmax(
+                    alt_lm_output.logits[alt_labels != -100]
+                    / self.loss_config.kl_temperature,
+                    dim=-1,
+                ),
+                reduction="batchmean",
+            )
+            losses[LossFunction.Response_KL] = loss
+        if LossFunction.Input_KL in self.loss_config.loss_weights and \
+            audio_token_start_idx is not None and \
+            audio_token_len is not None:
+
+            # compute the KL divergence loss for audio tokens
+            audio_mask = ((audio_token_start_idx.unsqueeze(1) <= torch.arange(labels.size(1), device=labels.device)) & 
+                        (audio_token_start_idx.unsqueeze(1) + audio_token_len.unsqueeze(1) > torch.arange(labels.size(1), device=labels.device)))
+            
+            loss = F.kl_div(
+                F.log_softmax(
+                    lm_output.logits[audio_mask] / self.loss_config.kl_temperature,
+                    dim=-1,
+                ),
+                F.softmax(
+                    alt_lm_output.logits[audio_mask] / self.loss_config.kl_temperature,
+                    dim=-1,
+                ),
+                reduction="batchmean",
+            )
+            losses[LossFunction.Input_KL] = loss
+        return losses
 
     def forward(
         self,
@@ -192,7 +219,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             ).last_hidden_state
             audio_tower_output = audio_tower_output.to(inputs_embeds.dtype)
 
-            audio_embeds = self.multi_modal_projector.forward(audio_tower_output)
+            audio_embeds, pred_num_tokens = self.adapter.forward(audio_tower_output, audio_token_len)
 
             # combine audio and text embeddings
             for i, (audio, start, length) in enumerate(
@@ -209,24 +236,33 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             **kwargs,
         )
         if self.training:
-            if self.loss_config.loss_function == LossFunction.CrossEntropy:
-                return lm_output
-            elif self.loss_config.loss_function == LossFunction.KL_Divergence:
-                return self._compute_kl_loss(
+            total_loss = 0
+            if self.loss_config.contains_kl_loss:
+                kl_loss = self._compute_kl_loss(
                     lm_output=lm_output,
                     labels=labels,
+                    audio_token_start_idx=audio_token_start_idx,
+                    audio_token_len=audio_token_len,
                     past_key_values=past_key_values,
                     alt_input_ids=alt_input_ids,
                     alt_attention_mask=alt_attention_mask,
                     alt_labels=alt_labels,
-                    **kwargs,
+                    **kwargs
                 )
-            else:
-                raise ValueError(
-                    f"Unsupported loss function: {self.loss_config.loss_function}"
-                )
-        else:
-            return lm_output
+            for loss, weight in self.loss_config.loss_weights.items():
+                if loss == LossFunction.Response_CE:
+                    total_loss += weight * lm_output.loss
+                elif loss == LossFunction.Response_KL:
+                    total_loss += weight * kl_loss[LossFunction.Response_KL]
+                elif loss == LossFunction.Input_KL:
+                    total_loss += weight * kl_loss[LossFunction.Input_KL]
+                elif loss == LossFunction.CIF_L1:
+                    total_loss += weight * F.l1_loss(pred_num_tokens/audio_token_len, torch.ones_like(audio_token_len), reduction="mean")
+                else:
+                    raise ValueError(f"Unsupported loss function: {loss}")
+            
+            lm_output.loss = total_loss
+        return lm_output
 
     def prepare_inputs_for_generation(
         self,
@@ -264,6 +300,19 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             model_input["audio_token_len"] = audio_token_len
 
         return model_input
+
+    @classmethod
+    def _create_adapter(
+        cls, config: UltravoxConfig
+    ) -> UltravoxAdapter:
+        if config.adapter_type is AdapterType.STACKING:
+            adapter = StackingAdapter(config)
+        elif config.adapter_type is AdapterType.CFORMER:
+            adapter = CFormerAdapter(config)
+        else:
+            raise ValueError(f"Unsupported adapter type: {config.adapter_type}")
+        return adapter
+
 
     @classmethod
     def _create_audio_tower(
@@ -393,7 +442,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         lm_trainable_params, lm_all_params = count_params(self.language_model)
         audio_trainable_params, audio_all_params = count_params(self.audio_tower)
 
-        projector_trainable_params = (
+        adapter_trainable_params = (
             trainable_params - lm_trainable_params - audio_trainable_params
         )
         projector_all_params = all_param - lm_all_params - audio_all_params
@@ -402,7 +451,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             f"Trainable%:   "
             f" LLM: {100 * lm_trainable_params / lm_all_params:.1f}%"
             f" || Audio Encoder: {100 * audio_trainable_params / audio_all_params:.1f}%"
-            f" || Projector: {100 * projector_trainable_params / projector_all_params:.1f}%"
+            f" || Adapter: {100 * adapter_trainable_params / projector_all_params:.1f}%"
         )
 
 
@@ -433,67 +482,6 @@ def apply_lora(model: torch.nn.Module, lora_config: dict) -> torch.nn.Module:
         model = peft.get_peft_model(model, lora_config)
 
     return model
-
-
-class StackAudioFrames(nn.Module):
-    """
-    Stack the audio embedding frames to reduce the sequence length by a factor of `stack_factor`.
-
-    The number of output frames will be `ceil(T / stack_factor) + 1` where `T` is the number of input frames.
-    NOTE: the extra +1 is intentional: in case the number of audio tokens are over-estimated by the processor,
-    we want to make sure `processor.audio_token_replacement` (i.e. EOS) doesn't get leaked into the middle of embeddings.
-    In most cases this extra padding will get removed in the model's forward function so it has no effect.
-    """
-
-    def __init__(self, stack_factor: int = 8):
-        super().__init__()
-        self.stack_factor = stack_factor
-
-    def forward(self, audio_embeds: torch.Tensor) -> torch.Tensor:
-        B, T, C = audio_embeds.shape
-        T_pad = (T + self.stack_factor - 1) // self.stack_factor * self.stack_factor
-        audio_embeds = F.pad(audio_embeds, (0, 0, 0, T_pad - T + self.stack_factor))
-        B, T, C = audio_embeds.shape
-        audio_embeds = audio_embeds.view(
-            B, T // self.stack_factor, C * self.stack_factor
-        )
-        return audio_embeds
-
-
-class RMSNorm(transformers.models.llama.modeling_llama.LlamaRMSNorm):
-    def __init__(self, hidden_size: int, init: float = 1, eps: float = 1e-6):
-        super().__init__(hidden_size=hidden_size, eps=eps)
-        self.weight.data.fill_(init)
-
-
-class SwiGLU(nn.Module):
-    def forward(self, x):
-        x, gate = x.chunk(2, dim=-1)
-        return F.silu(gate) * x
-
-
-class UltravoxProjector(nn.Sequential):
-    def __init__(self, config: UltravoxConfig):
-        super().__init__()
-        self.hidden_dim = config.hidden_size
-        self._pad_and_stack = StackAudioFrames(config.stack_factor)
-        dim = config.audio_config.hidden_size * config.stack_factor
-        self.ln_pre = RMSNorm(dim, init=config.norm_init)
-        self.linear_1 = nn.Linear(dim, self.hidden_dim, bias=False)
-        dim = self.hidden_dim
-        self.act = transformers.activations.get_activation(config.projector_act)
-        dim = dim // 2 if config.projector_act == "swiglu" else dim
-        self.linear_2 = nn.Linear(dim, config.text_config.hidden_size, bias=False)
-        self.ln_post = RMSNorm(config.text_config.hidden_size, init=config.norm_init)
-
-    def forward(self, audio_features: torch.Tensor) -> torch.Tensor:
-        audio_features = self._pad_and_stack(audio_features)
-        audio_features = self.ln_pre(audio_features)
-        hidden_states = self.linear_1(audio_features)
-        hidden_states = self.act(hidden_states)
-        hidden_states = self.linear_2(hidden_states)
-        hidden_states = self.ln_post(hidden_states)
-        return hidden_states
 
 
 class ModifiedWhisperEncoder(whisper.WhisperEncoder):
@@ -618,11 +606,6 @@ class ModifiedWhisperEncoder(whisper.WhisperEncoder):
             attentions=all_attentions,
         )
 
-
-UltravoxConfig.register_for_auto_class()
 UltravoxModel.register_for_auto_class()
-
-transformers.AutoConfig.register("ultravox", UltravoxConfig)
 transformers.AutoModel.register(UltravoxConfig, UltravoxModel)
 
-transformers.activations.ACT2FN["swiglu"] = SwiGLU

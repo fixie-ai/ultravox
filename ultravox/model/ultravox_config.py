@@ -1,6 +1,6 @@
 import dataclasses
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import transformers
 
@@ -20,21 +20,58 @@ class LoraConfigSimplified:
         default_factory=lambda: ["k_proj", "q_proj", "linear_k", "linear_q"]
     )
 
-
 class LossFunction(str, Enum):
-    CrossEntropy = "ce"
-    KL_Divergence = "kl"
+    Response_CE = "Response_CE"
+    Response_KL = "Response_KL"
+    Input_KL = "Input_KL"
+    CIF_L1 = "CIF_L1"
 
+class AdapterType(str, Enum):
+    STACKING = "STACKING"
+    CFORMER = "CFORMER"
 
 @dataclasses.dataclass
 class LossConfig:
-    loss_function: LossFunction = LossFunction.KL_Divergence
+    loss_weights: Dict[LossFunction, float] = dataclasses.field(default_factory=lambda: {LossFunction.Response_KL: 1.0})    
     kl_temperature: float = 2.0
 
     @property
     def requires_alt_fields(self):
-        return self.loss_function == LossFunction.KL_Divergence
+        return any(lf in self.loss_weights for lf in [LossFunction.Input_KL, LossFunction.Response_KL])
+    
+    def add_adapter_losses(self, adapter_type: AdapterType):
+        if adapter_type == AdapterType.CFORMER and LossFunction.CIF_L1 not in self.loss_weights:
+            self.loss_weights[LossFunction.CIF_L1] = 1.0
 
+    @property
+    def contains_kl_loss(self):
+        return any(lf in self.loss_weights for lf in [LossFunction.Input_KL, LossFunction.Response_KL])
+
+@dataclasses.dataclass
+class UltravoxCFormerAdapterConfig:
+    """
+    CFormer Adapter configuration.
+
+    CIF+Transformer-based adapter to segment speech into continuous speech tokens with 1:1 correspondence to text tokens.
+"""
+    num_pre_cif_layers: int = 2
+    num_post_cif_layers: int = 2
+
+
+@dataclasses.dataclass
+class UltravoxStackingAdapterConfig:
+    """
+    Stacking Adapter configuration.
+
+    Stacking+Convolutions-based adapter to segment speech into continuous speech tokens at a fixed downsampling rate.
+"""
+    stack_factor: int = 8
+    activation: str = "swiglu"
+
+ADAPTER_CONFIG_MAP: Dict[AdapterType, Any] = {
+    AdapterType.STACKING: UltravoxCFormerAdapterConfig,
+    AdapterType.CFORMER: UltravoxStackingAdapterConfig,
+}
 
 class UltravoxConfig(transformers.PretrainedConfig):
     r"""
@@ -63,7 +100,6 @@ class UltravoxConfig(transformers.PretrainedConfig):
             The LoRA configuration for finetuning the text model.
         audio_model_lora_config (`LoraConfigSimplified`, *optional*):
             The LoRA configuration for finetuning the audio model.
-
 
     Example:
 
@@ -96,8 +132,10 @@ class UltravoxConfig(transformers.PretrainedConfig):
         self,
         audio_config: Optional[Dict[str, Any]] = None,
         text_config: Optional[Dict[str, Any]] = None,
+        adapter_config: Union[UltravoxStackingAdapterConfig, UltravoxCFormerAdapterConfig] = None,
         audio_model_id: Optional[str] = None,
         text_model_id: Optional[str] = None,
+        adapter_type: AdapterType = AdapterType.STACKING,
         ignore_index: int = -100,
         audio_token_index: int = 32000,
         hidden_size: int = 4096,
@@ -150,8 +188,14 @@ class UltravoxConfig(transformers.PretrainedConfig):
             else dataclasses.asdict(audio_model_lora_config or LoraConfigSimplified())
         )
 
+        self.adapter_type = adapter_type
+        self.adapter_config = dataclasses.asdict(adapter_config or ADAPTER_CONFIG_MAP[adapter_type]())
+
         self.vocab_size = self.text_config.vocab_size
 
         self.initializer_range = self.text_config.initializer_range
 
         super().__init__(**kwargs)
+
+UltravoxConfig.register_for_auto_class()
+transformers.AutoConfig.register("ultravox", UltravoxConfig)

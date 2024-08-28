@@ -5,8 +5,9 @@ import torch
 import transformers
 
 from .ultravox_config import UltravoxConfig
+from .ultravox_adapter import UltravoxAdapter
 
-
+# TODO: update the comments to reflect the actual implementation
 class UltravoxProcessor(transformers.ProcessorMixin):
     """
     Constructs an Ultravox processor which wraps an audio processor and a tokenizer into a single processor.
@@ -36,7 +37,7 @@ class UltravoxProcessor(transformers.ProcessorMixin):
         tokenizer=None,
         audio_padding: str = "longest",
         encoder_ds_factor: int = 320,
-        stack_factor: int = 8,
+        adapter: UltravoxAdapter = None,
         audio_placeholder: str = "<|audio|>",
     ):
         """
@@ -50,7 +51,7 @@ class UltravoxProcessor(transformers.ProcessorMixin):
         """
         self.audio_padding = audio_padding
         self.encoder_ds_factor = encoder_ds_factor
-        self.stack_factor = stack_factor
+        self.adapter = adapter
         self.audio_placeholder = audio_placeholder
         self.audio_token_replacement = tokenizer.eos_token
         assert (
@@ -88,6 +89,7 @@ class UltravoxProcessor(transformers.ProcessorMixin):
         self,
         text: Optional[str] = None,
         audio: Optional[Union[np.ndarray, torch.Tensor]] = None,
+        transcript: Optional[str] = None,
         sampling_rate: Optional[int] = None,
         return_tensors: Optional[
             Union[str, transformers.TensorType]
@@ -133,20 +135,32 @@ class UltravoxProcessor(transformers.ProcessorMixin):
         """
         # TODO: Add support for multiple audio and text inputs.
         data = {}
-        audio_embed_frames = 0
+        audio_token_len = 0
         if audio is not None and len(audio) > 0:
+            if not self.adapter:
+                raise ValueError("Adapter must be provided for determing audio_token_len.")
+
             if self.audio_padding == "max_length":
                 # 30 seconds is the expected length for Whisper
                 assert sampling_rate is not None, "Sampling rate must be provided."
                 audio_len = 30 * sampling_rate
             else:
                 audio_len = audio.shape[-1]
+            
+            # num_encoder_frames is needed for the Stacking adapter to determine audio_token_len, both in training and inference.
             # It's guaranteed that the number of frames is less than or equal to this amount.
             # For Whisper this is exact AFAICT, but for Wav2Vec2 it's an upper bound.
             # Currently, StackAudioFrames makes sure an over-estimation won't cause issues by padding the audio embeddings.
-            nb_encoder_frames = int(round(audio_len / self.encoder_ds_factor + 1e-4))
-            audio_embed_frames = int(np.ceil(nb_encoder_frames / self.stack_factor))
-            data["audio_token_len"] = [audio_embed_frames]
+            num_encoder_frames = int(round(audio_len / self.encoder_ds_factor + 1e-4))
+            # num_text_tokens is needed for the CFormer adapter to determine audio_token_len in training mode.
+            # In inference mode, the inferred transcript length during forward pass is used to determine audio_token_len.
+            if transcript:
+                num_text_tokens = len(self.tokenizer.encode(transcript, add_special_tokens=False))
+            else:
+                num_text_tokens = 0
+            # compute the audio_token_len based on the model's adapter
+            audio_token_len = self.adapter.get_audio_token_len(num_encoder_frames, num_text_tokens)
+            data["audio_token_len"] = [audio_token_len]
 
             # Main audio processing. The processor is model-specific.
             x = self.audio_processor(
@@ -184,7 +198,7 @@ class UltravoxProcessor(transformers.ProcessorMixin):
                 #        where the number of </s> is the number of audio frames.
                 text = text.replace(
                     self.audio_placeholder,
-                    self.audio_token_replacement * audio_embed_frames,
+                    self.audio_token_replacement * audio_token_len,
                 )
 
             # Special tokens like BOS should already have been added by the caller.

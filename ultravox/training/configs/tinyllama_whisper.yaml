@@ -1,0 +1,29 @@
+# test config for fast experimentation, only 100 steps
+exp_name: "tinyllama_whisper_s"
+text_model: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+audio_model: "openai/whisper-small"
+
+lr_warmup_steps: 10
+max_steps: 100
+
+report_logs_to: ["tensorboard"]
+
+device: "cpu"
+adapter_type: "CFORMER"
+
+loss_config:
+  loss_weights: 
+    Response_KL: 1
+    Input_KL: 1
+
+val_sets: ["anyinstruct"]
+data_sets: []
+data_dicts:
+  - path: "fixie-ai/librispeech_asr"
+    name: "clean"
+    splits:
+      - "train.100"
+    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
+    assistant_template: "{{ continuation }}"
+    transcript_template: "{{ text }}"
+    num_samples: 100_000

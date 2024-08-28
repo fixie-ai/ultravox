@@ -3,7 +3,7 @@ import datetime
 import logging
 import os
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 import simple_parsing
 
@@ -22,9 +22,12 @@ class TrainConfig:
     audio_model: str
     """Audio encoder model to use; could be a huggingface model id, wandb path, or local path."""
 
-    # train_dataset_configs: List[Dict[str, Any]] = dataclasses.field(
-    #     default_factory=list
-    # )
+    adapter_type: ultravox_config.AdapterType = ultravox_config.AdapterType.STACKING
+    """Type of adapter to use for fine-tuning. Defaults to STACKING."""
+
+    adapter_config: Optional[Dict[str, Any]] = None
+    """Optional configuration dictionary for the adapter. If None, default settings will be used."""
+
     train_dataset_configs: List[datasets.DatasetConfig] = dataclasses.field(
         default_factory=list
     )
@@ -206,3 +209,18 @@ class TrainConfig:
                 "LayerDrop cannot be used in DDP when encoder is not frozen. Disabling LayerDrop."
             )
             self.disable_layerdrop = True
+
+        if self.adapter_type is ultravox_config.AdapterType.STACKING:
+            self.adapter_config = ultravox_config.UltravoxStackingAdapterConfig(
+                **(self.adapter_config or {})
+            )
+        elif self.adapter_type is ultravox_config.AdapterType.CFORMER:
+            self.adapter_config = ultravox_config.UltravoxCFormerAdapterConfig(
+                **(self.adapter_config or {})
+            )
+        else:
+            raise ValueError(f"Unsupported adapter type: {self.adapter_type}")
+
+        if self.loss_config is None:
+            self.loss_config = ultravox_config.LossConfig()
+        self.loss_config.add_adapter_losses(self.adapter_type)

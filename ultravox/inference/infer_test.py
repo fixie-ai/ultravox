@@ -49,7 +49,7 @@ class FakeInference(infer.LocalInference):
             return output
 
         processor = ultravox_processing.UltravoxProcessor(
-            audio_processor, tokenizer=tokenizer
+            audio_processor=audio_processor, tokenizer=tokenizer
         )
         super().__init__(
             mock.MagicMock(),

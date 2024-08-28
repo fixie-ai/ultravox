@@ -105,8 +105,6 @@ def train(args: config_base.TrainConfig):
     )
     text_tokenizer.padding_side = "right"
     text_tokenizer.pad_token = text_tokenizer.eos_token
-    audio_processor = transformers.AutoProcessor.from_pretrained(args.audio_model)
-    processor = ultravox_processing.UltravoxProcessor(audio_processor, text_tokenizer)
 
     # Instantiate the model and processor
     config = ultravox_config.UltravoxConfig(
@@ -114,6 +112,8 @@ def train(args: config_base.TrainConfig):
         text_model_id=args.text_model,
         text_model_lora_config=args.text_model_lora_config,
         audio_model_lora_config=args.audio_model_lora_config,
+        adapter_type = args.adapter_type,
+        adapter_config=args.adapter_config,
     )
 
     logging.info("Instantiating model...")
@@ -122,6 +122,9 @@ def train(args: config_base.TrainConfig):
     # downloading before the others start in order to avoid race conditions.
     with ddp_utils.run_on_master_first(is_master):
         model = ultravox_model.UltravoxModel(config)
+
+    audio_processor = transformers.AutoProcessor.from_pretrained(args.audio_model)
+    processor = ultravox_processing.UltravoxProcessor(audio_processor=audio_processor, tokenizer=text_tokenizer, adapter=model.adapter)
 
     assert model.get_input_embeddings().num_embeddings == len(
         text_tokenizer
