@@ -476,6 +476,7 @@ class LibriSpeechDummyDataset(VoiceDataset):
         return self._get_transcribe_sample(row, tproc=text_proc.format_asr_text)
 
 
+# Making EmptyDataset a SizedIterableDataset to be compatible with using epochs during training.
 class EmptyDataset(SizedIterableDataset):
     def __init__(self, estimated_length: int = 0) -> None:
         self._estimated_length = estimated_length

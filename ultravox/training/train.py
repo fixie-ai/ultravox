@@ -183,24 +183,24 @@ def main() -> None:
         [(x, [x]) for x in args.val_sets]
         + [(f"text_{x}", [x]) for x in args.val_sets]
     )
+    train_dataset = prepare_dataset(
+        dataset_names=args.data_sets,
+        train_on_inputs=args.train_on_inputs,
+        stop_strategy=args.stop_strategy,
+        processor=processor,
+        num_samples=args.num_samples,
+        data_args=datasets.VoiceDatasetArgs(
+            num_prompts=args.num_prompts,
+            data_dir=args.data_dir,
+            shuffle=args.shuffle_data,
+            shuffle_seed=args.shuffle_seed,
+            max_audio_duration_secs=args.max_audio_duration_secs,
+            use_mds=args.mds,
+            mds_batch_size=args.batch_size,
+        ),
+        include_alt_fields=model.loss_config.requires_alt_fields,
+    )
     if is_master:
-        train_dataset = prepare_dataset(
-            dataset_names=args.data_sets,
-            train_on_inputs=args.train_on_inputs,
-            stop_strategy=args.stop_strategy,
-            processor=processor,
-            num_samples=args.num_samples,
-            data_args=datasets.VoiceDatasetArgs(
-                num_prompts=args.num_prompts,
-                data_dir=args.data_dir,
-                shuffle=args.shuffle_data,
-                shuffle_seed=args.shuffle_seed,
-                max_audio_duration_secs=args.max_audio_duration_secs,
-                use_mds=args.mds,
-                mds_batch_size=args.batch_size,
-            ),
-            include_alt_fields=model.loss_config.requires_alt_fields,
-        )
         val_ds_args = datasets.VoiceDatasetArgs(
             num_prompts=1,
             split=datasets.DatasetSplit.VALIDATION,
@@ -230,23 +230,7 @@ def main() -> None:
     else:
         # When using DDP with split_batches=True, the primary process will distribute the batches to the workers
         # The point of this is to avoid unnecessary data processing/downloading in the workers.
-        train_dataset = prepare_dataset(
-            dataset_names=args.data_sets,
-            train_on_inputs=args.train_on_inputs,
-            stop_strategy=args.stop_strategy,
-            processor=processor,
-            num_samples=args.num_samples,
-            data_args=datasets.VoiceDatasetArgs(
-                num_prompts=args.num_prompts,
-                data_dir=args.data_dir,
-                shuffle=args.shuffle_data,
-                shuffle_seed=args.shuffle_seed,
-                max_audio_duration_secs=args.max_audio_duration_secs,
-                use_mds=args.mds,
-                mds_batch_size=args.batch_size,
-            ),
-            include_alt_fields=model.loss_config.requires_alt_fields,
-        )
+        # When using epochs to train, emptydataset must have a length equal to the training set
         train_dataset = datasets.EmptyDataset(len(train_dataset))
         val_datasets = {k: datasets.EmptyDataset() for k in val_sets}
 
