@@ -61,4 +61,4 @@ run *FLAGS:
     poetry run mcli run -f mcloud.yaml --follow {{FLAGS}}
 
 mcloud *FLAGS:
-    poetry run mcli interactive {{FLAGS}} --cluster ${MCLOUD_CLUSTER} --instance ${MCLOUD_INSTANCE}  --name `whoami` --command "bash -c \"$(cat setup.sh)\"" 
+    poetry run mcli interactive {{FLAGS}} --max-duration 1 --cluster ${MCLOUD_CLUSTER} --instance ${MCLOUD_INSTANCE}  --name `whoami` --command "bash -c \"$(cat setup.sh)\"" 
