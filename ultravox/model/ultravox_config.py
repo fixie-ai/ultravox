@@ -69,8 +69,8 @@ class UltravoxStackingAdapterConfig:
     activation: str = "swiglu"
 
 ADAPTER_CONFIG_MAP: Dict[AdapterType, Any] = {
-    AdapterType.STACKING: UltravoxCFormerAdapterConfig,
-    AdapterType.CFORMER: UltravoxStackingAdapterConfig,
+    AdapterType.STACKING: UltravoxStackingAdapterConfig,
+    AdapterType.CFORMER: UltravoxCFormerAdapterConfig
 }
 
 class UltravoxConfig(transformers.PretrainedConfig):
@@ -132,7 +132,7 @@ class UltravoxConfig(transformers.PretrainedConfig):
         self,
         audio_config: Optional[Dict[str, Any]] = None,
         text_config: Optional[Dict[str, Any]] = None,
-        adapter_config: Union[UltravoxStackingAdapterConfig, UltravoxCFormerAdapterConfig] = None,
+        adapter_config: Union[UltravoxStackingAdapterConfig, UltravoxCFormerAdapterConfig, Dict[str, Any]] = None,
         audio_model_id: Optional[str] = None,
         text_model_id: Optional[str] = None,
         adapter_type: AdapterType = AdapterType.STACKING,
@@ -188,8 +188,12 @@ class UltravoxConfig(transformers.PretrainedConfig):
             else dataclasses.asdict(audio_model_lora_config or LoraConfigSimplified())
         )
 
-        self.adapter_type = adapter_type
-        self.adapter_config = dataclasses.asdict(adapter_config or ADAPTER_CONFIG_MAP[adapter_type]())
+        self.adapter_type = AdapterType(adapter_type)
+        self.adapter_config = (
+            adapter_config
+            if isinstance(adapter_config, dict)
+            else dataclasses.asdict(adapter_config or ADAPTER_CONFIG_MAP[adapter_type]())
+        )
 
         self.vocab_size = self.text_config.vocab_size
 

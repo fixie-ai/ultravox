@@ -104,6 +104,35 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         self.config.vocab_size = model_embeds.num_embeddings
         self.vocab_size = model_embeds.num_embeddings
         return model_embeds
+    
+    def _insert_speech_placeholders(self, inputs_embeds, attention_mask, audio_start_idx, num_speech_tokens):
+        batch_size, seq_len, hidden_dim = inputs_embeds.shape
+        
+        # Calculate the actual length of each sample and the new length after insertion
+        sample_lengths = attention_mask.sum(dim=1)
+        new_sample_lengths = sample_lengths + num_speech_tokens
+        new_seq_len = new_sample_lengths.max().item()
+
+        # Create new tensors with expanded size
+        new_inputs_embeds = torch.zeros((batch_size, new_seq_len, hidden_dim), device=inputs_embeds.device)
+        new_attention_mask = torch.zeros((batch_size, new_seq_len), device=attention_mask.device, dtype=attention_mask.dtype)
+
+        for i in range(batch_size):
+            insert_pos = audio_start_idx[i]
+            insert_len = num_speech_tokens[i].item()
+            original_len = sample_lengths[i].item()
+
+            # Copy the part before insertion
+            new_inputs_embeds[i, :insert_pos] = inputs_embeds[i, :insert_pos]
+            new_attention_mask[i, :insert_pos] = attention_mask[i, :insert_pos]
+
+            # Leave space for audio embeddings (to be filled later)
+            
+            # Copy the part after insertion
+            new_inputs_embeds[i, insert_pos + insert_len:insert_pos + insert_len + original_len - insert_pos] = inputs_embeds[i, insert_pos:original_len]
+            new_attention_mask[i, insert_pos + insert_len:insert_pos + insert_len + original_len - insert_pos] = attention_mask[i, insert_pos:original_len]
+
+        return new_inputs_embeds, new_attention_mask
 
     def _compute_kl_loss(
         self,
@@ -220,6 +249,14 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             audio_tower_output = audio_tower_output.to(inputs_embeds.dtype)
 
             audio_embeds, pred_num_tokens = self.adapter.forward(audio_tower_output, audio_token_len)
+            if pred_num_tokens is not None:
+                inputs_embeds, attention_mask = self._insert_speech_placeholders(
+                    inputs_embeds,
+                    attention_mask,
+                    audio_token_start_idx,
+                    pred_num_tokens
+                )
+                audio_token_len = pred_num_tokens
 
             # combine audio and text embeddings
             for i, (audio, start, length) in enumerate(

@@ -207,6 +207,7 @@ class CFormerAdapter(UltravoxAdapter):
             # force the number of predicted tokens to be at least 1 in non-streaming mode
             # this will break streaming mode and needs to be updated
             num_tokens[num_tokens < 1] = 1
+            pred_num_tokens = num_tokens
 
         # scale alphas so that the sum of alphas is equal to num_tokens
         alphas = alphas * (num_tokens / pred_num_tokens)[:, None].repeat(1, T)
