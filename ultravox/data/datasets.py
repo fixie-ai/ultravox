@@ -355,12 +355,12 @@ class VoiceDataset(SizedIterableDataset):
                 ):
                     yield sample
             actual_length += 1
-            if actual_length > len(self):
+            if actual_length > len(self) and len(self) > 0:
                 warnings.warn(
                     f"The estimated length {self._estimated_length} has been exceeded for type {type(self._dataset)}. Make sure to update."
                 )
 
-        if actual_length != len(self):
+        if actual_length != len(self) and len(self) > 0:
             warnings.warn(
                 f"Mismatch between estimated length ({self._estimated_length}) and actual length ({actual_length}) for dataset of type {type(self._dataset)}. Make sure to update."
             )
