@@ -205,4 +205,6 @@ class UltravoxProcessor(transformers.ProcessorMixin):
         return list(set(tokenizer_input_names + audio_processor_input_names))
 
 
+UltravoxProcessor.register_for_auto_class()
+
 transformers.AutoProcessor.register(UltravoxConfig, UltravoxProcessor)
