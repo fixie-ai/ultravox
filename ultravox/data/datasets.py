@@ -355,6 +355,8 @@ class VoiceDataset(SizedIterableDataset):
                 ):
                     yield sample
             actual_length += 1
+            # If len(dataset) == 0 most likely the dataset is a validation dataset,
+            # or the training is using max_steps instead of num_epochs.
             if actual_length > len(self) and len(self) > 0:
                 warnings.warn(
                     f"The estimated length {self._estimated_length} has been exceeded for type {type(self._dataset)}. Make sure to update."
