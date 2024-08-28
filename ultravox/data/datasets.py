@@ -474,9 +474,12 @@ class LibriSpeechDummyDataset(VoiceDataset):
         return self._get_transcribe_sample(row, tproc=text_proc.format_asr_text)
 
 
-class EmptyDataset(data.IterableDataset):
+class EmptyDataset(SizedIterableDataset):
     def __iter__(self):
         return iter([])
+
+    def __len__(self):
+        return 0
 
 
 class AnyInstructDataset(VoiceDataset):
