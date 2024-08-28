@@ -307,7 +307,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             **kwargs,
         )
         if self.training:
-            total_loss = 0
+            losses = {}
             if self.loss_config.contains_kl_loss:
                 kl_loss = self._compute_kl_loss(
                     lm_output=lm_output,
@@ -320,17 +320,24 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
                     alt_labels=alt_labels,
                     **kwargs
                 )
-            for loss, weight in self.loss_config.loss_weights.items():
+            for loss, _ in self.loss_config.loss_weights.items():
                 if loss == LossFunction.Response_CE:
-                    total_loss += weight * lm_output.loss
+                    losses[loss] = lm_output.loss
                 elif loss == LossFunction.Response_KL:
-                    total_loss += weight * kl_loss[LossFunction.Response_KL]
+                    losses[loss] = kl_loss[LossFunction.Response_KL]
                 elif loss == LossFunction.Input_KL:
-                    total_loss += weight * kl_loss[LossFunction.Input_KL]
+                    losses[loss] = kl_loss[LossFunction.Input_KL]
                 elif loss == LossFunction.CIF_L1:
-                    total_loss += weight * F.l1_loss(pred_num_tokens/audio_token_len, torch.ones_like(audio_token_len), reduction="mean")
+                    losses[loss] = F.l1_loss(pred_num_tokens/audio_token_len, torch.ones_like(audio_token_len), reduction="mean")
                 else:
                     raise ValueError(f"Unsupported loss function: {loss}")
+            
+            # Compute total loss after all individual losses are calculated
+            total_loss = sum(weight * losses[loss] for loss, weight in self.loss_config.loss_weights.items())
+            
+            # Print all losses in a row
+            loss_str = " , ".join([f"{loss.name}: {value.item():.4f}" for loss, value in losses.items()])
+            print(f"Total: {total_loss.item():.4f} | Losses: {loss_str}")
             
             lm_output.loss = total_loss
         return lm_output
