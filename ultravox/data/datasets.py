@@ -475,11 +475,14 @@ class LibriSpeechDummyDataset(VoiceDataset):
 
 
 class EmptyDataset(SizedIterableDataset):
+    def __init__(self, estimated_length: int = 0) -> None:
+        self._estimated_length = estimated_length
+
     def __iter__(self):
         return iter([])
 
     def __len__(self):
-        return 0
+        return self._estimated_length
 
 
 class AnyInstructDataset(VoiceDataset):
