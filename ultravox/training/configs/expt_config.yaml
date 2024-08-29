@@ -13,7 +13,7 @@ loss_config:
 val_sets: ["anyinstruct", "soda", "peoplespeech"]
 
 batch_size: 24
-max_steps: 720 # x8x24 = 1,382,400 samples
+max_steps: 10 # x8x24 = 1,382,400 samples
 
 data_sets: []
 data_dicts:
