@@ -43,6 +43,7 @@ class TrainConfig:
     eval_num_samples: int = 100
     eval_max_new_tokens: Optional[int] = None
     eval_num_procs: int = 8
+    eval_text_only: bool = False
     num_prompts: int = 1
     # number of data loader workers
     num_workers: int = 8 if torch.cuda.is_available() else 1

@@ -8,7 +8,7 @@ license = "MIT"
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = ">=3.10,<4.0"
 torch = ">=2.4"
 transformers = {version = ">=4.43.1", extras = ["torch"]}
 bitsandbytes = "~0.42.0"
@@ -29,6 +29,7 @@ tensorboardx = "~2.6.2.2"
 wandb = "~0.17.1"
 sacrebleu = "^2.4.2"
 tenacity = "^9.0.0"
+evals = {git = "https://github.com/fixie-ai/evals"}
 
 [tool.poetry.group.dev.dependencies]
 black = "~24.4.2"
