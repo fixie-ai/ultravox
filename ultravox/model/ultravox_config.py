@@ -35,6 +35,9 @@ class LossConfig:
     loss_weights: Dict[LossFunction, float] = dataclasses.field(default_factory=lambda: {LossFunction.Response_KL: 1.0})    
     kl_temperature: float = 2.0
 
+    def __post_init__(self):
+        self.loss_weights = {LossFunction(key) if isinstance(key, str) else key: value for key, value in self.loss_weights.items()}
+
     @property
     def requires_alt_fields(self):
         return any(lf in self.loss_weights for lf in [LossFunction.Input_KL, LossFunction.Response_KL])

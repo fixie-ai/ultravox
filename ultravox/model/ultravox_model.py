@@ -321,23 +321,23 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
                     alt_labels=alt_labels,
                     **kwargs
                 )
-            for loss, _ in self.loss_config.loss_weights.items():
-                if loss == LossFunction.Response_CE:
-                    losses[loss] = lm_output.loss
-                elif loss == LossFunction.Response_KL:
-                    losses[loss] = kl_loss[LossFunction.Response_KL]
-                elif loss == LossFunction.Input_KL:
-                    losses[loss] = kl_loss[LossFunction.Input_KL]
-                elif loss == LossFunction.CIF_L1:
-                    losses[loss] = F.l1_loss(pred_num_tokens/audio_token_len, torch.ones_like(audio_token_len), reduction="mean")
+            for loss_fn, _ in self.loss_config.loss_weights.items():
+                if loss_fn == LossFunction.Response_CE:
+                    losses[loss_fn] = lm_output.loss
+                elif loss_fn == LossFunction.Response_KL:
+                    losses[loss_fn] = kl_loss[LossFunction.Response_KL]
+                elif loss_fn == LossFunction.Input_KL:
+                    losses[loss_fn] = kl_loss[LossFunction.Input_KL]
+                elif loss_fn == LossFunction.CIF_L1:
+                    losses[loss_fn] = F.l1_loss(pred_num_tokens/audio_token_len, torch.ones_like(audio_token_len), reduction="mean")
                 else:
-                    raise ValueError(f"Unsupported loss function: {loss}")
+                    raise ValueError(f"Unsupported loss function: {loss_fn}")
             
             # Compute total loss after all individual losses are calculated
-            total_loss = sum(weight * losses[loss] for loss, weight in self.loss_config.loss_weights.items())
+            total_loss = sum(weight * losses[loss_fn] for loss_fn, weight in self.loss_config.loss_weights.items())
             
             # Print all losses in a row
-            loss_str = " , ".join([f"{loss.name}: {value.item():.4f}" for loss, value in losses.items()])
+            loss_str = " , ".join([f"{loss_fn.value}: {value.item():.4f}" for loss_fn, value in losses.items()])
             print(f"Total: {total_loss.item():.4f} | Losses: {loss_str}")
             
             lm_output.loss = total_loss
