@@ -8,22 +8,28 @@ import torch
 from torch.utils import data
 from transformers.feature_extraction_utils import BatchFeature
 
+from ultravox.data import dataset_config
 from ultravox.data import datasets
 
 
-class FakeIterableDataset(data.IterableDataset):
-    """Fake version of a PyTorch IterableDataset."""
+class FakeSizedIterableDataset(datasets.SizedIterableDataset):
+    """Fake version of datasets.SizedIterableDataset"""
 
-    def __init__(self, n, start=0, weight=1):
+    def __init__(self, n, start=0, weight=1, estimated_length=0):
         self.data = range(start, start + n)
         self._weight = weight
-
-    def __iter__(self):
-        return (i for i in self.data)
+        self._estimated_length = estimated_length
 
     @property
     def weight(self) -> float:
         return self._weight
+
+    def __iter__(self):
+        for sample in self.data:
+            yield sample
+
+    def __len__(self):
+        return self._estimated_length
 
 
 class FakeHuggingFaceIterableDataset(hf_datasets.IterableDataset):
@@ -47,7 +53,24 @@ class FakeTranscribeDataset(datasets.VoiceDataset):
 
     def __init__(self, n: int, args: Optional[datasets.VoiceDatasetArgs] = None):
         super().__init__(args or datasets.VoiceDatasetArgs())
-        self._init_dataset(FakeHuggingFaceIterableDataset(n))
+
+        self._init_dataset(FakeHuggingFaceIterableDataset(n), n)
+
+    def _get_sample(self, row: BatchFeature) -> datasets.VoiceSample:
+        return self._get_transcribe_sample(row)
+
+
+class FakeGenericDataset(datasets.VoiceDataset):
+    """Fake version of GenericDataset."""
+
+    def __init__(
+        self,
+        n: int,
+        config: dataset_config.DataDictConfig,
+        args: Optional[datasets.VoiceDatasetArgs] = None,
+    ):
+        super().__init__(args or datasets.VoiceDatasetArgs())
+        self._init_dataset(FakeHuggingFaceIterableDataset(n), config.total_samples)
 
     def _get_sample(self, row: BatchFeature) -> datasets.VoiceSample:
         return self._get_transcribe_sample(row)
@@ -62,17 +85,17 @@ class FakeDataproc(datasets.Dataproc):
 
 
 def test_dataproc():
-    ds = FakeIterableDataset(5)
+    ds = FakeSizedIterableDataset(5)
     s = FakeDataproc(ds)
     assert list(s) == [0, -1, -2, -3, -4]
 
 
 def test_interleaved_first_exhausted():
-    ds1 = FakeIterableDataset(5)
+    ds1 = FakeSizedIterableDataset(5)
     s = datasets.InterleaveDataset([ds1])
     assert list(s) == [0, 1, 2, 3, 4]
-    ds2 = FakeIterableDataset(9)
-    ds3 = FakeIterableDataset(3)
+    ds2 = FakeSizedIterableDataset(9)
+    ds3 = FakeSizedIterableDataset(3)
     s = datasets.InterleaveDataset(
         [ds1, ds2, ds3],
         stop_strategy=datasets.StopStrategy.FIRST_EXHAUSTED,
@@ -86,8 +109,8 @@ def test_interleaved_first_exhausted():
 
 
 def test_interleaved_last_exhausted():
-    ds1 = FakeIterableDataset(4)
-    ds2 = FakeIterableDataset(2, start=10)
+    ds1 = FakeSizedIterableDataset(4)
+    ds2 = FakeSizedIterableDataset(2, start=10)
     s = datasets.InterleaveDataset(
         [ds1, ds2],
         stop_strategy=datasets.StopStrategy.LAST_EXHAUSTED,
@@ -99,8 +122,8 @@ def test_interleaved_last_exhausted():
 
 
 def test_interleaved_never_stop():
-    ds1 = FakeIterableDataset(4)
-    ds2 = FakeIterableDataset(2, start=10)
+    ds1 = FakeSizedIterableDataset(4)
+    ds2 = FakeSizedIterableDataset(2, start=10)
     s = datasets.InterleaveDataset(
         [ds1, ds2],
         stop_strategy=datasets.StopStrategy.NEVER_STOP,
@@ -112,8 +135,8 @@ def test_interleaved_never_stop():
 
 
 def test_interleaved_random():
-    ds1 = FakeIterableDataset(4, weight=10)
-    ds2 = FakeIterableDataset(2, start=10, weight=1)
+    ds1 = FakeSizedIterableDataset(4, weight=10)
+    ds2 = FakeSizedIterableDataset(2, start=10, weight=1)
     s = datasets.InterleaveDataset(
         [ds1, ds2],
     )
@@ -145,7 +168,7 @@ def test_interleaved_random():
 
 
 def test_interleaved_with_multiprocessing():
-    ds = FakeIterableDataset(5)
+    ds = FakeSizedIterableDataset(5)
     s = datasets.InterleaveDataset([ds])
 
     dl = data.DataLoader(s, num_workers=1, batch_size=5)
@@ -155,17 +178,20 @@ def test_interleaved_with_multiprocessing():
 
 
 def test_range():
-    ds = FakeIterableDataset(10)
+    ds = FakeSizedIterableDataset(10, estimated_length=10)
     s = datasets.Range(ds, 5)
+    assert len(s) == 5
     assert list(s) == [0, 1, 2, 3, 4]
     s = datasets.Range(ds, 100)
     assert list(s) == [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
     s = datasets.Range(ds)
+    assert len(s) == 10
     assert list(s) == [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
 
 def test_transcribe_dataset():
     ds = FakeTranscribeDataset(5)
+    assert len(ds) == 5
     sample = next(iter(ds))
     assert isinstance(sample, datasets.VoiceSample)
     assert sample.messages == [
@@ -295,3 +321,20 @@ def test_get_messages():
         {"role": "user", "content": "B"},
         {"role": "assistant", "content": "C"},
     ]
+
+
+def test_voice_dataset_size():
+    mock_config = dataset_config.DataDictConfig(path="mock_path", total_samples=5)
+    ds = FakeGenericDataset(10, mock_config)
+    assert len(ds) == 5
+
+    pattern = r"(has been exceeded|Mismatch between estimated length)"
+    with pytest.warns(UserWarning, match=pattern):
+        list(ds)
+
+    mock_config = dataset_config.DataDictConfig(path="mock_path", total_samples=10)
+    ds = FakeGenericDataset(5, mock_config)
+    assert len(ds) == 10
+
+    with pytest.warns(UserWarning, match="Mismatch between estimated length"):
+        list(ds)

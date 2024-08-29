@@ -11,6 +11,7 @@ class DataDictConfig(BaseModel):
     name: Optional[str] = None
     splits: List[str] = dataclasses.field(default_factory=list)
     num_samples: Optional[int] = None
+    total_samples: int
     weight: float = 1.0
     streaming: bool = True
     user_template: str = "<|audio|>"
