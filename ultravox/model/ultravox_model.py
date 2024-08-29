@@ -105,11 +105,11 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         self.vocab_size = model_embeds.num_embeddings
         return model_embeds
     
-    def _insert_speech_placeholders(self, inputs_embeds, attention_mask, audio_start_idx, num_speech_tokens, position_ids, cache_position):
+    def _insert_speech_placeholders(self, inputs_embeds, attention_mask, audio_start_idx, num_speech_tokens, position_ids=None, cache_position=None):
         batch_size, seq_len, hidden_dim = inputs_embeds.shape
         
-        if position_ids is None or position_ids.shape != (batch_size, seq_len):
-            raise ValueError(f"position_ids must be provided and have shape (batch_size, seq_len). Got: {position_ids.shape if position_ids is not None else None}")
+        if position_ids is not None and position_ids.shape != (batch_size, seq_len):
+            raise ValueError(f"position_ids must have shape (batch_size, seq_len) if provided. Got: {position_ids.shape}")
 
         # Calculate the actual length of each sample and the new length after insertion
         sample_lengths = attention_mask.sum(dim=1)
@@ -119,7 +119,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         # Create new tensors with expanded size
         new_inputs_embeds = torch.zeros((batch_size, new_seq_len, hidden_dim), device=inputs_embeds.device, dtype=inputs_embeds.dtype)
         new_attention_mask = torch.zeros((batch_size, new_seq_len), device=attention_mask.device, dtype=attention_mask.dtype)
-        new_position_ids = torch.zeros((batch_size, new_seq_len), device=position_ids.device, dtype=position_ids.dtype)
+        new_position_ids = torch.zeros((batch_size, new_seq_len), device=attention_mask.device, dtype=torch.long) if position_ids is not None else None
 
         for i in range(batch_size):
             insert_pos = audio_start_idx[i]
@@ -136,16 +136,17 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             new_attention_mask[i, insert_pos:insert_pos + insert_len] = 1  # Set attention mask for audio tokens
             new_attention_mask[i, insert_pos + insert_len:new_len] = attention_mask[i, insert_pos:original_len]
 
-            # Update position_ids
-            new_position_ids[i, :insert_pos] = position_ids[i, :insert_pos]
-            new_position_ids[i, insert_pos:insert_pos+insert_len] = position_ids[i, insert_pos] + torch.arange(insert_len, device=position_ids.device, dtype=position_ids.dtype)
-            new_position_ids[i, insert_pos + insert_len:new_len] = position_ids[i, insert_pos:original_len] + insert_len
+            # Update position_ids if provided
+            if position_ids is not None:
+                new_position_ids[i, :insert_pos] = position_ids[i, :insert_pos]
+                new_position_ids[i, insert_pos:insert_pos+insert_len] = position_ids[i, insert_pos] + torch.arange(insert_len, device=position_ids.device, dtype=position_ids.dtype)
+                new_position_ids[i, insert_pos + insert_len:new_len] = position_ids[i, insert_pos:original_len] + insert_len
 
         # Update cache_position if provided
         new_cache_position = cache_position
         if cache_position is not None:
             if not isinstance(cache_position, torch.Tensor) or cache_position.dim() != 1:
-                raise ValueError(f"cache_position must be a 1-dimensional torch.Tensor. Got: {type(cache_position)}")
+                raise ValueError(f"cache_position must be a 1-dimensional torch.Tensor if provided. Got: {type(cache_position)}")
             
             # Validation check for the last position in cache_position
             if cache_position[-1] != seq_len - 1:
@@ -279,13 +280,13 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             audio_tower_output = audio_tower_output.to(inputs_embeds.dtype)
 
             audio_embeds, pred_num_tokens = self.adapter.forward(audio_tower_output, audio_token_len)
-            if pred_num_tokens is not None:
+            if torch.all(audio_token_len == 0):
                 inputs_embeds, attention_mask, position_ids, cache_position = self._insert_speech_placeholders(
                     inputs_embeds,
                     attention_mask,
                     audio_token_start_idx,
                     pred_num_tokens,
-                    kwargs.get("position_ids"),
+                    kwargs.get("position_ids", None),
                     kwargs.get("cache_position", None)
                 )
                 audio_token_len = pred_num_tokens
