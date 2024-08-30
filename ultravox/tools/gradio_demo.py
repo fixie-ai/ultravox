@@ -22,8 +22,9 @@ class DemoConfig:
     #    runs/llama2_asr_gigaspeech/checkpoint-1000/
     #    wandb://fixie/ultravox/model-llama2_asr_gigaspeech:v0
     # model_path: str = "fixie-ai/ultravox-v0_3"
-    model_path: str = "wandb://fixie/ultravox/model-zhuang.2024-08-12-ultravox.input_kd-1a:v11"
-    device: Optional[str] = None
+    # model_path: str = "wandb://fixie/ultravox/model-zhuang_2024-08-12-ultravox_input_kd-1b:v4"
+    model_path: str = "artifacts/model-zhuang_2024-08-12-ultravox_input_kd-1b:v4"
+    device: Optional[str] = "cpu"
     data_type: Optional[str] = None
     default_prompt: str = ""
     max_new_tokens: int = 200
@@ -68,16 +69,17 @@ def process_turn(
             f"Expected exactly 1 message in sample but got {len(sample.messages)}"
         )
 
-    output = inference.infer_stream(
+    output = inference.infer(
         sample,
         max_tokens=max_new_tokens,
         temperature=temperature,
     )
-    history[-1][1] = ""
-    for chunk in output:
-        if isinstance(chunk, infer_base.InferenceChunk):
-            history[-1][1] += chunk.text
-            yield history
+    history[-1][1] = output.text
+    yield history
+    # for chunk in output:
+    #     if isinstance(chunk, infer_base.InferenceChunk):
+    #         history[-1][1] += chunk.text
+    #         yield history
 
 
 def process_text(history, prompt, max_new_tokens, temperature):

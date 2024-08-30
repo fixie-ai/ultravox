@@ -1,5 +1,7 @@
 import logging
 from typing import Any, Dict, Optional, Set, Tuple, Union
+from collections import defaultdict
+
 
 import peft
 import torch
@@ -53,6 +55,9 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         self.language_model = self._create_language_model(config)
 
         self.loss_config = LossConfig()
+        self.accumulated_losses = defaultdict(float)
+        self.step_counter = 0
+
         self.post_init()
 
     def get_input_embeddings(self):
@@ -91,6 +96,33 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
     def _reorder_cache(self, past_key_values, beam_idx):
         return self.language_model._reorder_cache(past_key_values, beam_idx)
 
+    def _track_and_log_losses(self, losses: Dict[LossFunction, torch.FloatTensor], total_loss: torch.FloatTensor):
+        """
+        Track losses over multiple steps and log them at regular intervals.
+        
+        Args:
+            losses (Dict[LossFunction, torch.FloatTensor]): Dictionary of individual losses
+            total_loss (torch.FloatTensor): Total combined loss
+        """
+        # Accumulate losses
+        for loss_fn, value in losses.items():
+            self.accumulated_losses[loss_fn] += value.item()
+        self.accumulated_losses['total'] += total_loss.item()
+        
+        self.step_counter += 1
+        
+        # Log accumulated losses every n steps
+        if self.step_counter % self.loss_config.log_interval == 0:
+            avg_losses = {k: v / self.loss_config.log_interval for k, v in self.accumulated_losses.items()}
+            
+            loss_str = " , ".join([f"{loss_fn.value if isinstance(loss_fn, LossFunction) else loss_fn}: {value:.4f}" 
+                                   for loss_fn, value in avg_losses.items() if loss_fn != 'total'])
+            
+            logging.info(f"\nStep {self.step_counter} | Avg Total: {avg_losses['total']:.4f} | Avg Losses: {loss_str}")
+            
+            # Reset accumulated losses
+            self.accumulated_losses.clear()
+
     def resize_token_embeddings(
         self,
         new_num_tokens: Optional[int] = None,
@@ -105,11 +137,27 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         self.vocab_size = model_embeds.num_embeddings
         return model_embeds
     
-    def _insert_speech_placeholders(self, inputs_embeds, attention_mask, audio_start_idx, num_speech_tokens, position_ids=None, cache_position=None):
+    def _insert_speech_placeholders(self, inputs_embeds: torch.Tensor, attention_mask: torch.Tensor, audio_start_idx: torch.Tensor, num_speech_tokens: torch.Tensor, position_ids: Optional[torch.Tensor]=None, cache_position: Optional[torch.Tensor]=None):
         batch_size, seq_len, hidden_dim = inputs_embeds.shape
         
         if position_ids is not None and position_ids.shape != (batch_size, seq_len):
             raise ValueError(f"position_ids must have shape (batch_size, seq_len) if provided. Got: {position_ids.shape}")
+
+        # Handle cases where inputs start from a non-zero position:
+        # 1. Calculate the offset using cache_position
+        # 2. Store the attention mask for past tokens if there's an offset
+        # 3. Adjust the attention mask to only include new tokens
+        # 4. The stored past attention mask will be added back after processing
+        if cache_position is not None:
+            if cache_position.shape[0] != inputs_embeds.shape[1]:
+                raise ValueError(f"cache_position shape {cache_position.shape[0]} does not match inputs_embeds shape {inputs_embeds.shape[1]}")
+            if cache_position[-1] != attention_mask.shape[1] - 1:
+                raise ValueError(f"The last position in cache_position should be {attention_mask.shape[1]-1}, but got {cache_position[-1]}")
+            input_offset = cache_position[0]
+        else:
+            input_offset = 0
+        past_attention_mask = attention_mask[:, :input_offset] if input_offset > 0 else None
+        attention_mask = attention_mask[:, input_offset:]
 
         # Calculate the actual length of each sample and the new length after insertion
         sample_lengths = attention_mask.sum(dim=1)
@@ -122,7 +170,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         new_position_ids = torch.zeros((batch_size, new_seq_len), device=attention_mask.device, dtype=torch.long) if position_ids is not None else None
 
         for i in range(batch_size):
-            insert_pos = audio_start_idx[i]
+            insert_pos = audio_start_idx[i] - input_offset
             insert_len = num_speech_tokens[i].item()
             original_len = sample_lengths[i].item()
             new_len = new_sample_lengths[i].item()
@@ -142,16 +190,16 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
                 new_position_ids[i, insert_pos:insert_pos+insert_len] = position_ids[i, insert_pos] + torch.arange(insert_len, device=position_ids.device, dtype=position_ids.dtype)
                 new_position_ids[i, insert_pos + insert_len:new_len] = position_ids[i, insert_pos:original_len] + insert_len
 
+        # Add past attention mask if it exists
+        if past_attention_mask is not None:
+            new_attention_mask = torch.cat([
+                past_attention_mask,
+                new_attention_mask
+            ], dim=1)
+
         # Update cache_position if provided
         new_cache_position = cache_position
-        if cache_position is not None:
-            if not isinstance(cache_position, torch.Tensor) or cache_position.dim() != 1:
-                raise ValueError(f"cache_position must be a 1-dimensional torch.Tensor if provided. Got: {type(cache_position)}")
-            
-            # Validation check for the last position in cache_position
-            if cache_position[-1] != seq_len - 1:
-                raise ValueError(f"The last position in cache_position should be seq_len-1 ({seq_len-1}), but got {cache_position[-1]}")
-            
+        if cache_position is not None:         
             max_inserted = new_seq_len - seq_len
             new_cache_position = torch.cat([
                 cache_position,
@@ -280,6 +328,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             audio_tower_output = audio_tower_output.to(inputs_embeds.dtype)
 
             audio_embeds, pred_num_tokens = self.adapter.forward(audio_tower_output, audio_token_len)
+            print(f"pred_num_tokens: {pred_num_tokens}")
             if torch.all(audio_token_len == 0):
                 inputs_embeds, attention_mask, position_ids, cache_position = self._insert_speech_placeholders(
                     inputs_embeds,
@@ -294,8 +343,9 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
                 kwargs["cache_position"] = cache_position
 
             # combine audio and text embeddings
+            input_offset = 0 if cache_position is None else cache_position[0]
             for i, (audio, start, length) in enumerate(
-                zip(audio_embeds, audio_token_start_idx, audio_token_len)
+                zip(audio_embeds, audio_token_start_idx - input_offset, audio_token_len)
             ):
                 length = min(length, audio.shape[0])
                 inputs_embeds[i, start : start + length] = audio[:length]
@@ -336,9 +386,8 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             # Compute total loss after all individual losses are calculated
             total_loss = sum(weight * losses[loss_fn] for loss_fn, weight in self.loss_config.loss_weights.items())
             
-            # Print all losses in a row
-            loss_str = " , ".join([f"{loss_fn.value}: {value.item():.4f}" for loss_fn, value in losses.items()])
-            print(f"Total: {total_loss.item():.4f} | Losses: {loss_str}")
+            # Track and log losses
+            self._track_and_log_losses(losses, total_loss)
             
             lm_output.loss = total_loss
         return lm_output
@@ -373,9 +422,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             and prefill_start_idx <= torch.max(audio_token_start_idx)
         ):
             model_input["audio_values"] = audio_values
-            model_input["audio_token_start_idx"] = (
-                audio_token_start_idx - prefill_start_idx
-            )
+            model_input["audio_token_start_idx"] = audio_token_start_idx
             model_input["audio_token_len"] = audio_token_len
 
         return model_input
