@@ -20,36 +20,54 @@ class LoraConfigSimplified:
         default_factory=lambda: ["k_proj", "q_proj", "linear_k", "linear_q"]
     )
 
+
 class LossFunction(str, Enum):
     Response_CE = "Response_CE"
     Response_KL = "Response_KL"
     Input_KL = "Input_KL"
     CIF_L1 = "CIF_L1"
 
+
 class AdapterType(str, Enum):
     STACKING = "STACKING"
     CFORMER = "CFORMER"
 
+
 @dataclasses.dataclass
 class LossConfig:
-    loss_weights: Dict[LossFunction, float] = dataclasses.field(default_factory=lambda: {LossFunction.Response_KL: 1.0})    
+    loss_weights: Dict[LossFunction, float] = dataclasses.field(
+        default_factory=lambda: {LossFunction.Response_KL: 1.0}
+    )
     kl_temperature: float = 2.0
     log_interval: int = 100
 
     def __post_init__(self):
-        self.loss_weights = {LossFunction(key) if isinstance(key, str) else key: value for key, value in self.loss_weights.items()}
+        self.loss_weights = {
+            LossFunction(key) if isinstance(key, str) else key: value
+            for key, value in self.loss_weights.items()
+        }
 
     @property
     def requires_alt_fields(self):
-        return any(lf in self.loss_weights for lf in [LossFunction.Input_KL, LossFunction.Response_KL])
-    
+        return any(
+            lf in self.loss_weights
+            for lf in [LossFunction.Input_KL, LossFunction.Response_KL]
+        )
+
     def add_adapter_losses(self, adapter_type: AdapterType):
-        if adapter_type == AdapterType.CFORMER and LossFunction.CIF_L1 not in self.loss_weights:
+        if (
+            adapter_type == AdapterType.CFORMER
+            and LossFunction.CIF_L1 not in self.loss_weights
+        ):
             self.loss_weights[LossFunction.CIF_L1] = 1.0
 
     @property
     def contains_kl_loss(self):
-        return any(lf in self.loss_weights for lf in [LossFunction.Input_KL, LossFunction.Response_KL])
+        return any(
+            lf in self.loss_weights
+            for lf in [LossFunction.Input_KL, LossFunction.Response_KL]
+        )
+
 
 @dataclasses.dataclass
 class UltravoxCFormerAdapterConfig:
@@ -57,7 +75,8 @@ class UltravoxCFormerAdapterConfig:
     CFormer Adapter configuration.
 
     CIF+Transformer-based adapter to segment speech into continuous speech tokens with 1:1 correspondence to text tokens.
-"""
+    """
+
     num_pre_cif_layers: int = 2
     num_post_cif_layers: int = 2
 
@@ -68,14 +87,17 @@ class UltravoxStackingAdapterConfig:
     Stacking Adapter configuration.
 
     Stacking+Convolutions-based adapter to segment speech into continuous speech tokens at a fixed downsampling rate.
-"""
+    """
+
     stack_factor: int = 8
     activation: str = "swiglu"
 
+
 ADAPTER_CONFIG_MAP: Dict[AdapterType, Any] = {
     AdapterType.STACKING: UltravoxStackingAdapterConfig,
-    AdapterType.CFORMER: UltravoxCFormerAdapterConfig
+    AdapterType.CFORMER: UltravoxCFormerAdapterConfig,
 }
+
 
 class UltravoxConfig(transformers.PretrainedConfig):
     r"""
@@ -136,7 +158,9 @@ class UltravoxConfig(transformers.PretrainedConfig):
         self,
         audio_config: Optional[Dict[str, Any]] = None,
         text_config: Optional[Dict[str, Any]] = None,
-        adapter_config: Union[UltravoxStackingAdapterConfig, UltravoxCFormerAdapterConfig, Dict[str, Any]] = None,
+        adapter_config: Optional[
+            Union[UltravoxStackingAdapterConfig, UltravoxCFormerAdapterConfig]
+        ] = None,
         audio_model_id: Optional[str] = None,
         text_model_id: Optional[str] = None,
         adapter_type: AdapterType = AdapterType.STACKING,
@@ -196,7 +220,9 @@ class UltravoxConfig(transformers.PretrainedConfig):
         self.adapter_config = (
             adapter_config
             if isinstance(adapter_config, dict)
-            else dataclasses.asdict(adapter_config or ADAPTER_CONFIG_MAP[adapter_type]())
+            else dataclasses.asdict(
+                adapter_config or ADAPTER_CONFIG_MAP[adapter_type]()
+            )
         )
 
         self.vocab_size = self.text_config.vocab_size
@@ -204,6 +230,7 @@ class UltravoxConfig(transformers.PretrainedConfig):
         self.initializer_range = self.text_config.initializer_range
 
         super().__init__(**kwargs)
+
 
 UltravoxConfig.register_for_auto_class()
 transformers.AutoConfig.register("ultravox", UltravoxConfig)

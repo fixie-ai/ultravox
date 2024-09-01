@@ -95,7 +95,9 @@ class LocalInference(base.VoiceInference):
         if self.conversation_mode:
             audio_token_len = inputs.get("audio_token_len", [0])[0]
             if audio_token_len == 0:
-                audio_token_len = output.past_key_values[0][0].shape[2] - input_len - output_len
+                audio_token_len = (
+                    output.past_key_values[0][0].shape[2] - input_len - output_len
+                )
             past_messages = self._build_past_messages(
                 extended_sample.messages, audio_token_len, output_text
             )
@@ -164,12 +166,16 @@ class LocalInference(base.VoiceInference):
                 output_text += chunk
                 yield base.InferenceChunk(chunk)
         thread.join()
-        output_len = len(self.tokenizer(output_text, add_special_tokens=False).input_ids)
+        output_len = len(
+            self.tokenizer(output_text, add_special_tokens=False).input_ids
+        )
         output = future.result()
         if self.conversation_mode:
             audio_token_len = inputs.get("audio_token_len", [0])[0]
             if audio_token_len == 0:
-                audio_token_len = output.past_key_values[0][0].shape[2] - input_len - output_len
+                audio_token_len = (
+                    output.past_key_values[0][0].shape[2] - input_len - output_len
+                )
             past_messages = self._build_past_messages(
                 extended_sample.messages, audio_token_len, output_text
             )

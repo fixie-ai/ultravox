@@ -92,15 +92,18 @@ class UltravoxDataproc(datasets.Dataproc):
             input_token_len = len(input_ids) - output_token_len
             labels[:input_token_len] = -100
 
-        inputs['labels'] = labels
+        inputs["labels"] = labels
         # If include_alt_fields is True, also include alt_input_ids, alt_attention_mask, and alt_labels
         if self.include_alt_fields:
-            if 'alt_input_ids' in inputs:
-                alt_input_ids = inputs['alt_input_ids'].squeeze_(0)
+            if "alt_input_ids" in inputs:
+                alt_input_ids = inputs["alt_input_ids"].squeeze_(0)
                 # print(f"alt_input_ids size: {alt_input_ids.size(0)}")
                 inputs["alt_attention_mask"].squeeze_(0)
                 alt_labels = alt_input_ids.clone()
-                if not self.train_on_inputs and sample.messages[-1]["role"] == "assistant":
+                if (
+                    not self.train_on_inputs
+                    and sample.messages[-1]["role"] == "assistant"
+                ):
                     alt_input_token_len = (
                         input_token_len + len(alt_input_ids) - len(input_ids)
                     )

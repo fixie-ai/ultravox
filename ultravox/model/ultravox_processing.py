@@ -1,12 +1,13 @@
-from typing import Optional, Union
 import re
+from typing import Optional, Union
 
 import numpy as np
 import torch
 import transformers
 
 from .ultravox_config import UltravoxConfig
-from .ultravox_adapter import UltravoxAdapter
+from .ultravox_model import UltravoxAdapter
+
 
 # TODO: update the comments to reflect the actual implementation
 class UltravoxProcessor(transformers.ProcessorMixin):
@@ -55,12 +56,14 @@ class UltravoxProcessor(transformers.ProcessorMixin):
         self.adapter = adapter
         self.audio_placeholder = audio_placeholder
         # The tokenizer treats spaces around special tokens differently depending on the context.
-        # When using the audio placeholder <|audio|>, we should always ignore any extra surrounding spaces 
+        # When using the audio placeholder <|audio|>, we should always ignore any extra surrounding spaces
         # to maintain consistency in tokenization, as extra spaces are meaningless in this context.
-        # When part of the text is marked by <|audio|> indicating audio input, we should tokenize 
-        # the three segments separated by the audio placeholder independently. This ensures consistency 
+        # When part of the text is marked by <|audio|> indicating audio input, we should tokenize
+        # the three segments separated by the audio placeholder independently. This ensures consistency
         # between text input and audio input.
-        self.audio_placeholder_regex = re.compile(rf" *{re.escape(audio_placeholder)} *")
+        self.audio_placeholder_regex = re.compile(
+            rf" *{re.escape(audio_placeholder)} *"
+        )
         self.audio_token_replacement = tokenizer.eos_token
         assert (
             self.audio_token_replacement is not None
@@ -149,7 +152,9 @@ class UltravoxProcessor(transformers.ProcessorMixin):
         tokenized_transcript = None
         if audio is not None and len(audio) > 0:
             if not self.adapter:
-                raise ValueError("Adapter must be provided for determing audio_token_len.")
+                raise ValueError(
+                    "Adapter must be provided for determing audio_token_len."
+                )
 
             if self.audio_padding == "max_length":
                 # 30 seconds is the expected length for Whisper
@@ -157,7 +162,7 @@ class UltravoxProcessor(transformers.ProcessorMixin):
                 audio_len = 30 * sampling_rate
             else:
                 audio_len = audio.shape[-1]
-            
+
             # num_encoder_frames is needed for the Stacking adapter to determine audio_token_len, both in training and inference.
             # It's guaranteed that the number of frames is less than or equal to this amount.
             # For Whisper this is exact AFAICT, but for Wav2Vec2 it's an upper bound.
@@ -166,12 +171,16 @@ class UltravoxProcessor(transformers.ProcessorMixin):
             # num_text_tokens is needed for the CFormer adapter to determine audio_token_len in training mode.
             # In inference mode, the inferred transcript length during forward pass is used to determine audio_token_len.
             if transcript:
-                tokenized_transcript = self.tokenizer(transcript, add_special_tokens=False, **kwargs)
+                tokenized_transcript = self.tokenizer(
+                    transcript, add_special_tokens=False, **kwargs
+                )
                 num_transcript_tokens = len(tokenized_transcript.input_ids)
             else:
                 num_transcript_tokens = 0
             # compute the audio_token_len based on the model's adapter
-            audio_token_len = self.adapter.get_audio_token_len(num_encoder_frames, num_transcript_tokens)
+            audio_token_len = self.adapter.get_audio_token_len(
+                num_encoder_frames, num_transcript_tokens
+            )
             data["audio_token_len"] = [audio_token_len]
 
             # Main audio processing. The processor is model-specific.
@@ -191,38 +200,64 @@ class UltravoxProcessor(transformers.ProcessorMixin):
             assert isinstance(
                 text, str
             ), "Text must be a string. Batch mode not supported yet."
-            
+
             # Find all matches of the audio placeholder
             matches = list(self.audio_placeholder_regex.finditer(text))
-            
+
             if len(matches) > 1:
-                raise ValueError(f"Multiple audio placeholders (found {len(matches)}) are not supported")
+                raise ValueError(
+                    f"Multiple audio placeholders (found {len(matches)}) are not supported"
+                )
             elif len(matches) == 1:
                 match = matches[0]
                 if "audio_token_len" not in data:
                     raise ValueError(
                         f"audio must be provided when using audio placeholder ({self.audio_placeholder}) in text."
                     )
-                
+
                 # Split the text into three parts
-                before_audio = text[:match.start()]
-                audio_replacement = self.audio_token_replacement * data["audio_token_len"][0]
-                after_audio = text[match.end():]
+                before_audio = text[: match.start()]
+                audio_replacement = (
+                    self.audio_token_replacement * data["audio_token_len"][0]
+                )
+                after_audio = text[match.end() :]
 
                 # Tokenize each part independently
-                tokenized_before = self.tokenizer(before_audio, add_special_tokens=False, **kwargs)
-                tokenized_audio = self.tokenizer(audio_replacement, add_special_tokens=False, **kwargs)
-                tokenized_after = self.tokenizer(after_audio, add_special_tokens=False, **kwargs)
+                tokenized_before = self.tokenizer(
+                    before_audio, add_special_tokens=False, **kwargs
+                )
+                tokenized_audio = self.tokenizer(
+                    audio_replacement, add_special_tokens=False, **kwargs
+                )
+                tokenized_after = self.tokenizer(
+                    after_audio, add_special_tokens=False, **kwargs
+                )
 
                 # Merge the tokenized parts using torch.cat
-                data["input_ids"] = [tokenized_before.input_ids + tokenized_audio.input_ids + tokenized_after.input_ids]
-                data["attention_mask"] = [tokenized_before.attention_mask + tokenized_audio.attention_mask + tokenized_after.attention_mask]
+                data["input_ids"] = [
+                    tokenized_before.input_ids
+                    + tokenized_audio.input_ids
+                    + tokenized_after.input_ids
+                ]
+                data["attention_mask"] = [
+                    tokenized_before.attention_mask
+                    + tokenized_audio.attention_mask
+                    + tokenized_after.attention_mask
+                ]
                 data["audio_token_start_idx"] = [len(tokenized_before.input_ids)]
 
                 # Include the tokenized transcript as alt_fields
                 if tokenized_transcript:
-                    data['alt_input_ids'] = [tokenized_before.input_ids + tokenized_transcript.input_ids + tokenized_after.input_ids]
-                    data['alt_attention_mask'] = [tokenized_before.attention_mask + tokenized_transcript.attention_mask + tokenized_after.attention_mask]
+                    data["alt_input_ids"] = [
+                        tokenized_before.input_ids
+                        + tokenized_transcript.input_ids
+                        + tokenized_after.input_ids
+                    ]
+                    data["alt_attention_mask"] = [
+                        tokenized_before.attention_mask
+                        + tokenized_transcript.attention_mask
+                        + tokenized_after.attention_mask
+                    ]
             else:
                 # No audio placeholder found, tokenize the entire text
                 tokenized = self.tokenizer([text], add_special_tokens=False, **kwargs)

@@ -112,7 +112,7 @@ def train(args: config_base.TrainConfig):
         text_model_id=args.text_model,
         text_model_lora_config=args.text_model_lora_config,
         audio_model_lora_config=args.audio_model_lora_config,
-        adapter_type = args.adapter_type,
+        adapter_type=args.adapter_type,
         adapter_config=args.adapter_config,
     )
 
@@ -128,7 +128,9 @@ def train(args: config_base.TrainConfig):
         model.set_loss_config(args.loss_config)
 
     audio_processor = transformers.AutoProcessor.from_pretrained(args.audio_model)
-    processor = ultravox_processing.UltravoxProcessor(audio_processor=audio_processor, tokenizer=text_tokenizer, adapter=model.adapter)
+    processor = ultravox_processing.UltravoxProcessor(
+        audio_processor=audio_processor, tokenizer=text_tokenizer, adapter=model.adapter
+    )
 
     assert model.get_input_embeddings().num_embeddings == len(
         text_tokenizer

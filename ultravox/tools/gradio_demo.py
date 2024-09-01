@@ -5,7 +5,6 @@ import gradio as gr
 import simple_parsing
 
 from ultravox.data import datasets
-from ultravox.inference import base as infer_base
 from ultravox.tools import gradio_helper
 
 DEMO_INSTRUCTION: str = """Enter your prompt here (audio will be inserted at the end or at <|audio|>).
@@ -110,7 +109,7 @@ with gr.Blocks() as demo:
         with gr.Column(scale=1):
             reset = gr.Button("Reset")
             audio = gr.Audio(
-label="🎤 / 📁",
+                label="🎤 / 📁",
                 sources=["microphone", "upload"],
                 type="filepath",
                 visible=True,
