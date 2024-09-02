@@ -411,7 +411,6 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             audio_embeds, pred_num_tokens = self.adapter.forward(
                 audio_tower_output, audio_token_len
             )
-            print(f"pred_num_tokens: {pred_num_tokens}")
             position_ids = kwargs.get("position_ids", None)
             cache_position = kwargs.get("cache_position", None)
             if torch.all(audio_token_len == 0):

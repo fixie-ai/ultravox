@@ -5,6 +5,7 @@ import gradio as gr
 import simple_parsing
 
 from ultravox.data import datasets
+from ultravox.inference import base as infer_base
 from ultravox.tools import gradio_helper
 
 DEMO_INSTRUCTION: str = """Enter your prompt here (audio will be inserted at the end or at <|audio|>).
@@ -22,7 +23,8 @@ class DemoConfig:
     #    wandb://fixie/ultravox/model-llama2_asr_gigaspeech:v0
     # model_path: str = "fixie-ai/ultravox-v0_3"
     # model_path: str = "wandb://fixie/ultravox/model-zhuang_2024-08-12-ultravox_input_kd-1b:v4"
-    model_path: str = "artifacts/model-zhuang_2024-08-12-ultravox_input_kd-1b:v4"
+    # model_path: str = "artifacts/model-zhuang_2024-08-12-ultravox_input_kd-1b:v4"
+    model_path: str = "wandb://fixie/ultravox/model-zhuang_2024-08-12-ultravox_input_kd-1b:v13"
     device: Optional[str] = "cpu"
     data_type: Optional[str] = None
     default_prompt: str = ""
@@ -68,17 +70,16 @@ def process_turn(
             f"Expected exactly 1 message in sample but got {len(sample.messages)}"
         )
 
-    output = inference.infer(
-        sample,
-        max_tokens=max_new_tokens,
-        temperature=temperature,
-    )
-    history[-1][1] = output.text
-    yield history
-    # for chunk in output:
-    #     if isinstance(chunk, infer_base.InferenceChunk):
-    #         history[-1][1] += chunk.text
-    #         yield history
+    output = inference.infer_stream(
+            sample,
+            max_tokens=max_new_tokens,
+            temperature=temperature,
+        )
+    history[-1][1] = ""
+    for chunk in output:
+        if isinstance(chunk, infer_base.InferenceChunk):
+            history[-1][1] += chunk.text
+            yield history
 
 
 def process_text(history, prompt, max_new_tokens, temperature):
