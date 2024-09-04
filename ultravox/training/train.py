@@ -1,17 +1,14 @@
 import copy
 import dataclasses
-import gc
 import glob
 import logging
 import os
 import re
-import subprocess
 import sys
 from datetime import datetime
 from typing import Dict, List, Optional
 
 import datasets as hf_datasets
-import pandas as pd
 import safetensors.torch
 import simple_parsing
 import torch
@@ -22,6 +19,7 @@ import wandb.sdk
 from torch.utils import data
 
 from ultravox.data import datasets
+from ultravox.inference import infer
 from ultravox.model import data_processing
 from ultravox.model import ultravox_config
 from ultravox.model import ultravox_model
@@ -30,6 +28,7 @@ from ultravox.model import ultravox_processing
 from ultravox.model import wandb_utils
 from ultravox.training import config_base
 from ultravox.training import ddp_utils
+from ultravox.training import evaluation
 
 INPUT_EXAMPLE = {"text": "Transcribe\n<|audio|>", "audio": b"\x00\x00" * 16000}
 OUTPUT_EXAMPLE = {"text": "Hello, world!"}
@@ -78,18 +77,6 @@ def main() -> None:
 
     transformers.set_seed(args.seed)
 
-    local_rank = int(os.environ.get("LOCAL_RANK", 0))
-    is_master = local_rank == 0
-
-    train(args)
-
-    if args.do_eval and is_master:
-        gc.collect()
-        torch.cuda.empty_cache()
-        evaluate(args)
-
-
-def train(args: config_base.TrainConfig):
     world_size = int(os.environ.get("WORLD_SIZE", 1))
     local_rank = int(os.environ.get("LOCAL_RANK", 0))
     is_master = local_rank == 0
@@ -315,94 +302,37 @@ def train(args: config_base.TrainConfig):
         )
         pipeline.save_pretrained(args.output_dir)
 
+    if args.do_eval:
+        logging.info("Starting evaluation...")
+        t_start = datetime.now()
+        logging.info(f"eval start time: {t_start}")
 
-def evaluate(args: config_base.TrainConfig):
-    """
-    Evaluate the model on the audio and text datasets.
-
-    NOTE: This function must be run only on the primary process.
-    """
-    logging.info("Starting evaluation...")
-    t_start = datetime.now()
-    logging.info(f"eval start time: {t_start}")
-
-    if args.text_model_lora_config and args.text_model_lora_config.r:
-        logging.warn(
-            "Model has unmerged LoRA config. This can lead to slower inference."
+        # Merge LoRA weights for better inference performance.
+        # Note: this is irreversible and changes model saving format
+        model.merge_and_unload()
+        # padding_side="left" is required for (batch) inference
+        processor.tokenizer.padding_side = "left"
+        inference = infer.LocalInference(
+            model=model,
+            processor=processor,
+            tokenizer=processor.tokenizer,
+            device=args.device,
+            dtype=getattr(torch, args.data_type),
         )
-
-    logs_dir = wandb.run.dir if wandb.run else str(args.logs_dir)
-
-    # Run audio-based evaluations and log to W&B
-    audio_metrics_df = run_oaievalset(
-        log_dir=os.path.join(logs_dir, "oaieval/audio"),
-        model_dir=str(args.output_dir),
-        eval_set="audio-core",
-        num_samples=args.eval_num_samples,
-    )
-    # TODO: it would be best to do trainer.log, but then we'd risk keeping parts of the model
-    # in GPU memory, which could cause OOM errors.
-    if wandb.run:
-        wandb.run.log({"eval_audio": wandb.Table(data=audio_metrics_df)})
-
-    if args.eval_text_only:
-        # Run text-only evaluations and log to W&B
-        text_metrics_df = run_oaievalset(
-            log_dir=os.path.join(logs_dir, "oaieval/text"),
-            model_dir=str(args.output_dir),
-            eval_set="transcript-core",
+        metrics = evaluation.evaluate(
+            inference,
+            data_dir=args.data_dir,
+            num_procs=args.eval_num_procs,
             num_samples=args.eval_num_samples,
+            max_new_tokens=args.eval_max_new_tokens,
+            log_dir=wandb.run.dir if wandb.run else str(args.logs_dir),
         )
-        if wandb.run:
-            wandb.run.log({"eval_text": wandb.Table(data=text_metrics_df)})
+        if is_master:
+            trainer.log(metrics)
 
-    t_end = datetime.now()
-    logging.info(f"eval end time: {t_end}")
-    logging.info(f"elapsed: {t_end - t_start}")
-
-
-def run_oaievalset(
-    log_dir: str, model_dir: str, eval_set: str, num_samples: Optional[int] = None
-) -> pd.DataFrame:
-    env = os.environ.copy()
-
-    # num_gpus = max(1, torch.cuda.device_count())
-    env["EVALS_THREADS"] = "64"
-
-    # TODO: currently running this on a single GPU is faster than multiple GPUs :facepalm:
-    env["CUDA_VISIBLE_DEVICES"] = "0"
-
-    command = [
-        "oaievalset",
-        "--record_dir",
-        log_dir,
-        "generation/gpu/ultravox-dev",
-        eval_set,
-        f"--completion_args=model={model_dir}",
-    ]
-    if num_samples:
-        command.append(f"--max_samples={num_samples}")
-
-    # Run the evaluation set
-    subprocess.run(command, check=True, env=env)
-
-    # Extract the results from the log directory
-    subprocess.run(
-        [
-            "python",
-            "-m",
-            "evals.elsuite.audio.make_table",
-            "--out_dir",
-            log_dir,
-            "--log_dir",
-            log_dir,
-        ],
-        check=True,
-    )
-
-    df = pd.read_csv(os.path.join(log_dir, "results.csv"))
-
-    return df
+        t_end = datetime.now()
+        logging.info(f"eval end time: {t_end}")
+        logging.info(f"elapsed: {t_end - t_start}")
 
 
 if __name__ == "__main__":
