@@ -14,10 +14,10 @@ from tenacity import retry
 from tenacity import stop_after_attempt
 from tenacity import wait_fixed
 
+import ultravox.tools.ds_tool.chunked_dataset as chunked_dataset
 from ultravox.data import text_proc
 from ultravox.tools.ds_tool import caching
 from ultravox.tools.ds_tool import tts
-import ultravox.tools.ds_tool.chunked_dataset as chunked_dataset
 
 tts_client: caching.CachingTtsWrapper
 chat_client: caching.CachingChatWrapper
@@ -333,9 +333,13 @@ class DatasetChunkProcessor:
             self.args.exclude_fields,
         )
 
-    @retry(wait=wait_fixed(3), stop=stop_after_attempt(2))
+    @retry(wait=wait_fixed(3), stop=stop_after_attempt(3))
     def _upload(self, ds_chunk_processed: datasets.Dataset, data_dir: str, split_name):
         print(f"Uploading chunk to hub: {data_dir}")
+        ds_split_chunked: chunked_dataset.ChunkedDataset = (
+            chunked_dataset.convert_to_chunked_dataset(ds_chunk_processed)
+        )
+
         hub_args: Dict[str, Any] = {
             "config_name": self.args.upload_subset,
             "token": self.args.token or os.environ.get("HF_TOKEN"),
@@ -344,7 +348,7 @@ class DatasetChunkProcessor:
             "num_shards": self.args.num_shards,
             "split": split_name,
         }
-        ds_chunk_processed.push_to_hub(self.args.upload_name, **hub_args)
+        ds_split_chunked.push_to_hub(self.args.upload_name, **hub_args)
 
 
 def main(args: DatasetToolArgs):
@@ -353,7 +357,6 @@ def main(args: DatasetToolArgs):
     data_dict: datasets.DatasetDict = datasets.load_dataset(
         ds_name, args.dataset_subset, split=args.dataset_split
     )
-    data_dict = chunked_dataset.convert_to_chunked_dataset(data_dict)
 
     if isinstance(data_dict, datasets.Dataset):
         data_dict = datasets.DatasetDict({args.upload_split: data_dict})
@@ -375,11 +378,6 @@ def main(args: DatasetToolArgs):
         ds_chunk_proc.process_and_upload_split_rescursive(
             split_name, ds_split, 0, len(ds_split)
         )
-
-    # Note: After running this script, you need to manually update the README.md file with the new dataset information.
-    # 1. Change the configs section path to point to upload_subset/split_name/**
-    # 2. Update the dataset split num_examples field to the total number of samples processed. This can be found in the logs as the final output.
-
-
+        
 if __name__ == "__main__":
     main(simple_parsing.parse(DatasetToolArgs))
