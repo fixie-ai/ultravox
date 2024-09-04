@@ -220,6 +220,8 @@ class DatasetToolArgs:
     )
 
     def __post_init__(self):
+        if not self.dataset_subset:
+            self.dataset_subset = "default"
         if not self.upload_subset and self.dataset_subset:
             self.upload_subset = self.dataset_subset
         if self.dataset_split and not self.upload_split:
@@ -348,6 +350,7 @@ class DatasetChunkProcessor:
             "num_shards": self.args.num_shards,
             "split": split_name,
         }
+        assert isinstance(self.args.upload_name, str)
         ds_split_chunked.push_to_hub(self.args.upload_name, **hub_args)
 
 
@@ -378,6 +381,7 @@ def main(args: DatasetToolArgs):
         ds_chunk_proc.process_and_upload_split_rescursive(
             split_name, ds_split, 0, len(ds_split)
         )
-        
+
+
 if __name__ == "__main__":
     main(simple_parsing.parse(DatasetToolArgs))

@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 import fnmatch
 import json
 import math
