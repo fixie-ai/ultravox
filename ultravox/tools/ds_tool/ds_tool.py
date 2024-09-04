@@ -190,6 +190,7 @@ class DatasetToolArgs:
     dataset_name: str = simple_parsing.field(alias="-d")
     dataset_subset: Optional[str] = simple_parsing.field(default=None, alias="-S")
     dataset_split: Optional[str] = simple_parsing.field(default=None, alias="-s")
+    dataset_version: Optional[str] = simple_parsing.field(default="main", alias="-v")
 
     # Local processing parameters
     shuffle: bool = simple_parsing.field(default=False)
@@ -357,8 +358,13 @@ class DatasetChunkProcessor:
 def main(args: DatasetToolArgs):
     ds_name = args.dataset_name
     print(f'Loading dataset "{ds_name}" for task {args.task}')
+    download_config = datasets.DownloadConfig(num_proc=args.num_workers, max_retries=2)
     data_dict: datasets.DatasetDict = datasets.load_dataset(
-        ds_name, args.dataset_subset, split=args.dataset_split
+        ds_name,
+        args.dataset_subset,
+        split=args.dataset_split,
+        download_config=download_config,
+        revision=args.dataset_version,
     )
 
     if isinstance(data_dict, datasets.Dataset):
