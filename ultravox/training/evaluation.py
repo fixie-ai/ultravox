@@ -131,6 +131,7 @@ def evaluate(
             split=datasets.DatasetSplit.VALIDATION,
             include_audio=task.include_audio,
             include_context=task.include_context,
+            max_audio_duration_secs=30,
         )
 
         ds = datasets.Range(datasets.create_dataset(task.dataset, ds_args), num_samples)
