@@ -40,6 +40,7 @@ def fix_hyphens(arg: str):
 
 
 def prepare_dataset(
+    train_args: config_base.TrainConfig,
     dataset_names: List[str],
     data_args: datasets.VoiceDatasetArgs,
     processor: ultravox_processing.UltravoxProcessor,
@@ -48,8 +49,14 @@ def prepare_dataset(
     num_samples: Optional[int] = None,
     include_alt_fields: bool = False,  # whether to generate tensors for text-only input (e.g., used for KD training)
 ) -> datasets.SizedIterableDataset:
-
     data_sets = [datasets.create_dataset(ds, data_args) for ds in dataset_names]
+    # If we're using epochs to train, validate the dataset length is appropriate.
+    if train_args.max_steps == 0:
+        for ds in data_sets:
+            assert (
+                len(ds) > 1
+            ), f"Dataset {ds} has length {len(ds)} which is too short for epoch training"
+
     interleave = datasets.InterleaveDataset(data_sets, stop_strategy=stop_strategy)
     ds_with_proc = data_processing.UltravoxDataproc(
         interleave,
@@ -196,6 +203,7 @@ def train(args: config_base.TrainConfig):
         + [(f"text_{x}", [x]) for x in args.val_sets]
     )
     train_dataset = prepare_dataset(
+        train_args=args,
         dataset_names=args.data_sets,
         train_on_inputs=args.train_on_inputs,
         stop_strategy=args.stop_strategy,
@@ -226,6 +234,7 @@ def train(args: config_base.TrainConfig):
         val_ds_args_text.include_audio = False
         val_datasets = {
             k: prepare_dataset(
+                train_args=args,
                 dataset_names=val_sets[k],
                 train_on_inputs=args.train_on_inputs,
                 stop_strategy=args.stop_strategy,
