@@ -298,7 +298,7 @@ class VoiceDataset(SizedIterableDataset):
         self._rng = np.random.default_rng(self._args.shuffle_seed)
         self._weight = 1.0  # the default weight for the dataset
 
-    def _init_dataset(self, dataset: data.Dataset, estimated_length: int = 0) -> None:
+    def _init_dataset(self, dataset: data.Dataset, estimated_length: int = 1) -> None:
         self._dataset = dataset
         # Only required when using epochs when training dataset.
         self._estimated_length = estimated_length
@@ -363,12 +363,12 @@ class VoiceDataset(SizedIterableDataset):
             actual_length += 1
             # If len(dataset) == 0 most likely the dataset is a validation dataset,
             # or the training is using max_steps instead of num_epochs.
-            if actual_length > len(self) and len(self) > 0:
+            if actual_length > len(self) and len(self) > 1:
                 warnings.warn(
                     f"The estimated length {self._estimated_length} has been exceeded for type {type(self._dataset)}. Make sure to update."
                 )
 
-        if actual_length != len(self) and len(self) > 0:
+        if actual_length != len(self) and len(self) > 1:
             warnings.warn(
                 f"Mismatch between estimated length ({self._estimated_length}) and actual length ({actual_length}) for dataset of type {type(self._dataset)}. Make sure to update."
             )
@@ -484,7 +484,7 @@ class LibriSpeechDummyDataset(VoiceDataset):
 
 # Making EmptyDataset a SizedIterableDataset to be compatible with using epochs during training.
 class EmptyDataset(SizedIterableDataset):
-    def __init__(self, estimated_length: int = 0) -> None:
+    def __init__(self, estimated_length: int = 1) -> None:
         self._estimated_length = estimated_length
 
     def __iter__(self):
