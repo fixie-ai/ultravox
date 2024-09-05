@@ -34,18 +34,15 @@ def flatten(data: List[List[T]]) -> List[T]:
 
 def all_gather_list(data: List[T]) -> List[T]:
     local_rank = torch.distributed.get_rank()
-    print(f"Entering all_gather_list with {len(data)} items on local rank {local_rank}, with {len(data)} object: {data[:10]}", flush=True)
     if not torch.distributed.is_initialized():
         return data
     world_size = torch.distributed.get_world_size()
-    print(f"World size: {world_size} on local rank {local_rank}", flush=True)
     data_list = [None] * world_size
     try: 
         torch.distributed.all_gather_object(data_list, data)
     except Exception as e:
         print(f"Error in all_gather_object: {e}", flush=True)
         raise e
-    print(f"Exiting all_gather_list with {len(data_list)} items on local rank {local_rank}", flush=True)
     return flatten(data_list)  # type: ignore
 
 

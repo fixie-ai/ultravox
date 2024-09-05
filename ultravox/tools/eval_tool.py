@@ -122,18 +122,17 @@ def main():
 
 def dataset_infer(
     inference: ultravox_infer.UltravoxInference,
-    data_loader: data_utils.DataLoader,
+    dataset: datasets.VoiceDataset,
     batch_size: Optional[int] = 1,
     max_tokens: Optional[int] = None,
     temperature: float = 0.0,
     world_size: int = 1,
     local_rank: int = 0
 ) -> List[eval_types.Sample]:
+    data_loader = data_utils.DataLoader(dataset, batch_size=batch_size, collate_fn=lambda x: x)
     batch_index = 0
     results = []
-    print(f"Entering dataset_infer with batch_size={batch_size}, max_tokens={max_tokens}, temperature={temperature}, world_size={world_size}, local_rank={local_rank}", flush=True)
     for batch_input in ddp_utils.sharded_dataloader(data_loader, world_size, local_rank):
-        print(f"Starting to process batch {batch_index} of rank {local_rank}/{world_size}", flush=True)
         batch_references = []
         for sample in batch_input:
             assistant_message = sample.messages.pop()
@@ -146,7 +145,6 @@ def dataset_infer(
             max_tokens=max_tokens,
             temperature=temperature,
         )
-        print(f"Finished inferencing batch {batch_index} of rank {local_rank}/{world_size}", flush=True)
         # set the starting index for the samples
         sample_index = batch_size * (batch_index * world_size + local_rank)        
         for sample, generated, expected in zip(
@@ -162,9 +160,7 @@ def dataset_infer(
                 )
             )
             sample_index += 1
-        print(f"Finished processing batch {batch_index} of rank {local_rank}/{world_size}", flush=True)
         batch_index += 1
-    print(f"Exiting dataset_infer with batch_size={batch_size}, max_tokens={max_tokens}, temperature={temperature}, world_size={world_size}, local_rank={local_rank}", flush=True)
     return results
 
 def run_evaluation(inference: ultravox_infer.UltravoxInference, args: GenericInferArgs, dataset_configs: List[dataset_config.DatasetConfig], world_size: int, local_rank: int):
@@ -173,13 +169,11 @@ def run_evaluation(inference: ultravox_infer.UltravoxInference, args: GenericInf
     dataset_args = datasets.VoiceDatasetArgs()
     for config in dataset_configs:
         dataset = datasets.GenericVoiceDataset(dataset_args, config)
-        data_loader = data_utils.DataLoader(dataset, batch_size=args.batch_size, collate_fn=lambda x: x)
-        print(f"Starting to process dataset {config.alias} of rank {local_rank}/{world_size}", flush=True)
-        results = dataset_infer(inference, data_loader, batch_size=args.batch_size, max_tokens=args.max_tokens, temperature=args.temperature, world_size=world_size, local_rank=local_rank)
-        print(f"Before all_gather_list on local rank {local_rank}", flush=True)
+        results = dataset_infer(inference, dataset, batch_size=args.batch_size, max_tokens=args.max_tokens, temperature=args.temperature, world_size=world_size, local_rank=local_rank)
         results = ddp_utils.all_gather_list(results)
-        print(f"After all_gather_list on local rank {local_rank}", flush=True)
         if local_rank == 0:
+            # Sort results based on index
+            results.sort(key=lambda x: x.index)
             dataset_alias = config.alias
             if config.eval_config:
                 eval_result: eval_types.Result = eval.evaluate_answers(results, config.eval_config)
