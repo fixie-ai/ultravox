@@ -13,6 +13,10 @@ class EvalConfig(BaseModel):
         extra = "forbid"
         # do not allow undefined parameters
 
+class EvalConfig(BaseModel):
+    metric: str
+    args: Optional[Dict[str, str]] = dataclasses.field(default_factory=dict)
+
 
 @dataclasses.dataclass
 class Sample(dataclasses_json.DataClassJsonMixin):

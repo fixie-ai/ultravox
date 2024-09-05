@@ -6,12 +6,12 @@ compute:
   cluster: r14z3p1
 integrations:
   - integration_type: git_repo
-    git_repo: fixie-ai/ultravox
+    git_repo: fixie-ai/ultravox-expts
     git_branch: $UV_BRANCH
     pip_install: poetry==1.7.1
 command: >-
-  cd ultravox && poetry install --no-dev && poetry run torchrun --nproc_per_node=8 -m ultravox.tools.eval_tool $EVAL_ARGS
+  cd ultravox-expts && poetry install --no-dev && poetry run torchrun --nproc_per_node=8 -m ultravox.tools.eval_tool $EVAL_ARGS --exp_name $UV_BRANCH
 env_variables:
   MLFLOW_TRACKING_URI: databricks
-  UV_BRANCH: main
+  UV_BRANCH: zhuang.2024-08-12-ultravox.input_kd-1e
   EVAL_ARGS: --config_path ultravox/evaluation/configs/eval_config.yaml
