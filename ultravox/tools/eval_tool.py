@@ -237,7 +237,7 @@ def main():
     with ddp_utils.run_on_master_first(local_rank == 0):
         inference = ultravox_infer.UltravoxInference(
             args.model,
-            device=args.device,
+            device=device
             data_type=device_helpers.get_dtype(args.data_type),
         )
 
