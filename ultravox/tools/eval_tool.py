@@ -215,7 +215,7 @@ def main():
     device = torch.device(args.device, index=local_rank)
     if world_size > 1:
         timeout = datetime.timedelta(seconds=600)  # 10 minutes
-        dist.init_process_group(backend="nccl", timeout=timeout)
+        dist.init_process_group(backend="gloo", timeout=timeout)
 
     output_dir = Path(args.output_dir)
     # Initialize wandb if it's in report_logs_to
