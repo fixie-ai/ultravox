@@ -2,7 +2,6 @@ import dataclasses
 import json
 import math
 import os
-from collections import defaultdict
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import datasets
@@ -234,7 +233,6 @@ class DatasetChunkProcessor:
     args: DatasetToolArgs
     cache_dir: str = ".cache/ds_tool/processed_datasets"
     chunks_not_uploaded: List[Tuple[int, int]] = []
-    total_samples_processed: Dict[str, int] = defaultdict(int)
 
     def __init__(self, args: DatasetToolArgs):
         self.args = args
@@ -296,7 +294,6 @@ class DatasetChunkProcessor:
                         ds_chunk_processed.to_parquet(ds_chunk_cache_path)
                     else:
                         print(f"Chunk {ds_chunk_name} has 0 samples. Not uploading.")
-                self.total_samples_processed[split_name] += len(ds_chunk_processed)
 
             except Exception as e:
                 # If the error is unsupported operand type(s) for -=: 'NoneType' and 'float',
@@ -325,9 +322,7 @@ class DatasetChunkProcessor:
                 )
             failed_chunk_ranges = new_failed_ranges
         print(f"Could not upload chunks: {self.chunks_not_uploaded}")
-        print(
-            f"Finished processing and uploading all chunks for split {split_name}. Total samples processed: {self.total_samples_processed}"
-        )
+        print(f"Finished processing and uploading all chunks for split {split_name}.")
 
     def _process(self, ds_chunk: datasets.Dataset) -> datasets.Dataset:
         return self.args.task.map_split(
