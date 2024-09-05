@@ -448,8 +448,11 @@ class VoiceDataset(SizedIterableDataset):
         row: transformers.BatchFeature,
         tcol: str = "text",
         tproc: Optional[Callable[[str], str]] = None,
-    ) -> VoiceSample:
-        text = tproc(row[tcol]) if tproc else row[tcol]
+    ) -> Optional[VoiceSample]:
+        try:
+            text = tproc(row[tcol]) if tproc else row[tcol]
+        except text_proc.FormatASRError:
+            return None
         return self._make_sample(
             self._get_transcribe_messages(text),
             self._get_audio(row),
@@ -479,10 +482,7 @@ class LibriSpeechDummyDataset(VoiceDataset):
         self._init_dataset(dataset, 73)
 
     def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
-        try:
-            return self._get_transcribe_sample(row, tproc=text_proc.format_asr_text)
-        except text_proc.FormatASRError:
-            return None
+        return self._get_transcribe_sample(row, tproc=text_proc.format_asr_text)
 
 
 # Making EmptyDataset a SizedIterableDataset to be compatible with using epochs during training.
@@ -537,7 +537,7 @@ class AnyInstructAnswerDataset(AnyInstructDataset):
     def __init__(self, args: VoiceDatasetArgs) -> None:
         super().__init__(args)
 
-    def _get_sample(self, row: transformers.BatchFeature) -> VoiceSample:
+    def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
         chat = row["chat"]
         return self._make_sample(
             self._get_answer_messages(chat[0]["message"], chat[1]["message"]),
@@ -550,7 +550,7 @@ class AnyInstructInputDataset(AnyInstructDataset):
     def __init__(self, args: VoiceDatasetArgs) -> None:
         super().__init__(args)
 
-    def _get_sample(self, row: transformers.BatchFeature) -> VoiceSample:
+    def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
         audio_transcript = row["chat"][0]["message"]
         return self._make_sample(
             self._get_transcribe_messages(audio_transcript),
@@ -563,7 +563,7 @@ class AnyInstructOutputDataset(AnyInstructDataset):
     def __init__(self, args: VoiceDatasetArgs) -> None:
         super().__init__(args)
 
-    def _get_sample(self, row: transformers.BatchFeature) -> VoiceSample:
+    def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
         audio_transcript = row["chat"][1]["message"]
         return self._make_sample(
             self._get_transcribe_messages(audio_transcript),
@@ -592,7 +592,7 @@ class BoolQDataset(VoiceDataset):
 
 
 class BoolQInputDataset(BoolQDataset):
-    def _get_sample(self, row: transformers.BatchFeature) -> VoiceSample:
+    def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
         return self._get_transcribe_sample(row, tcol="question")
 
 
@@ -816,10 +816,7 @@ class LibriSpeechDataset(VoiceDataset):
         self._init_dataset(ds)
 
     def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
-        try:
-            return self._get_transcribe_sample(row, tproc=text_proc.format_asr_text)
-        except text_proc.FormatASRError:
-            return None
+        return self._get_transcribe_sample(row, tproc=text_proc.format_asr_text)
 
 
 # TODO: this dataset can be replaced with GenericVoiceDataset and will be removed/updated in the future.
@@ -839,10 +836,7 @@ class GigaSpeechDataset(VoiceDataset):
         self._init_dataset(dataset)
 
     def _get_sample(self, row) -> Optional[VoiceSample]:
-        try:
-            return self._get_transcribe_sample(row, tproc=text_proc.format_asr_text)
-        except text_proc.FormatASRError:
-            return None
+        return self._get_transcribe_sample(row, tproc=text_proc.format_asr_text)
 
 
 # TODO: this dataset can be replaced with GenericVoiceDataset and will be removed/updated in the future.
@@ -861,7 +855,7 @@ class VoxPopuliDataset(VoiceDataset):
         )
         self._init_dataset(dataset)
 
-    def _get_sample(self, row) -> VoiceSample:
+    def _get_sample(self, row) -> Optional[VoiceSample]:
         return self._get_transcribe_sample(row, tcol="raw_text")
 
 
@@ -884,7 +878,7 @@ class CommonVoiceDataset(VoiceDataset):
         )
         self._init_dataset(dataset)
 
-    def _get_sample(self, row) -> VoiceSample:
+    def _get_sample(self, row) -> Optional[VoiceSample]:
         return self._get_transcribe_sample(row, tcol="sentence")
 
 
@@ -986,7 +980,7 @@ class PeopleSpeechDataset(VoiceDataset):
         )
         self._init_dataset(dataset)
 
-    def _get_sample(self, row) -> VoiceSample:
+    def _get_sample(self, row) -> Optional[VoiceSample]:
         return self._get_transcribe_sample(row, tcol="text")
 
 

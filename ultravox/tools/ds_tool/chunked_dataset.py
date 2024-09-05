@@ -65,8 +65,8 @@ class ChunkedDataset(Dataset):
     ) -> CommitInfo:
         """
         This overrides the push_to_hub method to work with chunked uploads. The old method assumed
-        each write was supposed to override the existing split, but this method will append to the
-        existing split values in the metadata (ie download_size, num_examples, etc).
+        each write was supposed to override the existing split data in the README, but this method will append to the
+        existing split values in the README (ie download_size, num_examples, etc).
         """
         if config_name == "data":
             raise ValueError(
