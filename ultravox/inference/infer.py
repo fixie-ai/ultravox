@@ -119,6 +119,7 @@ class LocalInference(base.VoiceInference):
 
         tensors = self.data_collator(inputs)
 <<<<<<< HEAD
+<<<<<<< HEAD
         # Move non-None tensors to the same device as the model
         tensors = {
             k: v.to(self.model.device) if v is not None else v
@@ -127,6 +128,10 @@ class LocalInference(base.VoiceInference):
 =======
         tensors = {k: v.to(self.model.device) for k, v in tensors.items()}
 >>>>>>> e6e7716 (Update)
+=======
+        # Move non-None tensors to the same device as the model
+        tensors = {k: v.to(self.model.device) if v is not None else v for k, v in tensors.items()}
+>>>>>>> 4edf9b0 (Update)
         input_len = tensors["input_ids"].shape[1]
         output_batch = self._generate(
             tensors, max_tokens, temperature, return_dict_in_generate=False
@@ -236,8 +241,8 @@ class LocalInference(base.VoiceInference):
         do_sample = temperature is not None
 
         terminators = [self.tokenizer.eos_token_id]
-        if "<|eot_id|>" in self.tokenizer.added_tokens_encoder:
-            terminators.append(self.tokenizer.convert_tokens_to_ids("<|eot_id|>"))
+        if "" in self.tokenizer.added_tokens_encoder:
+            terminators.append(self.tokenizer.convert_tokens_to_ids("<|end_header_id|>"))
 
         return self.model.generate(
             **inputs,
