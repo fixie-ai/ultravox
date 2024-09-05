@@ -35,6 +35,7 @@ def flatten(data: List[List[T]]) -> List[T]:
 def all_gather_list(data: List[T]) -> List[T]:
     if not torch.distributed.is_initialized():
         return data
+    torch.distributed.barrier()
     world_size = torch.distributed.get_world_size()
     data_list = [None] * world_size
     torch.distributed.all_gather_object(data_list, data)

@@ -174,7 +174,6 @@ def run_evaluation(inference: ultravox_infer.UltravoxInference, args: GenericInf
         data_loader = data_utils.DataLoader(dataset, batch_size=args.batch_size, collate_fn=lambda x: x)
         data_loader = ddp_utils.sharded_dataloader(data_loader, world_size, local_rank)
         results = dataset_infer(inference, data_loader, batch_size=args.batch_size, max_tokens=args.max_tokens, temperature=args.temperature, world_size=world_size, local_rank=local_rank)
-        
         results = ddp_utils.all_gather_list(results)
 
         if world_size == 1 or (world_size > 1 and dist.get_rank() == 0):
@@ -212,7 +211,8 @@ def main():
     local_rank = device_helpers.get_local_rank()
     device = torch.device(args.device, index=local_rank)
     if world_size > 1:
-        dist.init_process_group(backend="nccl")
+        timeout = datetime.timedelta(seconds=600)  # 10 minutes
+        dist.init_process_group(backend="nccl", timeout=timeout)
 
     # Initialize wandb if it's in report_logs_to
     use_wandb = "wandb" in args.report_logs_to
