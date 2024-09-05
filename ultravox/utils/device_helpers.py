@@ -12,7 +12,6 @@ def default_device():
     else:
         return "cpu"
 
-
 def default_dtype():
     # macOS Sonoma 14 enabled bfloat16 on MPS.
     return (
