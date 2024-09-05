@@ -729,6 +729,7 @@ class ModifiedWhisperEncoder(whisper.WhisperEncoder):
             * self.conv1.stride[0]
             * self.conv2.stride[0]
         )
+        # Chunk the input_features if it exceeds expected_seq_length
         if input_features.shape[-1] > expected_seq_length:
             import warnings
 
