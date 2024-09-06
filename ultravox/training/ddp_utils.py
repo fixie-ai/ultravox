@@ -63,7 +63,6 @@ def sharded_batch_iterator(
             if len(batch) == batch_size:
                 yield batch
                 batch = []
-
     # Yield any remaining samples in the last incomplete batch
     if batch:
         yield batch

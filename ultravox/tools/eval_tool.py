@@ -129,38 +129,34 @@ def dataset_infer(
     world_size: int = 1,
     local_rank: int = 0
 ) -> List[eval_types.Sample]:
-    data_loader = data_utils.DataLoader(dataset, batch_size=batch_size, collate_fn=lambda x: x)
-    batch_index = 0
     results = []
-    for batch_input in ddp_utils.sharded_dataloader(data_loader, world_size, local_rank):
+    for batch_input in ddp_utils.sharded_batch_iterator(dataset, batch_size, world_size, local_rank):
+        batch_indices = [idx for idx, _ in batch_input]
+        batch_samples = [sample for _, sample in batch_input]
         batch_references = []
-        for sample in batch_input:
+        for sample in batch_samples:
             assistant_message = sample.messages.pop()
             if assistant_message['role'] != 'assistant':
                 raise ValueError(f"Expected assistant message but got: role={assistant_message['role']}, content={assistant_message['content']}")
             batch_references.append(assistant_message["content"])
         
         batch_output = inference.infer_batch(
-            batch_input,
+            batch_samples,
             max_tokens=max_tokens,
             temperature=temperature,
         )
-        # set the starting index for the samples
-        sample_index = batch_size * (batch_index * world_size + local_rank)        
-        for sample, generated, expected in zip(
-            batch_input, batch_output, batch_references
+        for index, sample, generated, expected in zip(
+            batch_indices, batch_samples, batch_output, batch_references
         ):
             
             results.append(
                 eval_types.Sample(
-                    index=sample_index,
+                    index=index,
                     question=sample.messages[-1]['content'],
                     expected_answer=expected,
                     generated_answer=generated.text,
                 )
             )
-            sample_index += 1
-        batch_index += 1
     return results
 
 def run_evaluation(inference: ultravox_infer.UltravoxInference, args: GenericInferArgs, dataset_configs: List[dataset_config.DatasetConfig], world_size: int, local_rank: int):
@@ -182,10 +178,10 @@ def run_evaluation(inference: ultravox_infer.UltravoxInference, args: GenericInf
                 # Log to wandb
                 if use_wandb:
                     wandb.log({
-                        f"eval/{dataset_alias}/{config.eval_config.metric}": eval_result.score,
+                        f"eval/{dataset_alias}-{config.eval_config.metric}": eval_result.score,
                     })
 
-            filename = f"{dataset_alias}.results.json"
+            filename = f"{dataset_alias}-{config.eval_config.metric}.results.json"
             output_file = args.output_dir / filename
             
             with open(output_file, "w") as f:   
