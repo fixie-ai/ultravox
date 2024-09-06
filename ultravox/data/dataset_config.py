@@ -4,7 +4,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 
-class DataDictConfig(BaseModel):
+class DatasetConfig(BaseModel):
     # Path to the dataset, or huggingface dataset id
     path: str
     # Name of the dataset, or huggingface dataset config/subset

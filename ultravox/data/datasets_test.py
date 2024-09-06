@@ -66,7 +66,7 @@ class FakeGenericDataset(datasets.VoiceDataset):
     def __init__(
         self,
         n: int,
-        config: dataset_config.DataDictConfig,
+        config: dataset_config.DatasetConfig,
         args: Optional[datasets.VoiceDatasetArgs] = None,
     ):
         super().__init__(args or datasets.VoiceDatasetArgs())
@@ -324,7 +324,7 @@ def test_get_messages():
 
 
 def test_voice_dataset_size():
-    mock_config = dataset_config.DataDictConfig(path="mock_path", total_samples=5)
+    mock_config = dataset_config.DatasetConfig(path="mock_path", total_samples=5)
     ds = FakeGenericDataset(10, mock_config)
     assert len(ds) == 5
 
@@ -332,7 +332,7 @@ def test_voice_dataset_size():
     with pytest.warns(UserWarning, match=pattern):
         list(ds)
 
-    mock_config = dataset_config.DataDictConfig(path="mock_path", total_samples=10)
+    mock_config = dataset_config.DatasetConfig(path="mock_path", total_samples=10)
     ds = FakeGenericDataset(5, mock_config)
     assert len(ds) == 10
 

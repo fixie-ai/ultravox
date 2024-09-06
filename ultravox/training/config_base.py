@@ -93,7 +93,7 @@ class TrainConfig:
     def __post_init__(self):
         if self.data_dicts:
             self.data_dicts = [
-                dataset_config.DataDictConfig(**data_dict)
+                dataset_config.DatasetConfig(**data_dict)
                 for data_dict in self.data_dicts
             ]
             # For now, self.data_dicts is a hack to allow for the inclusion of new datasets using the

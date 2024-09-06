@@ -12,6 +12,7 @@ METRIC_REGISTRY = {
     "conversation": gpt_eval_conv.evaluate_conversation_response,
     "exact_match_last_word": string_based.match_last_word,
     "bleu": string_based.bleu,
+    "corpus_bleu": string_based.corpus_bleu,
 }
 
 

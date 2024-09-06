@@ -3,6 +3,8 @@ import re
 import sacrebleu
 
 from ultravox.evaluation import eval_types
+from typing import List
+
 
 
 def match_last_word(sample: eval_types.Sample) -> eval_types.ExactMatchResult:
@@ -36,4 +38,14 @@ def bleu(sample: eval_types.Sample) -> eval_types.BleuResult:
         hypothesis=sample.generated_answer,
         references=[sample.expected_answer],
     ).score
+    return eval_types.BleuResult(score=score)
+
+def corpus_bleu(samples: List[eval_types.Sample], **kwargs) -> eval_types.BleuResult:
+    """
+    Compute BLEU score for a list of samples.
+    """
+    references = [[sample.expected_answer] for sample in samples]
+    hypotheses = [sample.generated_answer for sample in samples]
+    score = sacrebleu.corpus_bleu(
+        hypotheses=hypotheses, references=references, **kwargs).score
     return eval_types.BleuResult(score=score)
