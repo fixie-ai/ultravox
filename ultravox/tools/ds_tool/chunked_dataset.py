@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Optional, Union
 
 import datasets
+import huggingface_hub
 from datasets.data_files import sanitize_patterns
 from datasets.info import DatasetInfo
 from datasets.info import DatasetInfosDict
@@ -20,12 +21,6 @@ from datasets.utils.metadata import MetadataConfigs
 from datasets.utils.py_utils import asdict
 from datasets.utils.py_utils import glob_pattern_to_regex
 from datasets.utils.py_utils import string_to_dict
-from huggingface_hub import CommitInfo
-from huggingface_hub import CommitOperationAdd
-from huggingface_hub import CommitOperationDelete
-from huggingface_hub import DatasetCard
-from huggingface_hub import DatasetCardData
-from huggingface_hub import HfApi
 from huggingface_hub.hf_api import RepoFile
 
 logger = logging.get_logger(__name__)
@@ -61,7 +56,7 @@ class ChunkedDataset(datasets.Dataset):
         max_shard_size: Optional[Union[int, str]] = None,
         num_shards: Optional[int] = None,
         embed_external_files: bool = True,
-    ) -> CommitInfo:
+    ) -> huggingface_hub.CommitInfo:
         """
         This overrides the push_to_hub method to work with chunked uploads. The old method assumed
         each write was supposed to override the existing split data in the README, but this method will append to the
@@ -93,7 +88,7 @@ class ChunkedDataset(datasets.Dataset):
             )
             revision = branch
 
-        api = HfApi(endpoint=datasets.config.HF_ENDPOINT, token=token)
+        api = huggingface_hub.HfApi(endpoint=datasets.config.HF_ENDPOINT, token=token)
 
         repo_url = api.create_repo(
             repo_id,
@@ -154,7 +149,9 @@ class ChunkedDataset(datasets.Dataset):
                 and repo_file.rfilename not in repo_files_to_add
             ):
                 deletions.append(
-                    CommitOperationDelete(path_in_repo=repo_file.rfilename)
+                    huggingface_hub.CommitOperationDelete(
+                        path_in_repo=repo_file.rfilename
+                    )
                 )
                 deleted_size += repo_file.size
             elif fnmatch.fnmatch(
@@ -199,7 +196,7 @@ class ChunkedDataset(datasets.Dataset):
                 repo_type="dataset",
                 revision=revision,
             )
-            dataset_card = DatasetCard.load(Path(dataset_card_path))
+            dataset_card = huggingface_hub.DatasetCard.load(Path(dataset_card_path))
             dataset_card_data = dataset_card.data
             metadata_configs = MetadataConfigs.from_dataset_card_data(dataset_card_data)
             dataset_infos: DatasetInfosDict = DatasetInfosDict.from_dataset_card_data(
@@ -212,7 +209,7 @@ class ChunkedDataset(datasets.Dataset):
         # get the deprecated dataset_infos.json to update them
         elif repo_with_dataset_infos:
             dataset_card = None
-            dataset_card_data = DatasetCardData()
+            dataset_card_data = huggingface_hub.DatasetCardData()
             metadata_configs = MetadataConfigs()
             dataset_infos_path = api.hf_hub_download(
                 repo_id,
@@ -230,7 +227,7 @@ class ChunkedDataset(datasets.Dataset):
                 )
         else:
             dataset_card = None
-            dataset_card_data = DatasetCardData()
+            dataset_card_data = huggingface_hub.DatasetCardData()
             metadata_configs = MetadataConfigs()
             repo_info = None
         # Update the total info to dump from existing info.
@@ -332,7 +329,7 @@ class ChunkedDataset(datasets.Dataset):
             buffer = BytesIO()
             buffer.write(json.dumps(dataset_infos, indent=4).encode("utf-8"))
             additions.append(
-                CommitOperationAdd(
+                huggingface_hub.CommitOperationAdd(
                     path_in_repo=datasets.config.DATASETDICT_INFOS_FILENAME,
                     path_or_fileobj=buffer,
                 )
@@ -345,12 +342,12 @@ class ChunkedDataset(datasets.Dataset):
             dataset_card_data
         )
         dataset_card = (
-            DatasetCard(f"---\n{dataset_card_data}\n---\n")
+            huggingface_hub.DatasetCard(f"---\n{dataset_card_data}\n---\n")
             if dataset_card is None
             else dataset_card
         )
         additions.append(
-            CommitOperationAdd(
+            huggingface_hub.CommitOperationAdd(
                 path_in_repo=datasets.config.REPOCARD_FILENAME,
                 path_or_fileobj=str(dataset_card).encode(),
             )
