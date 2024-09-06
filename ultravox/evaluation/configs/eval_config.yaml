@@ -33,7 +33,7 @@ eval_dataset_configs:
       metric: "bleu"
       args:
         tokenize: "zh"
-  - alias: "covost2-en_ar"
+  - alias: "covost2-en_ar.2k"
     path: "fixie-ai/covost2"
     name: "en_ar"
     splits:
