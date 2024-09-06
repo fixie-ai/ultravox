@@ -266,7 +266,7 @@ class DatasetChunkProcessor:
             chunk_end = min(chunk_start + chunk_size, end_index)
 
             ds_chunk = ds_split.select(range(chunk_start, chunk_end))
-            ds_chunk_name = f"chunk-range-{chunk_start:09d}-{chunk_end:09d}.parquet"
+            ds_chunk_name = f"chunk-range-{chunk_start:09d}-{chunk_end:09d}"
             ds_chunk_hub_path = os.path.join(
                 str(self.args.upload_subset), split_name, ds_chunk_name
             )
@@ -275,15 +275,12 @@ class DatasetChunkProcessor:
                 self.args.dataset_name.replace("/", "__"),
                 str(self.args.upload_subset),
                 split_name,
-                ds_chunk_name,
+                ds_chunk_name + ".parquet",
             )
             try:
                 if os.path.exists(ds_chunk_cache_path):
                     print(
                         f"Skipping chunk {ds_chunk_name} as it has already been processed and uploaded."
-                    )
-                    ds_chunk_processed = datasets.Dataset.from_parquet(
-                        ds_chunk_cache_path
                     )
                 else:
                     print(f"Processing chunk {ds_chunk_name}")
@@ -326,20 +323,21 @@ class DatasetChunkProcessor:
         print(f"Finished processing and uploading all chunks for split {split_name}.")
 
     def _process(self, ds_chunk: datasets.Dataset) -> datasets.Dataset:
-        ds = self.args.task.map_split(
+        ds_mapped = self.args.task.map_split(
             ds_chunk,
             self.args.num_workers,
             self.args.writer_batch_size,
             self.args.exclude_fields,
         )
-        ds.filter(
+
+        check_empty_columns = self.args.check_empty_columns
+        return ds_mapped.filter(
             lambda sample: all(
-                sample[column] is not None for column in self.args.check_empty_columns
+                sample[column] is not None for column in check_empty_columns
             ),
             num_proc=self.args.num_workers,
             writer_batch_size=self.args.writer_batch_size,
         )
-        return ds
 
     @retry(wait=wait_fixed(3), stop=stop_after_attempt(3))
     def _upload(self, ds_chunk_processed: datasets.Dataset, data_dir: str, split_name):
