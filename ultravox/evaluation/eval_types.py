@@ -13,8 +13,8 @@ class EvalConfig(BaseModel):
 class Sample(dataclasses_json.DataClassJsonMixin):
     index: int
     question: str
-    generated_answer: str
-    expected_answer: str
+    hypothesis: str
+    reference: str
     history: List[Dict[str, str]] = dataclasses.field(default_factory=list)
 
 

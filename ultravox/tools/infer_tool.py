@@ -143,8 +143,8 @@ def run_tui(
             ds_name = args.data_sets[0]
             eval_sample = eval_types.Sample(
                 sample.audio_transcript or question_message["content"],
-                expected_answer=expected_response,
-                generated_answer=text,
+                reference=expected_response,
+                hypothesis=text,
             )
             eval_metric = (
                 "asr" if args.asr else "boolq" if ds_name == "boolq" else "instruct"

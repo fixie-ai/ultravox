@@ -29,5 +29,5 @@ def compute_wer(references, hypotheses):
 
 
 def evaluate_answer_asr(sample: eval_types.Sample):
-    wer_rate = compute_wer([sample.expected_answer], [sample.generated_answer])
+    wer_rate = compute_wer([sample.reference], [sample.hypothesis])
     return eval_types.WerResult(score=min(1.0, wer_rate))

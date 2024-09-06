@@ -38,8 +38,8 @@ def dataset_infer(
         )
         eval_sample = eval_types.Sample(
             question=question_text,
-            generated_answer=output.text,
-            expected_answer=expected_answer,
+            hypothesis=output.text,
+            reference=expected_answer,
             history=history,
         )
         eval_samples.append(eval_sample)

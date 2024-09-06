@@ -92,7 +92,7 @@ def dataset_infer(
             max_tokens=max_tokens,
             temperature=temperature,
         )
-        for index, sample, generated, expected in zip(
+        for index, sample, output, reference in zip(
             batch_indices, batch_samples, batch_output, batch_references
         ):
             
@@ -100,8 +100,8 @@ def dataset_infer(
                 eval_types.Sample(
                     index=index,
                     question=sample.messages[-1]['content'],
-                    expected_answer=expected,
-                    generated_answer=generated.text,
+                    reference=reference,
+                    hypothesis=output.text,
                 )
             )
     return results
