@@ -1,11 +1,17 @@
 import dataclasses
 from typing import Dict, List, Optional, Union
+from pydantic import BaseModel
 
 import dataclasses_json
+
+class EvalConfig(BaseModel):
+    metric: str
+    args: Optional[Dict[str, str]] = dataclasses.field(default_factory=dict)
 
 
 @dataclasses.dataclass
 class Sample(dataclasses_json.DataClassJsonMixin):
+    index: int
     question: str
     generated_answer: str
     expected_answer: str
