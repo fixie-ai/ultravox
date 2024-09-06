@@ -8,8 +8,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Optional, Union
 
-from datasets import Dataset
-from datasets import config
+import datasets
 from datasets.data_files import sanitize_patterns
 from datasets.info import DatasetInfo
 from datasets.info import DatasetInfosDict
@@ -35,7 +34,7 @@ PUSH_TO_HUB_WITHOUT_METADATA_CONFIGS_SPLIT_PATTERN_SHARDED = (
 )
 
 
-class ChunkedDataset(Dataset):
+class ChunkedDataset(datasets.Dataset):
     @classmethod
     def from_dataset(cls, dataset):
         """
@@ -94,7 +93,7 @@ class ChunkedDataset(Dataset):
             )
             revision = branch
 
-        api = HfApi(endpoint=config.HF_ENDPOINT, token=token)
+        api = HfApi(endpoint=datasets.config.HF_ENDPOINT, token=token)
 
         repo_url = api.create_repo(
             repo_id,
@@ -146,9 +145,9 @@ class ChunkedDataset(Dataset):
         ):
             if not isinstance(repo_file, RepoFile):
                 continue
-            if repo_file.rfilename == config.REPOCARD_FILENAME:
+            if repo_file.rfilename == datasets.config.REPOCARD_FILENAME:
                 repo_with_dataset_card = True
-            elif repo_file.rfilename == config.DATASETDICT_INFOS_FILENAME:
+            elif repo_file.rfilename == datasets.config.DATASETDICT_INFOS_FILENAME:
                 repo_with_dataset_infos = True
             elif (
                 repo_file.rfilename.startswith(f"{data_dir}/{split}-")
@@ -196,7 +195,7 @@ class ChunkedDataset(Dataset):
         if repo_with_dataset_card:
             dataset_card_path = api.hf_hub_download(
                 repo_id,
-                config.REPOCARD_FILENAME,
+                datasets.config.REPOCARD_FILENAME,
                 repo_type="dataset",
                 revision=revision,
             )
@@ -217,7 +216,7 @@ class ChunkedDataset(Dataset):
             metadata_configs = MetadataConfigs()
             dataset_infos_path = api.hf_hub_download(
                 repo_id,
-                config.DATASETDICT_INFOS_FILENAME,
+                datasets.config.DATASETDICT_INFOS_FILENAME,
                 repo_type="dataset",
                 revision=revision,
             )
@@ -323,7 +322,7 @@ class ChunkedDataset(Dataset):
         if repo_with_dataset_infos:
             dataset_infos_path = api.hf_hub_download(
                 repo_id,
-                config.DATASETDICT_INFOS_FILENAME,
+                datasets.config.DATASETDICT_INFOS_FILENAME,
                 repo_type="dataset",
                 revision=revision,
             )
@@ -334,7 +333,7 @@ class ChunkedDataset(Dataset):
             buffer.write(json.dumps(dataset_infos, indent=4).encode("utf-8"))
             additions.append(
                 CommitOperationAdd(
-                    path_in_repo=config.DATASETDICT_INFOS_FILENAME,
+                    path_in_repo=datasets.config.DATASETDICT_INFOS_FILENAME,
                     path_or_fileobj=buffer,
                 )
             )
@@ -352,7 +351,7 @@ class ChunkedDataset(Dataset):
         )
         additions.append(
             CommitOperationAdd(
-                path_in_repo=config.REPOCARD_FILENAME,
+                path_in_repo=datasets.config.REPOCARD_FILENAME,
                 path_or_fileobj=str(dataset_card).encode(),
             )
         )
@@ -360,7 +359,7 @@ class ChunkedDataset(Dataset):
         commit_message = (
             commit_message if commit_message is not None else "Upload dataset"
         )
-        if len(additions) <= config.UPLOADS_MAX_NUMBER_PER_COMMIT:
+        if len(additions) <= datasets.config.UPLOADS_MAX_NUMBER_PER_COMMIT:
             commit_info = api.create_commit(
                 repo_id,
                 operations=additions + deletions,
@@ -373,16 +372,16 @@ class ChunkedDataset(Dataset):
             )
         else:
             logger.info(
-                f"Number of files to upload is larger than {config.UPLOADS_MAX_NUMBER_PER_COMMIT}. Splitting the push into multiple commits."
+                f"Number of files to upload is larger than {datasets.config.UPLOADS_MAX_NUMBER_PER_COMMIT}. Splitting the push into multiple commits."
             )
             num_commits = math.ceil(
-                len(additions) / config.UPLOADS_MAX_NUMBER_PER_COMMIT
+                len(additions) / datasets.config.UPLOADS_MAX_NUMBER_PER_COMMIT
             )
             for i in range(0, num_commits):
                 operations = additions[
                     i
-                    * config.UPLOADS_MAX_NUMBER_PER_COMMIT : (i + 1)
-                    * config.UPLOADS_MAX_NUMBER_PER_COMMIT
+                    * datasets.config.UPLOADS_MAX_NUMBER_PER_COMMIT : (i + 1)
+                    * datasets.config.UPLOADS_MAX_NUMBER_PER_COMMIT
                 ] + (deletions if i == 0 else [])
                 commit_info = api.create_commit(
                     repo_id,
@@ -409,4 +408,8 @@ class ChunkedDataset(Dataset):
 
 # Function to convert Dataset to ChunkedDataset
 def convert_to_chunked_dataset(data) -> ChunkedDataset:
-    return ChunkedDataset.from_dataset(data) if isinstance(data, Dataset) else data
+    return (
+        ChunkedDataset.from_dataset(data)
+        if isinstance(data, datasets.Dataset)
+        else data
+    )

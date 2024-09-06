@@ -128,8 +128,7 @@ class TextGenerationTask:
 
         # Filter out samples where new_column_name is None
         return ds_mapped.filter(
-            lambda sample: sample[self.new_column_name] is not None
-            and sample["audio"] is not None,
+            lambda sample: sample[self.new_column_name] is not None,
             num_proc=num_proc,
             writer_batch_size=writer_batch_size,
         )
