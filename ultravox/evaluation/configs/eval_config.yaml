@@ -30,8 +30,12 @@ dataset_configs:
 =======
     total_samples: 15531
     eval_config:
+<<<<<<< HEAD
       metric: "corpus_bleu"
 >>>>>>> ca4e476 (Update)
+=======
+      metric: "bleu"
+>>>>>>> 8f86e8e (Update)
   - alias: "covost2-en_zh"
     path: "fixie-ai/covost2"
     name: "en_zh-CN"
@@ -68,8 +72,12 @@ dataset_configs:
 =======
     total_samples: 15531
     eval_config:
+<<<<<<< HEAD
       metric: "corpus_bleu"
 >>>>>>> ca4e476 (Update)
+=======
+      metric: "bleu"
+>>>>>>> 8f86e8e (Update)
   - alias: "covost2-en_ca"
     path: "fixie-ai/covost2"
     name: "en_ca"
@@ -87,8 +95,12 @@ dataset_configs:
 =======
     total_samples: 15531
     eval_config:
+<<<<<<< HEAD
       metric: "corpus_bleu"
 >>>>>>> ca4e476 (Update)
+=======
+      metric: "bleu"
+>>>>>>> 8f86e8e (Update)
   - alias: "covost2-es_en"
     path: "fixie-ai/covost2"
     name: "es_en"
@@ -106,8 +118,12 @@ dataset_configs:
 =======
     total_samples: 13221
     eval_config:
+<<<<<<< HEAD
       metric: "corpus_bleu"
 >>>>>>> ca4e476 (Update)
+=======
+      metric: "bleu"
+>>>>>>> 8f86e8e (Update)
   - alias: "covost2-ru_en"
     path: "fixie-ai/covost2"
     name: "ru_en"
@@ -125,8 +141,12 @@ dataset_configs:
 =======
     total_samples: 6300
     eval_config:
+<<<<<<< HEAD
       metric: "corpus_bleu"
 >>>>>>> ca4e476 (Update)
+=======
+      metric: "bleu"
+>>>>>>> 8f86e8e (Update)
   - alias: "covost2-zh_en"
     path: "fixie-ai/covost2"
     name: "zh-CN_en"
@@ -143,4 +163,8 @@ dataset_configs:
     total_samples: 4898
 >>>>>>> ca4e476 (Update)
     eval_config:
+<<<<<<< HEAD
       metric: "bleu"
+=======
+      metric: "bleu"
+>>>>>>> 8f86e8e (Update)
