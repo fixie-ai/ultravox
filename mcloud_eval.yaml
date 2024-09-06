@@ -1,0 +1,17 @@
+# Ultravox training configuration
+name: ultravox
+image: mosaicml/composer:latest
+compute:
+  gpus: 8
+  cluster: r14z3p1
+integrations:
+  - integration_type: git_repo
+    git_repo: fixie-ai/ultravox-expts
+    git_branch: $UV_BRANCH
+    pip_install: poetry==1.7.1
+command: >-
+  cd ultravox-expts && poetry install --no-dev && poetry run torchrun --nproc_per_node=8 -m ultravox.tools.eval_tool $EVAL_ARGS --exp_name $UV_BRANCH
+env_variables:
+  MLFLOW_TRACKING_URI: databricks
+  UV_BRANCH: zhuang_2024-08-12-ultravox_eval_v0.4
+  EVAL_ARGS: --config_path ultravox/evaluation/configs/eval_config.yaml

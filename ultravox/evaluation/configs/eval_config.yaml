@@ -1,0 +1,84 @@
+model: "fixie-ai/ultravox-v0_4"
+report_logs_to: ["wandb"]
+batch_size: 50
+output_dir: "./output"
+dataset_configs:
+  - alias: "covost2-en_de.2k"
+    path: "fixie-ai/covost2"
+    name: "en_de"
+    splits:
+      - "test"
+    user_template: "Please translate the text to German. Your response should only include the German translation, without any additional words:\n\n<|audio|>"
+    assistant_template: "{{ translation }}"
+    transcript_template: "{{ sentence }}"
+    num_samples: 2000
+    eval_config:
+      metric: "corpus_bleu"
+  - alias: "covost2-en_zh.2k"
+    path: "fixie-ai/covost2"
+    name: "en_zh-CN"
+    splits:
+      - "test"
+    user_template: "Please translate the text to Chinese. Your response should only include the Chinese translation, without any additional words:\n\n<|audio|>"
+    assistant_template: "{{ translation }}"
+    transcript_template: "{{ sentence }}"
+    num_samples: 2000
+    eval_config:
+      metric: "corpus_bleu"
+      args:
+        tokenize: "zh"
+  - alias: "covost2-en_ar.2k"
+    path: "fixie-ai/covost2"
+    name: "en_ar"
+    splits:
+      - "test"
+    user_template: "Please translate the text to Arabic. Your response should only include the Arabic translation, without any additional words:\n\n<|audio|>"
+    assistant_template: "{{ translation }}"
+    transcript_template: "{{ sentence }}"
+    num_samples: 2000
+    eval_config:
+      metric: "corpus_bleu"
+  - alias: "covost2-en_ca.2k"
+    path: "fixie-ai/covost2"
+    name: "en_ca"
+    splits:
+      - "test"
+    user_template: "Please translate the text to Catalan. Your response should only include the Catalan translation, without any additional words:\n\n<|audio|>"
+    assistant_template: "{{ translation }}"
+    transcript_template: "{{ sentence }}"
+    num_samples: 2000
+    eval_config:
+      metric: "corpus_bleu"
+  - alias: "covost2-es_en.2k"
+    path: "fixie-ai/covost2"
+    name: "es_en"
+    splits:
+      - "test"
+    user_template: "Please translate the text to English. Your response should only include the English translation, without any additional words:\n\n<|audio|>"
+    assistant_template: "{{ translation }}"
+    transcript_template: "{{ sentence }}"
+    num_samples: 2000
+    eval_config:
+      metric: "corpus_bleu"
+  - alias: "covost2-ru_en.2k"
+    path: "fixie-ai/covost2"
+    name: "ru_en"
+    splits:
+      - "test"
+    user_template: "Please translate the text to English. Your response should only include the English translation, without any additional words:\n\n<|audio|>"
+    assistant_template: "{{ translation }}"
+    transcript_template: "{{ sentence }}"
+    num_samples: 2000
+    eval_config:
+      metric: "corpus_bleu"
+  - alias: "covost2-zh_en.2k"
+    path: "fixie-ai/covost2"
+    name: "zh-CN_en"
+    splits:
+      - "test"
+    user_template: "Please translate the text to English. Your response should only include the English translation, without any additional words:\n\n<|audio|>"
+    assistant_template: "{{ translation }}"
+    transcript_template: "{{ sentence }}"
+    num_samples: 2000
+    eval_config:
+      metric: "corpus_bleu"
