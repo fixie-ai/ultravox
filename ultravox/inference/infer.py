@@ -114,6 +114,8 @@ class LocalInference(base.VoiceInference):
                 input[key] = val.squeeze(0)
 
         tensors = self.data_collator(inputs)
+        # Move non-None tensors to the same device as the model
+        tensors = {k: v.to(self.model.device) if v is not None else v for k, v in tensors.items()}
         input_len = tensors["input_ids"].shape[1]
         output_batch = self._generate(
             tensors, max_tokens, temperature, return_dict_in_generate=False

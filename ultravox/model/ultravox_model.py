@@ -526,9 +526,9 @@ class ModifiedWhisperEncoder(whisper.WhisperEncoder):
             * self.conv2.stride[0]
         )
         if input_features.shape[-1] > expected_seq_length:
-            raise ValueError(
-                f"Whisper expects the mel input features to be of length {expected_seq_length} or less, but found {input_features.shape[-1]}. Make sure to pad the input mel features to {expected_seq_length}."
-            )
+            import warnings
+            warnings.warn(f"Input features length ({input_features.shape[-1]}) exceeds the expected sequence length ({expected_seq_length}). The input will be chunked to {expected_seq_length}.")
+            input_features = input_features[..., :expected_seq_length]
 
         output_attentions = (
             output_attentions
