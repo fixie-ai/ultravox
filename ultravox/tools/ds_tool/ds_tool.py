@@ -213,6 +213,11 @@ class DatasetToolArgs:
     num_chunks: int = simple_parsing.field(default=10)
     chunk_split_threshold: int = simple_parsing.field(default=50000)
 
+    # Columns that cannot be null
+    check_empty_columns: List[str] = simple_parsing.field(
+        default_factory=lambda: ["audio"]
+    )
+
     task: Union[TtsTask, TextGenerationTask] = simple_parsing.subgroups(
         {"tts": TtsTask, "textgen": TextGenerationTask},  # type: ignore
         default_factory=TtsTask,
@@ -321,12 +326,20 @@ class DatasetChunkProcessor:
         print(f"Finished processing and uploading all chunks for split {split_name}.")
 
     def _process(self, ds_chunk: datasets.Dataset) -> datasets.Dataset:
-        return self.args.task.map_split(
+        ds = self.args.task.map_split(
             ds_chunk,
             self.args.num_workers,
             self.args.writer_batch_size,
             self.args.exclude_fields,
         )
+        ds.filter(
+            lambda sample: all(
+                sample[column] is not None for column in self.args.check_empty_columns
+            ),
+            num_proc=self.args.num_workers,
+            writer_batch_size=self.args.writer_batch_size,
+        )
+        return ds
 
     @retry(wait=wait_fixed(3), stop=stop_after_attempt(3))
     def _upload(self, ds_chunk_processed: datasets.Dataset, data_dir: str, split_name):
