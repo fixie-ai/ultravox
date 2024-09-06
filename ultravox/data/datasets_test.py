@@ -56,7 +56,7 @@ class FakeTranscribeDataset(datasets.VoiceDataset):
 
         self._init_dataset(FakeHuggingFaceIterableDataset(n), n)
 
-    def _get_sample(self, row: BatchFeature) -> datasets.VoiceSample:
+    def _get_sample(self, row: BatchFeature) -> Optional[datasets.VoiceSample]:
         return self._get_transcribe_sample(row)
 
 
@@ -72,7 +72,7 @@ class FakeGenericDataset(datasets.VoiceDataset):
         super().__init__(args or datasets.VoiceDatasetArgs())
         self._init_dataset(FakeHuggingFaceIterableDataset(n), config.total_samples)
 
-    def _get_sample(self, row: BatchFeature) -> datasets.VoiceSample:
+    def _get_sample(self, row: BatchFeature) -> Optional[datasets.VoiceSample]:
         return self._get_transcribe_sample(row)
 
 

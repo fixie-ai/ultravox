@@ -1,14 +1,19 @@
 import dataclasses
 import json
+import math
 import os
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import datasets
 import jinja2
 import openai
 import simple_parsing
 import yaml
+from tenacity import retry
+from tenacity import stop_after_attempt
+from tenacity import wait_fixed
 
+import ultravox.tools.ds_tool.chunked_dataset as chunked_dataset
 from ultravox.data import text_proc
 from ultravox.tools.ds_tool import caching
 from ultravox.tools.ds_tool import tts
@@ -95,8 +100,6 @@ class TextGenerationTask:
     max_tokens: int = 128
     temperature: float = 0
 
-    template_failures: int = 0
-
     def __post_init__(self):
         # The OAI client is separate from the task to avoid pickling issues when multiprocessing.
         global chat_client
@@ -122,12 +125,10 @@ class TextGenerationTask:
             num_proc=num_proc,
             writer_batch_size=writer_batch_size,
         )
-        if self.template_failures == 0:
-            return ds_mapped
 
         # Filter out samples where new_column_name is None
         return ds_mapped.filter(
-            lambda sample: (True if sample[self.new_column_name] != None else False),
+            lambda sample: sample[self.new_column_name] is not None,
             num_proc=num_proc,
             writer_batch_size=writer_batch_size,
         )
@@ -143,20 +144,17 @@ class TextGenerationTask:
             rendered = jinja2.Template(
                 self.template, undefined=jinja2.StrictUndefined
             ).render(**filtered_sample, json_dump=json.dumps, text_proc=text_proc)
-
+        except text_proc.FormatASRError as e:
+            print(f"Format ASR Error {e}. Filtering out sample.")
+            sample[self.new_column_name] = None
+            return sample
         except jinja2.TemplateError as e:
-            error_message = str(e)
-            if "The formatted text is empty." in error_message:
-                print("Formatted text is empty. Setting output to None.")
-                sample[self.new_column_name] = None
-                self.template_failures += 1
-            else:
-                print(f"Error rendering template: {e}")
-                print(f"template: {self.template}")
-                print(f"sample keys: {list(filtered_sample.keys())}")
-                raise ValueError(
-                    f"Template rendering failed. Make sure all keys in the template exist in the sample."
-                ) from e
+            print(f"Error rendering template: {e}")
+            print(f"template: {self.template}")
+            print(f"sample keys: {list(filtered_sample.keys())}")
+            raise ValueError(
+                f"Template rendering failed. Make sure all keys in the template exist in the sample."
+            ) from e
 
         if self.json_mode:
             turns = yaml.safe_load(rendered)
@@ -191,6 +189,7 @@ class DatasetToolArgs:
     dataset_name: str = simple_parsing.field(alias="-d")
     dataset_subset: Optional[str] = simple_parsing.field(default=None, alias="-S")
     dataset_split: Optional[str] = simple_parsing.field(default=None, alias="-s")
+    dataset_version: Optional[str] = simple_parsing.field(default="main", alias="-v")
 
     # Local processing parameters
     shuffle: bool = simple_parsing.field(default=False)
@@ -210,6 +209,15 @@ class DatasetToolArgs:
     private: bool = simple_parsing.field(default=False)
     token: Optional[str] = None
 
+    # Chunk processing parameters
+    num_chunks: int = simple_parsing.field(default=10)
+    chunk_split_threshold: int = simple_parsing.field(default=50000)
+
+    # Columns that cannot be null
+    check_empty_columns: List[str] = simple_parsing.field(
+        default_factory=lambda: ["audio"]
+    )
+
     task: Union[TtsTask, TextGenerationTask] = simple_parsing.subgroups(
         {"tts": TtsTask, "textgen": TextGenerationTask},  # type: ignore
         default_factory=TtsTask,
@@ -217,17 +225,152 @@ class DatasetToolArgs:
     )
 
     def __post_init__(self):
+        if not self.dataset_subset:
+            self.dataset_subset = "default"
         if not self.upload_subset and self.dataset_subset:
             self.upload_subset = self.dataset_subset
         if self.dataset_split and not self.upload_split:
             self.upload_split = self.dataset_split
 
 
+class DatasetChunkProcessor:
+    args: DatasetToolArgs
+    cache_dir: str = ".cache/ds_tool/processed_datasets"
+    chunks_not_uploaded: List[Tuple[int, int]] = []
+
+    def __init__(self, args: DatasetToolArgs):
+        self.args = args
+
+    def process_and_upload_split_rescursive(
+        self,
+        split_name: str,
+        ds_split: datasets.Dataset,
+        start_index: int,
+        end_index: int,
+    ):
+        original_chunk_size = end_index - start_index
+        if original_chunk_size < self.args.chunk_split_threshold:
+            total_chunks = 1
+            chunk_size = original_chunk_size
+            print(
+                f"Chunk range [{start_index}, {end_index}) is too small to split further. Processing and uploading as a single chunk."
+            )
+        else:
+            total_chunks = self.args.num_chunks
+            chunk_size = math.ceil(original_chunk_size / total_chunks)
+        failed_chunk_ranges = []
+        print(
+            f"Processing and uploading {total_chunks} chunks for range [{start_index}, {end_index}) with chunk size {chunk_size}"
+        )
+        for chunk_start in range(start_index, end_index, chunk_size):
+            chunk_end = min(chunk_start + chunk_size, end_index)
+
+            ds_chunk = ds_split.select(range(chunk_start, chunk_end))
+            ds_chunk_name = f"chunk-range-{chunk_start:09d}-{chunk_end:09d}"
+            ds_chunk_hub_path = os.path.join(
+                str(self.args.upload_subset), split_name, ds_chunk_name
+            )
+            ds_chunk_cache_path = os.path.join(
+                self.cache_dir,
+                self.args.dataset_name.replace("/", "__"),
+                str(self.args.upload_subset),
+                split_name,
+                ds_chunk_name + ".parquet",
+            )
+            try:
+                if os.path.exists(ds_chunk_cache_path):
+                    print(
+                        f"Skipping chunk {ds_chunk_name} as it has already been processed and uploaded."
+                    )
+                else:
+                    print(f"Processing chunk {ds_chunk_name}")
+                    ds_chunk_processed = self._process(ds_chunk)
+                    print(
+                        "Finished processing chunk with length", len(ds_chunk_processed)
+                    )
+                    if len(ds_chunk_processed) > 0:
+                        # Note: The caching is after the upload to avoid caching failed upload chunks.
+                        # Saved chunks indicate they have been uploaded to HF.
+                        self._upload(ds_chunk_processed, ds_chunk_hub_path, split_name)
+                        ds_chunk_processed.to_parquet(ds_chunk_cache_path)
+                    else:
+                        print(f"Chunk {ds_chunk_name} has 0 samples. Not uploading.")
+
+            except Exception as e:
+                # If the error is unsupported operand type(s) for -=: 'NoneType' and 'float',
+                # then the huggingface README needs to be updated to have the
+                # download_size, and dataset_size fields present under dataset_info (could be initalized to 0)
+                print(f"Failed to upload chunk {ds_chunk_name}: {e}. Retrying later.")
+                if total_chunks == 1:
+                    print(
+                        f"Finished processing and uploading 0/1 chunks for range [{start_index}, {end_index})"
+                    )
+                    self.chunks_not_uploaded.append((start_index, end_index))
+                    return None
+                failed_chunk_ranges.append((chunk_start, chunk_end))
+        successful_chunks = self.args.num_chunks - len(failed_chunk_ranges)
+        print(
+            f"Finished processing and uploading {successful_chunks}/{self.args.num_chunks} chunks for range [{start_index}, {end_index})"
+        )
+        if len(failed_chunk_ranges) > 0:
+            for start, end in failed_chunk_ranges:
+                print(f"Retrying failed chunk range [{start}, {end})")
+                self.process_and_upload_split_rescursive(
+                    split_name, ds_split, start, end
+                )
+
+        print(f"Could not upload chunks: {self.chunks_not_uploaded}")
+        print(f"Finished processing and uploading all chunks for split {split_name}.")
+
+    def _process(self, ds_chunk: datasets.Dataset) -> datasets.Dataset:
+        ds_mapped = self.args.task.map_split(
+            ds_chunk,
+            self.args.num_workers,
+            self.args.writer_batch_size,
+            self.args.exclude_fields,
+        )
+
+        check_empty_columns = self.args.check_empty_columns
+        if len(check_empty_columns) > 0:
+            return ds_mapped.filter(
+                lambda sample: all(
+                    sample[column] is not None for column in check_empty_columns
+                ),
+                num_proc=self.args.num_workers,
+                writer_batch_size=self.args.writer_batch_size,
+            )
+        else:
+            return ds_mapped
+
+    @retry(wait=wait_fixed(3), stop=stop_after_attempt(3))
+    def _upload(self, ds_chunk_processed: datasets.Dataset, data_dir: str, split_name):
+        print(f"Uploading chunk to hub: {data_dir}")
+        ds_split_chunked: chunked_dataset.ChunkedDataset = (
+            chunked_dataset.convert_to_chunked_dataset(ds_chunk_processed)
+        )
+
+        hub_args: Dict[str, Any] = {
+            "config_name": self.args.upload_subset,
+            "token": self.args.token or os.environ.get("HF_TOKEN"),
+            "private": self.args.private,
+            "data_dir": data_dir,
+            "num_shards": self.args.num_shards,
+            "split": split_name,
+        }
+        assert isinstance(self.args.upload_name, str)
+        ds_split_chunked.push_to_hub(self.args.upload_name, **hub_args)
+
+
 def main(args: DatasetToolArgs):
     ds_name = args.dataset_name
     print(f'Loading dataset "{ds_name}" for task {args.task}')
+    download_config = datasets.DownloadConfig(num_proc=args.num_workers, max_retries=2)
     data_dict: datasets.DatasetDict = datasets.load_dataset(
-        ds_name, args.dataset_subset, split=args.dataset_split
+        ds_name,
+        args.dataset_subset,
+        split=args.dataset_split,
+        download_config=download_config,
+        revision=args.dataset_version,
     )
 
     if isinstance(data_dict, datasets.Dataset):
@@ -236,47 +379,20 @@ def main(args: DatasetToolArgs):
     if len(data_dict) > 1 and args.upload_split:
         raise ValueError("Cannot upload multiple splits to a single split")
 
-    for split, ds_split in data_dict.items():
+    ds_chunk_proc = DatasetChunkProcessor(args)
+
+    for split_name, ds_split in data_dict.items():
         print(
-            f"Processing dataset: {ds_name}, subset {args.dataset_subset}, split {args.dataset_split}, containing {len(ds_split)} samples"
+            f"Processing dataset: {ds_name}, subset {args.dataset_subset}, split {split_name}, containing {len(ds_split)} samples"
         )
         if args.shuffle:
             ds_split = ds_split.shuffle(seed=args.shuffle_seed)
         if args.num_samples:
             ds_split = ds_split.select(range(args.num_samples))
-        data_dict[split] = args.task.map_split(
-            ds_split,
-            args.num_workers,
-            args.writer_batch_size,
-            args.exclude_fields,
+
+        ds_chunk_proc.process_and_upload_split_rescursive(
+            split_name, ds_split, 0, len(ds_split)
         )
-
-    hub_args: Dict[str, Any] = {
-        "config_name": args.upload_subset or "default",
-        "token": args.token or os.environ.get("HF_TOKEN"),
-        "revision": args.upload_branch,
-        "private": args.private,
-    }
-
-    if args.num_shards is not None:
-        hub_args["num_shards"] = args.num_shards
-
-    try:
-        if args.dataset_split:
-            data_dict[args.dataset_split].push_to_hub(
-                args.upload_name, split=args.upload_split, **hub_args
-            )
-        else:
-            data_dict.push_to_hub(args.upload_name, **hub_args)
-    except Exception as e:
-        print(f"Failed to push to hub: {e}")
-
-        # If the push fails or upload_name is not specified, save the data locally.
-        for split in data_dict.keys():
-            output_name = f"{split}-00000-of-00001.parquet"
-            data_dict[split].to_parquet(output_name)
-            print(f"Saved to {output_name}")
-            print(f"Sample {0} of {split}: {data_dict[split][0]}")
 
 
 if __name__ == "__main__":
