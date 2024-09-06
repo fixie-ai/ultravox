@@ -236,19 +236,12 @@ class ChunkedDataset(Dataset):
             repo_info = None
         # update the total info to dump from existing info
         if repo_info is not None:
-            print("repo_info not none")
             logger.info("Updating downloaded metadata with the new split.")
             old_split = repo_info.splits.get(split, SplitInfo())
-            if repo_info.splits and list(repo_info.splits) != [split]:
+            if repo_info.splits:
                 if self._info.features != repo_info.features:
                     raise ValueError(
                         f"Features of the new split don't match the features of the existing splits on the hub: {self._info.features} != {repo_info.features}"
-                    )
-
-                if split in repo_info.splits:
-                    repo_info.download_size -= deleted_size
-                    repo_info.dataset_size -= (
-                        repo_info.splits.get(split, SplitInfo()).num_bytes or 0
                     )
 
                 repo_info.download_checksums = None

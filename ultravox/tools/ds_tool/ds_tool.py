@@ -211,7 +211,7 @@ class DatasetToolArgs:
     token: Optional[str] = None
 
     # Chunk processing parameters
-    max_chunk_split: int = simple_parsing.field(default=10)
+    num_chunks: int = simple_parsing.field(default=10)
     chunk_split_threshold: int = simple_parsing.field(default=50000)
 
     task: Union[TtsTask, TextGenerationTask] = simple_parsing.subgroups(
@@ -252,7 +252,7 @@ class DatasetChunkProcessor:
                 f"Chunk range [{start_index}, {end_index}) is too small to split further. Processing and uploading as a single chunk."
             )
         else:
-            total_chunks = self.args.max_chunk_split
+            total_chunks = self.args.num_chunks
             chunk_size = math.ceil(original_chunk_size / total_chunks)
         failed_chunk_ranges = []
         print(
@@ -307,9 +307,9 @@ class DatasetChunkProcessor:
                     self.chunks_not_uploaded.append((start_index, end_index))
                     return []
                 failed_chunk_ranges.append((chunk_start, chunk_end))
-        successful_chunks = self.args.max_chunk_split - len(failed_chunk_ranges)
+        successful_chunks = self.args.num_chunks - len(failed_chunk_ranges)
         print(
-            f"Finished processing and uploading {successful_chunks}/{self.args.max_chunk_split} chunks for range [{start_index}, {end_index})"
+            f"Finished processing and uploading {successful_chunks}/{self.args.num_chunks} chunks for range [{start_index}, {end_index})"
         )
         while len(failed_chunk_ranges) > 0:
             new_failed_ranges = []
