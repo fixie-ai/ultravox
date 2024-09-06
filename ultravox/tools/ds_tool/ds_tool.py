@@ -331,13 +331,16 @@ class DatasetChunkProcessor:
         )
 
         check_empty_columns = self.args.check_empty_columns
-        return ds_mapped.filter(
-            lambda sample: all(
-                sample[column] is not None for column in check_empty_columns
-            ),
-            num_proc=self.args.num_workers,
-            writer_batch_size=self.args.writer_batch_size,
-        )
+        if len(check_empty_columns) > 0:
+            return ds_mapped.filter(
+                lambda sample: all(
+                    sample[column] is not None for column in check_empty_columns
+                ),
+                num_proc=self.args.num_workers,
+                writer_batch_size=self.args.writer_batch_size,
+            )
+        else:
+            return ds_mapped
 
     @retry(wait=wait_fixed(3), stop=stop_after_attempt(3))
     def _upload(self, ds_chunk_processed: datasets.Dataset, data_dir: str, split_name):
