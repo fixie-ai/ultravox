@@ -13,7 +13,7 @@ dataset_configs:
     transcript_template: "{{ sentence }}"
     total_samples: 15531
     eval_config:
-      metric: "corpus_bleu"
+      metric: "bleu"
   - alias: "covost2-en_zh"
     path: "fixie-ai/covost2"
     name: "en_zh-CN"
@@ -24,7 +24,7 @@ dataset_configs:
     transcript_template: "{{ sentence }}"
     total_samples: 15531
     eval_config:
-      metric: "corpus_bleu"
+      metric: "bleu"
       args:
         tokenize: "zh"
   - alias: "covost2-en_ar"
@@ -37,7 +37,7 @@ dataset_configs:
     transcript_template: "{{ sentence }}"
     total_samples: 15531
     eval_config:
-      metric: "corpus_bleu"
+      metric: "bleu"
   - alias: "covost2-en_ca"
     path: "fixie-ai/covost2"
     name: "en_ca"
@@ -48,7 +48,7 @@ dataset_configs:
     transcript_template: "{{ sentence }}"
     total_samples: 15531
     eval_config:
-      metric: "corpus_bleu"
+      metric: "bleu"
   - alias: "covost2-es_en"
     path: "fixie-ai/covost2"
     name: "es_en"
@@ -59,7 +59,7 @@ dataset_configs:
     transcript_template: "{{ sentence }}"
     total_samples: 13221
     eval_config:
-      metric: "corpus_bleu"
+      metric: "bleu"
   - alias: "covost2-ru_en"
     path: "fixie-ai/covost2"
     name: "ru_en"
@@ -70,7 +70,7 @@ dataset_configs:
     transcript_template: "{{ sentence }}"
     total_samples: 6300
     eval_config:
-      metric: "corpus_bleu"
+      metric: "bleu"
   - alias: "covost2-zh_en"
     path: "fixie-ai/covost2"
     name: "zh-CN_en"
@@ -81,4 +81,4 @@ dataset_configs:
     transcript_template: "{{ sentence }}"
     total_samples: 4898
     eval_config:
-      metric: "corpus_bleu"
+      metric: "bleu"
