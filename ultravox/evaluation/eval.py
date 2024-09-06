@@ -1,3 +1,4 @@
+from typing import List
 from ultravox.evaluation import eval_types
 from ultravox.evaluation import gpt_eval_boolq
 from ultravox.evaluation import gpt_eval_conv
@@ -21,3 +22,9 @@ def evaluate_answer(sample: eval_types.Sample, metric: str) -> eval_types.Result
         return METRIC_REGISTRY[metric](sample)
     else:
         raise ValueError(f"Unknown metric: {metric}")
+
+def evaluate_answers(samples: List[eval_types.Sample], metric_config: eval_types.EvalConfig) -> eval_types.Result:
+    if metric_config.metric in METRIC_REGISTRY:
+        return METRIC_REGISTRY[metric_config.metric](samples, **metric_config.args)
+    else:
+        raise ValueError(f"Unknown metric: {metric_config.metric}")
