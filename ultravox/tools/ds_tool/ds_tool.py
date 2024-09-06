@@ -305,22 +305,19 @@ class DatasetChunkProcessor:
                         f"Finished processing and uploading 0/1 chunks for range [{start_index}, {end_index})"
                     )
                     self.chunks_not_uploaded.append((start_index, end_index))
-                    return []
+                    return None
                 failed_chunk_ranges.append((chunk_start, chunk_end))
         successful_chunks = self.args.num_chunks - len(failed_chunk_ranges)
         print(
             f"Finished processing and uploading {successful_chunks}/{self.args.num_chunks} chunks for range [{start_index}, {end_index})"
         )
-        while len(failed_chunk_ranges) > 0:
-            new_failed_ranges = []
+        if len(failed_chunk_ranges) > 0:
             for start, end in failed_chunk_ranges:
                 print(f"Retrying failed chunk range [{start}, {end})")
-                new_failed_ranges.extend(
-                    self.process_and_upload_split_rescursive(
-                        split_name, ds_split, start, end
-                    )
+                self.process_and_upload_split_rescursive(
+                    split_name, ds_split, start, end
                 )
-            failed_chunk_ranges = new_failed_ranges
+
         print(f"Could not upload chunks: {self.chunks_not_uploaded}")
         print(f"Finished processing and uploading all chunks for split {split_name}.")
 
