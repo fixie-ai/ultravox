@@ -234,10 +234,16 @@ class ChunkedDataset(Dataset):
             dataset_card_data = DatasetCardData()
             metadata_configs = MetadataConfigs()
             repo_info = None
-        # update the total info to dump from existing info
+        # Update the total info to dump from existing info.
         if repo_info is not None:
             logger.info("Updating downloaded metadata with the new split.")
+            # MODIFIED:
+            # New Addition:
+            # Keep the old split info to update the new split info
             old_split = repo_info.splits.get(split, SplitInfo())
+            # MODIFIED:
+            # Old:
+            # if repo_info.splits and list(repo_info.splits) != [split]:
             if repo_info.splits:
                 if self._info.features != repo_info.features:
                     raise ValueError(
@@ -251,6 +257,11 @@ class ChunkedDataset(Dataset):
                     repo_info.download_size + repo_info.dataset_size
                 )
                 repo_info.splits.pop(split, None)
+                # MODIFIED:
+                # Old:
+                # repo_info.splits[split] = SplitInfo(
+                #     split, num_bytes=dataset_nbytes, num_examples=len(self), dataset_name=dataset_name
+                # )
                 repo_info.splits[split] = SplitInfo(
                     split,
                     num_bytes=old_split.num_bytes + dataset_nbytes,
@@ -276,6 +287,9 @@ class ChunkedDataset(Dataset):
             else:
                 data_files_to_dump = {}
             # add the new split
+            # MODIFIED:
+            # Old:
+            # data_files_to_dump[split] = [f"{data_dir}/{split}-*"]
             data_files_to_dump[split] = [f"{config_name}/{split}/**"]
             metadata_config_to_dump = {
                 "data_files": [
@@ -287,6 +301,9 @@ class ChunkedDataset(Dataset):
                 ]
             }
         else:
+            # MODIFIED:
+            # Old:
+            # metadata_config_to_dump = {"data_files": [{"split": split, "path": f"{data_dir}/{split}-*"}]}
             metadata_config_to_dump = {
                 "data_files": [{"split": split, "path": f"{config_name}/{split}/**"}]
             }
