@@ -1,10 +1,18 @@
+<<<<<<< HEAD
 model: "fixie-ai/ultravox-v0_4"
+=======
+model: "wandb://fixie/ultravox/model-zhuang_2024-08-12-ultravox_input_kd-1b:v19"
+>>>>>>> ca4e476 (Update)
 report_logs_to: ["wandb"]
 output_dir: "./output"
+<<<<<<< HEAD
 eval_dataset_args:
   batch_size: 40
   max_tokens: 512
 eval_dataset_configs:
+=======
+dataset_configs:
+>>>>>>> ca4e476 (Update)
   - alias: "covost2-en_de"
     path: "fixie-ai/covost2"
     name: "en_de"
@@ -15,9 +23,15 @@ eval_dataset_configs:
       target: "German"
     assistant_template: "{{ translation }}"
     transcript_template: "{{ sentence }}"
+<<<<<<< HEAD
     num_samples: 15531
     eval_config:
       metric: "bleu"
+=======
+    total_samples: 15531
+    eval_config:
+      metric: "corpus_bleu"
+>>>>>>> ca4e476 (Update)
   - alias: "covost2-en_zh"
     path: "fixie-ai/covost2"
     name: "en_zh-CN"
@@ -28,12 +42,16 @@ eval_dataset_configs:
       target: "Chinese"
     assistant_template: "{{ translation }}"
     transcript_template: "{{ sentence }}"
+<<<<<<< HEAD
     num_samples: 15531
+=======
+    total_samples: 15531
+>>>>>>> ca4e476 (Update)
     eval_config:
       metric: "bleu"
       args:
         tokenize: "zh"
-  - alias: "covost2-en_ar.2k"
+  - alias: "covost2-en_ar"
     path: "fixie-ai/covost2"
     name: "en_ar"
     splits:
@@ -43,9 +61,15 @@ eval_dataset_configs:
       target: "Arabic"
     assistant_template: "{{ translation }}"
     transcript_template: "{{ sentence }}"
+<<<<<<< HEAD
     num_samples: 15531
     eval_config:
       metric: "bleu"
+=======
+    total_samples: 15531
+    eval_config:
+      metric: "corpus_bleu"
+>>>>>>> ca4e476 (Update)
   - alias: "covost2-en_ca"
     path: "fixie-ai/covost2"
     name: "en_ca"
@@ -56,9 +80,15 @@ eval_dataset_configs:
       target: "Catalan"
     assistant_template: "{{ translation }}"
     transcript_template: "{{ sentence }}"
+<<<<<<< HEAD
     num_samples: 15531
     eval_config:
       metric: "bleu"
+=======
+    total_samples: 15531
+    eval_config:
+      metric: "corpus_bleu"
+>>>>>>> ca4e476 (Update)
   - alias: "covost2-es_en"
     path: "fixie-ai/covost2"
     name: "es_en"
@@ -69,9 +99,15 @@ eval_dataset_configs:
       target: "English"
     assistant_template: "{{ translation }}"
     transcript_template: "{{ sentence }}"
+<<<<<<< HEAD
     num_samples: 15531
     eval_config:
       metric: "bleu"
+=======
+    total_samples: 13221
+    eval_config:
+      metric: "corpus_bleu"
+>>>>>>> ca4e476 (Update)
   - alias: "covost2-ru_en"
     path: "fixie-ai/covost2"
     name: "ru_en"
@@ -82,9 +118,15 @@ eval_dataset_configs:
       target: "English"
     assistant_template: "{{ translation }}"
     transcript_template: "{{ sentence }}"
+<<<<<<< HEAD
     num_samples: 15531
     eval_config:
       metric: "bleu"
+=======
+    total_samples: 6300
+    eval_config:
+      metric: "corpus_bleu"
+>>>>>>> ca4e476 (Update)
   - alias: "covost2-zh_en"
     path: "fixie-ai/covost2"
     name: "zh-CN_en"
@@ -95,6 +137,10 @@ eval_dataset_configs:
       target: "English"
     assistant_template: "{{ translation }}"
     transcript_template: "{{ sentence }}"
+<<<<<<< HEAD
     num_samples: 15531
+=======
+    total_samples: 4898
+>>>>>>> ca4e476 (Update)
     eval_config:
       metric: "bleu"

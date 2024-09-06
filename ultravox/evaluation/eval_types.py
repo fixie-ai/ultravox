@@ -24,7 +24,11 @@ class Sample(dataclasses_json.DataClassJsonMixin):
     question: str
     hypothesis: str
     reference: str
+<<<<<<< HEAD
     history: List[Dict[str, Any]] = dataclasses.field(default_factory=list)
+=======
+    history: List[Dict[str, str]] = dataclasses.field(default_factory=list)
+>>>>>>> ca4e476 (Update)
 
 
 @dataclasses.dataclass
