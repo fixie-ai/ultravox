@@ -4,7 +4,29 @@ import sacrebleu
 
 from ultravox.evaluation import eval_types
 from typing import List
+import jiwer
 
+def wer(sample: eval_types.Sample):
+    transforms = jiwer.Compose(
+        [
+            jiwer.ExpandCommonEnglishContractions(),
+            jiwer.RemoveEmptyStrings(),
+            jiwer.ToLowerCase(),
+            jiwer.RemoveMultipleSpaces(),
+            jiwer.Strip(),
+            jiwer.RemovePunctuation(),
+            jiwer.ReduceToListOfListOfWords(),
+        ]
+    )
+
+    score = jiwer.wer(
+        [sample.reference],
+        [sample.hypothesis],
+        truth_transform=transforms,
+        hypothesis_transform=transforms,
+    )
+
+    return eval_types.WerResult(score=min(1.0, score))
 
 
 def match_last_word(sample: eval_types.Sample) -> eval_types.ExactMatchResult:
@@ -25,6 +47,7 @@ def match_last_word(sample: eval_types.Sample) -> eval_types.ExactMatchResult:
     return eval_types.ExactMatchResult(
         score=last_word == expected_tf, reason="exact_match check"
     )
+
 
 def bleu(samples: List[eval_types.Sample], **kwargs) -> eval_types.BleuResult:
     """

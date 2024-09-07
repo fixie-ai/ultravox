@@ -1,4 +1,5 @@
 from typing import List
+import numpy as np
 from ultravox.evaluation import eval_types
 from ultravox.evaluation import gpt_eval_boolq
 from ultravox.evaluation import gpt_eval_conv
@@ -12,9 +13,11 @@ METRIC_REGISTRY = {
     "instruct": gpt_eval_instruct.evaluate_answer_instruct,
     "conversation": gpt_eval_conv.evaluate_conversation_response,
     "exact_match_last_word": string_based.match_last_word,
-    "bleu": string_based.bleu,
 }
 
+CORPUS_METRIC_REGISTRY = {
+    "bleu": string_based.bleu
+}
 
 def evaluate_answer(sample: eval_types.Sample, metric: str) -> eval_types.Result:
     if metric in METRIC_REGISTRY:
@@ -23,7 +26,7 @@ def evaluate_answer(sample: eval_types.Sample, metric: str) -> eval_types.Result
         raise ValueError(f"Unknown metric: {metric}")
 
 def evaluate_answers(samples: List[eval_types.Sample], metric_config: eval_types.EvalConfig) -> eval_types.Result:
-    if metric_config.metric in METRIC_REGISTRY:
-        return METRIC_REGISTRY[metric_config.metric](samples, **metric_config.args)
+    if metric_config.metric in CORPUS_METRIC_REGISTRY:
+        return CORPUS_METRIC_REGISTRY[metric_config.metric](samples, **metric_config.args)
     else:
         raise ValueError(f"Unknown metric: {metric_config.metric}")
