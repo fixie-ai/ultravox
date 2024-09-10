@@ -2,6 +2,8 @@ import dataclasses
 import datetime
 import logging
 import os
+import re
+import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -130,3 +132,16 @@ class TrainConfig:
                 "LayerDrop cannot be used in DDP when encoder is not frozen. Disabling LayerDrop."
             )
             self.disable_layerdrop = True
+
+
+def fix_hyphens(arg: str):
+    return re.sub(r"^--([^=]+)", lambda m: "--" + m.group(1).replace("-", "_"), arg)
+
+
+def get_train_args() -> TrainConfig:
+    return simple_parsing.parse(
+        config_class=TrainConfig,
+        config_path="ultravox/training/configs/meta_config.yaml",  # base config file
+        add_config_path_arg=True,
+        args=[fix_hyphens(arg) for arg in sys.argv[1:]],
+    )

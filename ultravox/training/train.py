@@ -4,16 +4,13 @@ import gc
 import glob
 import logging
 import os
-import re
 import subprocess
-import sys
 from datetime import datetime
 from typing import Dict, List, Optional
 
 import datasets as hf_datasets
 import pandas as pd
 import safetensors.torch
-import simple_parsing
 import torch
 import torch.distributed
 import transformers
@@ -32,10 +29,6 @@ from ultravox.training import config_base
 
 INPUT_EXAMPLE = {"text": "Transcribe\n<|audio|>", "audio": b"\x00\x00" * 16000}
 OUTPUT_EXAMPLE = {"text": "Hello, world!"}
-
-
-def fix_hyphens(arg: str):
-    return re.sub(r"^--([^=]+)", lambda m: "--" + m.group(1).replace("-", "_"), arg)
 
 
 def prepare_dataset(
@@ -75,12 +68,7 @@ def main() -> None:
     os.environ["WANDB_LOG_MODEL"] = "checkpoint"
     os.environ["WANDB_PROJECT"] = "ultravox"
 
-    args = simple_parsing.parse(
-        config_class=config_base.TrainConfig,
-        config_path="ultravox/training/configs/meta_config.yaml",  # base config file
-        add_config_path_arg=True,
-        args=[fix_hyphens(arg) for arg in sys.argv[1:]],
-    )
+    args = config_base.get_train_args()
 
     transformers.set_seed(args.seed)
 
