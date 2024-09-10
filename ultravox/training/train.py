@@ -323,9 +323,9 @@ def train(args: config_base.TrainConfig):
     )
     # We don't want to save the model twice. Trainer.save_model saves the model to the output_dir.
     old_save_pretrained = model.save_pretrained
-    model.save_pretrained = lambda *_, **__: None
+    model.save_pretrained = lambda *_, **__: None  # type: ignore[method-assign]
     pipeline.save_pretrained(args.output_dir)
-    model.save_pretrained = old_save_pretrained
+    model.save_pretrained = old_save_pretrained  # type: ignore[method-assign]
 
     trainer.save_model(args.output_dir)
 
