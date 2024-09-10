@@ -138,16 +138,15 @@ def fix_hyphens(arg: str):
     return re.sub(r"^--([^=]+)", lambda m: "--" + m.group(1).replace("-", "_"), arg)
 
 
-def get_train_args(args: Optional[List[str]] = None) -> TrainConfig:
+def get_train_args(override_sys_args: Optional[List[str]] = None) -> TrainConfig:
     """
     Parse the command line arguments and return a TrainConfig object.
 
     Args:
-        args: The command line arguments. If None, sys.argv[1:] is used.
+        override_sys_args: The command line arguments. If None, sys.argv[1:] is used.
             This is mainly useful for testing.
     """
-    if args is None:
-        args = sys.argv[1:]
+    args = override_sys_args or sys.argv[1:]
 
     return simple_parsing.parse(
         config_class=TrainConfig,

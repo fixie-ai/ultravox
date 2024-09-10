@@ -9,11 +9,11 @@ from ultravox.training import config_base
 ALLOW_PATTERNS = ["*.safetensors", "*.json"]
 
 
-def main(args: Optional[List[str]] = None):
+def main(override_sys_args: Optional[List[str]] = None):
     start = datetime.now()
     print("Downloading weights ...")
 
-    args = config_base.get_train_args(args)
+    args = config_base.get_train_args(override_sys_args)
 
     for model_id in [args.text_model, args.audio_model]:
         try:
