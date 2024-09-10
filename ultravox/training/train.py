@@ -317,12 +317,17 @@ def train(args: config_base.TrainConfig):
         logging.info(f"train end time: {t_end}")
         logging.info(f"elapsed: {t_end - t_start}")
 
-    if is_master:
-        # Saving the model using pipeline to ensure its code is saved
-        pipeline = ultravox_pipeline.UltravoxPipeline(
-            model, tokenizer=text_tokenizer, device=device
-        )
-        pipeline.save_pretrained(args.output_dir)
+    # Save the pipeline code and update the config to include the pipeline
+    pipeline = ultravox_pipeline.UltravoxPipeline(
+        model, tokenizer=text_tokenizer, device=model.device
+    )
+    # We don't want to save the model twice. Trainer.save_model saves the model to the output_dir.
+    old_save_pretrained = model.save_pretrained
+    model.save_pretrained = lambda *_, **__: None
+    pipeline.save_pretrained(args.output_dir)
+    model.save_pretrained = old_save_pretrained
+
+    trainer.save_model(args.output_dir)
 
 
 def evaluate(args: config_base.TrainConfig):
