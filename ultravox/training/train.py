@@ -129,10 +129,9 @@ def train(args: config_base.TrainConfig):
 
     logging.info("Instantiating model...")
 
-    # Since the model downloads the language model and audio encoder weights, we want one process to finish up
-    # downloading before the others start in order to avoid race conditions.
-    with ddp_utils.run_on_master_first(is_master):
-        model = ultravox_model.UltravoxModel(config)
+    # We assume that the weights are already downloaded via prefetch_weights.py
+    # If the weights are not downloaded, we might see a race condition here when using DDP.
+    model = ultravox_model.UltravoxModel(config)
 
     assert model.get_input_embeddings().num_embeddings == len(
         text_tokenizer
@@ -166,9 +165,10 @@ def train(args: config_base.TrainConfig):
         logging.info(f"Loading model state dict from {args.model_load_dir}")
         load_path = args.model_load_dir
         if wandb_utils.is_wandb_url(load_path):
-            # Download the model from W&B. The main process should do the download while the others wait.
-            with ddp_utils.run_on_master_first(is_master):
-                load_path = wandb_utils.download_model_from_wandb(load_path)
+            # We assume that the weights are already downloaded via prefetch_weights.py
+            # and hence this is just resolving the path. If the weights are not downloaded,
+            # we might see a race condition here when using DDP.
+            load_path = wandb_utils.download_model_from_wandb(load_path)
         if os.path.isdir(load_path):
             load_path = os.path.join(load_path, "model*.safetensors")
         paths = glob.glob(load_path)
