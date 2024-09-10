@@ -56,6 +56,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
 
         self.loss_config = LossConfig()
         self.post_init()
+        self.multi_modal_projector.to(dtype=config.torch_dtype)
 
     def get_input_embeddings(self):
         return self.language_model.get_input_embeddings()
@@ -188,7 +189,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
 
             # B x A/3200 x D
             audio_tower_output = self.audio_tower.forward(
-                audio_values
+                audio_values.to(self.audio_tower.dtype)
             ).last_hidden_state
             audio_tower_output = audio_tower_output.to(inputs_embeds.dtype)
 
@@ -272,11 +273,11 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         if config.audio_model_id is not None:
             if "whisper" in config.audio_model_id is not None:
                 audio_tower = ModifiedWhisperEncoder.from_pretrained(
-                    config.audio_model_id
+                    config.audio_model_id, torch_dtype=config.torch_dtype
                 )
             else:
                 audio_tower = transformers.AutoModel.from_pretrained(
-                    config.audio_model_id
+                    config.audio_model_id, torch_dtype=config.torch_dtype
                 )
         else:
             if "whisper" in config.audio_config._name_or_path:
@@ -307,14 +308,18 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
     ) -> transformers.LlamaForCausalLM:
         if config.text_model_id is not None:
             language_model = transformers.AutoModelForCausalLM.from_pretrained(
-                config.text_model_id, attn_implementation=config._attn_implementation
+                config.text_model_id,
+                attn_implementation=config._attn_implementation,
+                torch_dtype=config.torch_dtype,
             )
         else:
             with transformers.modeling_utils.no_init_weights():
                 # we only ever use from_config if the weights are retrained, hence initializing is not
                 # required. This makes the model quite creation faster since init on CPU is quite slow.
                 language_model = transformers.AutoModelForCausalLM.from_config(
-                    config.text_config, attn_implementation=config._attn_implementation
+                    config.text_config,
+                    attn_implementation=config._attn_implementation,
+                    torch_dtype=config.torch_dtype,
                 )
 
         language_model = apply_lora(language_model, config.text_model_lora_config)
