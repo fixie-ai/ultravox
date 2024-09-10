@@ -1188,7 +1188,7 @@ class InterleaveDataset(SizedIterableDataset):
     # Only used when using_epochs is True
     def __len__(self) -> int:
         # TODO: Implement the length method for different stop strategies
-        return sum(int(getattr(ds, "weight", 1) * len(ds)) for ds in datasets)
+        return sum(int(getattr(ds, "weight", 1) * len(ds)) for ds in self._datasets)
 
 
 class Dataproc(SizedIterableDataset):
