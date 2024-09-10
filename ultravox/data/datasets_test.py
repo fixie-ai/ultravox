@@ -15,7 +15,7 @@ from ultravox.data import datasets
 class FakeSizedIterableDataset(datasets.SizedIterableDataset):
     """Fake version of datasets.SizedIterableDataset"""
 
-    def __init__(self, n, start=0, weight=1, estimated_length=0):
+    def __init__(self, n, start=0, weight=1, estimated_length=1):
         self.data = range(start, start + n)
         self._weight = weight
         self._estimated_length = estimated_length

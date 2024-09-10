@@ -51,13 +51,16 @@ def prepare_dataset(
 ) -> datasets.SizedIterableDataset:
     data_sets = [datasets.create_dataset(ds, data_args) for ds in dataset_names]
     # If we're using epochs to train, validate the dataset length is appropriate.
-    if train_args.max_steps == 0:
+    using_epochs = train_args.max_steps == 0
+    if using_epochs:
         for ds in data_sets:
             assert (
                 len(ds) > 1
             ), f"Dataset {ds} has length {len(ds)} which is too short for epoch training"
 
-    interleave = datasets.InterleaveDataset(data_sets, stop_strategy=stop_strategy)
+    interleave = datasets.InterleaveDataset(
+        data_sets, stop_strategy=stop_strategy, using_epochs=using_epochs
+    )
     ds_with_proc = data_processing.UltravoxDataproc(
         interleave,
         processor=processor,

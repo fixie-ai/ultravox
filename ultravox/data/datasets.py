@@ -279,7 +279,7 @@ class SizedIterableDataset(abc.ABC, data.IterableDataset):
     """
 
     @abc.abstractmethod
-    def __len__(self):
+    def __len__(self) -> int:
         pass
 
 
@@ -373,8 +373,8 @@ class VoiceDataset(SizedIterableDataset):
                 f"Mismatch between estimated length ({self._estimated_length}) and actual length ({actual_length}) for dataset of type {type(self._dataset)}. Make sure to update."
             )
 
-    def __len__(self):
-        return self._estimated_length
+    def __len__(self) -> int:
+        return int(self._estimated_length * self._weight)
 
     @abc.abstractmethod
     def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
@@ -493,7 +493,7 @@ class EmptyDataset(SizedIterableDataset):
     def __iter__(self):
         return iter([])
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self._estimated_length
 
 
@@ -1129,6 +1129,7 @@ class InterleaveDataset(SizedIterableDataset):
         stop_strategy: StopStrategy = StopStrategy.LAST_EXHAUSTED,
         seed: Optional[int] = 42,
         static: bool = False,
+        using_epochs: bool = False,
     ) -> None:
         """
         Args:
@@ -1142,8 +1143,12 @@ class InterleaveDataset(SizedIterableDataset):
         self._static = static
 
         self._stop_strategy = stop_strategy
+        self._using_epochs = using_epochs
+        if not self._using_epochs:
+            weights = [int(getattr(ds, "weight", 1) * len(ds)) for ds in datasets]
+        else:
+            weights = [getattr(ds, "weight", 1) for ds in datasets]
 
-        weights = [getattr(ds, "weight", 1) for ds in datasets]
         total_weight = sum(weights)
         self._normalized_probs = [w / total_weight for w in weights]
 
@@ -1180,9 +1185,10 @@ class InterleaveDataset(SizedIterableDataset):
                 iters[iter_index] = iter(self._datasets[iter_index])
                 yield next(iters[iter_index])
 
-    def __len__(self):
+    # Only used when using_epochs is True
+    def __len__(self) -> int:
         # TODO: Implement the length method for different stop strategies
-        return sum(len(ds) for ds in self._datasets)
+        return sum(int(getattr(ds, "weight", 1) * len(ds)) for ds in datasets)
 
 
 class Dataproc(SizedIterableDataset):
@@ -1198,7 +1204,7 @@ class Dataproc(SizedIterableDataset):
     def __iter__(self):
         return (self._process(sample) for sample in self._dataset)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self._dataset)
 
 
@@ -1234,7 +1240,7 @@ class Range(SizedIterableDataset):
                 break
             yield sample
 
-    def __len__(self):
+    def __len__(self) -> int:
         return (
             self._num_samples
             if self._num_samples is not None
