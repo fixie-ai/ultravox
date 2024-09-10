@@ -1,7 +1,7 @@
 text_model: "meta-llama/Meta-Llama-3-8B-Instruct"
 audio_model: "facebook/wav2vec2-base-960h"
 
-data_sets: ["gigaspeech"]
+data_sets: []
 val_sets: ["heysquad_human", "anyinstruct", "soda", "peoplespeech"]
 stop_strategy: "LAST_EXHAUSTED"
 
