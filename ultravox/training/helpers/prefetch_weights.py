@@ -2,8 +2,8 @@ from datetime import datetime
 
 import huggingface_hub
 
-from ultravox.training import config_base
 from ultravox.model import wandb_utils
+from ultravox.training import config_base
 
 ALLOW_PATTERNS = ["*.safetensors", "*.json"]
 
