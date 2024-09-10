@@ -1,3 +1,4 @@
+from typing import List, Optional
 from datetime import datetime
 
 import huggingface_hub
@@ -8,11 +9,11 @@ from ultravox.training import config_base
 ALLOW_PATTERNS = ["*.safetensors", "*.json"]
 
 
-def main():
+def main(args: Optional[List[str]] = None):
     start = datetime.now()
     print("Downloading weights ...")
 
-    args = config_base.get_train_args()
+    args = config_base.get_train_args(args)
 
     for model_id in [args.text_model, args.audio_model]:
         try:
