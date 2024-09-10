@@ -374,7 +374,7 @@ class VoiceDataset(SizedIterableDataset):
             )
 
     def __len__(self) -> int:
-        return int(self._estimated_length * self._weight)
+        return self._estimated_length
 
     @abc.abstractmethod
     def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
@@ -1049,16 +1049,17 @@ class GenericVoiceDataset(VoiceDataset):
         if self._args.shuffle:
             dataset = dataset.shuffle(seed=self._args.shuffle_seed)
 
-        if config.num_samples:
-            dataset = Range(dataset, config.num_samples, config.total_samples)
-
         self._weight = config.weight
 
         self.user_template = config.user_template
         self.assistant_template = config.assistant_template
         self.transcript_template = config.transcript_template
 
-        super()._init_dataset(dataset, config.total_samples)
+        if config.num_samples:
+            dataset = Range(dataset, config.num_samples, config.total_samples)
+            super()._init_dataset(dataset, len(dataset))
+        else:
+            super()._init_dataset(dataset, config.total_samples)
 
     def _get_sample(self, row) -> VoiceSample:
         try:
