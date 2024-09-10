@@ -1186,7 +1186,6 @@ class InterleaveDataset(SizedIterableDataset):
                 iters[iter_index] = iter(self._datasets[iter_index])
                 yield next(iters[iter_index])
 
-    # Only used when using_epochs is True
     def __len__(self) -> int:
         # TODO: Implement the length method for different stop strategies
         return sum(int(getattr(ds, "weight", 1) * len(ds)) for ds in self._datasets)
