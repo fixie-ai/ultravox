@@ -51,6 +51,8 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         self.vocab_size = config.vocab_size
 
         self.audio_tower = self._create_audio_tower(config)
+        self.audio_tower_context_length = 3000  # the context window for the whisper model
+        
         self.multi_modal_projector = UltravoxProjector(config)
         self.language_model = self._create_language_model(config)
 
@@ -186,17 +188,30 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
                 len(audio_token_start_idx) == len(audio_token_len) == len(audio_values)
             ), "audio_token_start_idx, audio_token_len, and audio_values must have the same batch size."
 
-            # B x A/3200 x D
-            audio_tower_output = self.audio_tower.forward(
-                audio_values
-            ).last_hidden_state
-            audio_tower_output = audio_tower_output.to(inputs_embeds.dtype)
+            # Check if the audio_values T dimension is greater than whisper encoder's context window.
+            print("audio values shape: ", audio_values.shape)
+            if audio_values.shape[2] > self.audio_tower_context_length:
+                audio_values_chunks = torch.split(
+                    audio_values, self.audio_tower_context_length, dim=2
+                )
+            else:
+                audio_values_chunks = (audio_values,)
 
-            audio_embeds = self.multi_modal_projector.forward(audio_tower_output)
+            rebuilt_audio_embeds = []
+            for audio_chunk in audio_values_chunks:
+                # B x A/3200 x D
+                audio_tower_output = self.audio_tower.forward(
+                    audio_chunk
+                ).last_hidden_state
+                audio_tower_output = audio_tower_output.to(inputs_embeds.dtype)
+                audio_embeds = self.multi_modal_projector.forward(audio_tower_output)
+                rebuilt_audio_embeds.append(audio_embeds)
+
+            rebuilt_audio_embeds_tensor = torch.cat(rebuilt_audio_embeds, dim=1)
 
             # combine audio and text embeddings
             for i, (audio, start, length) in enumerate(
-                zip(audio_embeds, audio_token_start_idx, audio_token_len)
+                zip(rebuilt_audio_embeds_tensor, audio_token_start_idx, audio_token_len)
             ):
                 length = min(length, audio.shape[0])
                 inputs_embeds[i, start : start + length] = audio[:length]
