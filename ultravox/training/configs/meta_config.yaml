@@ -19,32 +19,37 @@ logging_steps: 100
 
 report_logs_to: ["tensorboard", "wandb"]
 
+val_dataset_args:
+  batch_size: 25
 val_dataset_configs:
-  - path: "fixie-ai/covost2"
-    alias: "covost2-en_zh-val"
+  - alias: "covost2-en_zh-val"
+    path: "fixie-ai/covost2"
     name: "en_zh-CN"
     splits:
       - "validation"
-    active_samples: 100
+    active_samples: 200
     num_samples: 15531
     user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
     user_template_args:
       target: "Chinese"
     assistant_template: "{{ translation }}"
     transcript_template: "{{ sentence }}"
-  - path: "fixie-ai/covost2"
-    alias: "covost2-zh_en-val"
-    name: "zh-CN_en"
-    splits:
-      - "validation"
-    active_samples: 100
-    num_samples: 4843
-    user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
-    user_template_args:
-      target: "English"
-    assistant_template: "{{ translation }}"
-    transcript_template: "{{ sentence }}"
+  # - alias: "covost2-zh_en-val"
+  #   path: "fixie-ai/covost2"
+  #   name: "zh-CN_en"
+  #   splits:
+  #     - "validation"
+  #   active_samples: 100
+  #   num_samples: 4843
+  #   user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
+  #   user_template_args:
+  #     target: "English"
+  #   assistant_template: "{{ translation }}"
+  #   transcript_template: "{{ sentence }}"
 
+eval_dataset_args:
+  batch_size: 40
+  max_tokens: 512
 eval_dataset_configs:
   - alias: "covost2-en_de.2k"
     path: "fixie-ai/covost2"

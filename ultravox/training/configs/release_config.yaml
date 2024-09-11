@@ -16,11 +16,6 @@ max_steps: 14400 # x8x24 = 2,764,800
 train_dataset_args:
   shuffle: True
   batch_size: 24
-val_dataset_args:
-  batch_size: 24
-eval_dataset_args:
-  batch_size: 40
-  max_tokens: 512
 
 train_dataset_configs:
 # continuation
