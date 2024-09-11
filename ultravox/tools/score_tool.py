@@ -3,13 +3,14 @@ import dataclasses
 import json
 import sys
 from pathlib import Path
-from typing import List, Dict
+from typing import Dict
 
 import simple_parsing
 
+from ultravox.evaluation import eval_helpers
 from ultravox.evaluation import eval_types
-from ultravox.evaluation.eval import evaluate_answers
 from ultravox.utils import string_helpers
+
 
 @dataclasses.dataclass
 class ScoreArgs:
@@ -20,6 +21,7 @@ class ScoreArgs:
     # Additional arguments for the metric configuration
     args: Dict[str, str] = simple_parsing.field(alias="-a", default_factory=dict)
 
+
 def main():
     args = simple_parsing.parse(
         config_class=ScoreArgs,
@@ -27,21 +29,22 @@ def main():
     )
 
     # Load samples from JSON file
-    with open(args.input, 'r') as f:
+    with open(args.input, "r") as f:
         samples_data = json.load(f)
-    
+
     samples = [eval_types.Sample(**sample) for sample in samples_data]
-    
+
     # Create EvalConfig with args
     metric_config = eval_types.EvalConfig(metric=args.metric, args=args.args)
-    
+
     # Evaluate samples
-    result = evaluate_answers(samples, metric_config)
-    
+    result = eval_helpers.evaluate_answers(samples, metric_config)
+
     # Print result
     print(f"input: {args.input}")
     print(f"args: {args.args}")
     print(f"{args.metric}: {result.score:.2f}")
+
 
 if __name__ == "__main__":
     main()

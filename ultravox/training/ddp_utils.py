@@ -44,7 +44,10 @@ def sharded_iterator(ds: data.IterableDataset, num_shards: int, shard_index: int
         if i % num_shards == shard_index:
             yield sample
 
-def sharded_batch_iterator(ds: data.IterableDataset, batch_size: int, num_shards: int, shard_index: int):
+
+def sharded_batch_iterator(
+    ds: data.IterableDataset, batch_size: int, num_shards: int, shard_index: int
+):
     batch = []
     for idx, sample in enumerate(ds):
         if idx % num_shards == shard_index:
@@ -52,7 +55,7 @@ def sharded_batch_iterator(ds: data.IterableDataset, batch_size: int, num_shards
             if len(batch) == batch_size:
                 yield batch
                 batch = []
-    
+
     # Yield any remaining samples in the last incomplete batch
     if batch:
         yield batch

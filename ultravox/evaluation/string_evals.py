@@ -1,10 +1,11 @@
 import re
+from typing import List
 
+import jiwer
 import sacrebleu
 
 from ultravox.evaluation import eval_types
-from typing import List
-import jiwer
+
 
 def wer(sample: eval_types.Sample):
     transforms = jiwer.Compose(
@@ -56,5 +57,6 @@ def bleu(samples: List[eval_types.Sample], **kwargs) -> eval_types.BleuResult:
     references = [[sample.reference for sample in samples]]
     hypotheses = [sample.hypothesis for sample in samples]
     score = sacrebleu.corpus_bleu(
-        hypotheses=hypotheses, references=references, **kwargs).score
+        hypotheses=hypotheses, references=references, **kwargs
+    ).score
     return eval_types.BleuResult(score=score)

@@ -1,12 +1,13 @@
 import dataclasses
-from typing import Dict, List, Optional, Union
-from pydantic import BaseModel
+from typing import Any, Dict, List, Optional, Union
 
 import dataclasses_json
+from pydantic import BaseModel
+
 
 class EvalConfig(BaseModel):
     metric: str
-    args: Optional[Dict[str, str]] = dataclasses.field(default_factory=dict)
+    args: Dict[str, Any] = dataclasses.field(default_factory=dict)
 
 
 @dataclasses.dataclass
@@ -15,7 +16,7 @@ class Sample(dataclasses_json.DataClassJsonMixin):
     question: str
     hypothesis: str
     reference: str
-    history: List[Dict[str, str]] = dataclasses.field(default_factory=list)
+    history: List[Dict[str, Any]] = dataclasses.field(default_factory=list)
 
 
 @dataclasses.dataclass
@@ -51,4 +52,4 @@ class BleuResult:
     score: float
 
 
-Result = Union[InstructResult, WerResult, ExactMatchResult]
+Result = Union[InstructResult, WerResult, ExactMatchResult, BleuResult]

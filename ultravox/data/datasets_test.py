@@ -8,7 +8,6 @@ import torch
 from torch.utils import data
 from transformers.feature_extraction_utils import BatchFeature
 
-from ultravox.data import dataset_config
 from ultravox.data import datasets
 
 
@@ -51,8 +50,16 @@ class FakeHuggingFaceIterableDataset(hf_datasets.IterableDataset):
 class FakeTranscribeDataset(datasets.VoiceDataset):
     """Fake version of our VoiceDataset using a transcribe prompt."""
 
-    def __init__(self, n: int, args: Optional[datasets.VoiceDatasetArgs] = None):
-        super().__init__(args or datasets.VoiceDatasetArgs())
+    def __init__(
+        self,
+        n: int,
+        args: Optional[datasets.VoiceDatasetArgs] = None,
+        config: Optional[datasets.DatasetConfig] = None,
+    ):
+        super().__init__(
+            args or datasets.VoiceDatasetArgs(),
+            config or datasets.DatasetConfig(num_samples=n),
+        )
 
         self._init_dataset(FakeHuggingFaceIterableDataset(n), n)
 
@@ -66,11 +73,11 @@ class FakeGenericDataset(datasets.VoiceDataset):
     def __init__(
         self,
         n: int,
-        config: dataset_config.DatasetConfig,
+        config: datasets.DatasetConfig,
         args: Optional[datasets.VoiceDatasetArgs] = None,
     ):
-        super().__init__(args or datasets.VoiceDatasetArgs())
-        self._init_dataset(FakeHuggingFaceIterableDataset(n), config.total_samples)
+        super().__init__(args or datasets.VoiceDatasetArgs(), config)
+        self._init_dataset(FakeHuggingFaceIterableDataset(n), config.num_samples)
 
     def _get_sample(self, row: BatchFeature) -> Optional[datasets.VoiceSample]:
         return self._get_transcribe_sample(row)

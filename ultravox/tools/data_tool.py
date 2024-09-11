@@ -29,11 +29,15 @@ def main(args: argparse.Namespace):
         num_prompts=args.num_prompts,
         shuffle=args.shuffle,
         use_mds=args.mds,
-        split=args.data_split,
     )
     if args.seed is not None:
         data_args.shuffle_seed = args.seed
-    data_sets = [datasets.create_dataset(ds, data_args) for ds in args.data_sets]
+    data_sets = [
+        datasets.create_dataset(
+            data_args, datasets.DatasetConfig(type=ds_type, splits=[args.data_split])
+        )
+        for ds_type in args.data_sets
+    ]
     out_set = datasets.Range(datasets.InterleaveDataset(data_sets), args.num_samples)
     for i, sample in enumerate(out_set):
         print(f"--- Sample {i} ---")

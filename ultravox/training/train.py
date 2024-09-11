@@ -1,17 +1,12 @@
-import copy
 import dataclasses
-import gc
 import glob
 import logging
 import os
-import re
-import subprocess
 import sys
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import datasets as hf_datasets
-import pandas as pd
 import safetensors.torch
 import simple_parsing
 import torch
@@ -22,6 +17,8 @@ import wandb.sdk
 from torch.utils import data
 
 from ultravox.data import datasets
+from ultravox.evaluation import eval
+from ultravox.inference import infer
 from ultravox.model import data_processing
 from ultravox.model import ultravox_config
 from ultravox.model import ultravox_model
@@ -30,26 +27,25 @@ from ultravox.model import ultravox_processing
 from ultravox.model import wandb_utils
 from ultravox.training import config_base
 from ultravox.training import ddp_utils
+from ultravox.utils import string_helpers
 
 INPUT_EXAMPLE = {"text": "Transcribe\n<|audio|>", "audio": b"\x00\x00" * 16000}
 OUTPUT_EXAMPLE = {"text": "Hello, world!"}
 
 
-def fix_hyphens(arg: str):
-    return re.sub(r"^--([^=]+)", lambda m: "--" + m.group(1).replace("-", "_"), arg)
-
-
 def prepare_dataset(
     train_args: config_base.TrainConfig,
-    dataset_names: List[str],
+    dataset_configs: List[datasets.DatasetConfig],
     data_args: datasets.VoiceDatasetArgs,
     processor: ultravox_processing.UltravoxProcessor,
     train_on_inputs: bool,
     stop_strategy: datasets.StopStrategy,
-    num_samples: Optional[int] = None,
     include_alt_fields: bool = False,  # whether to generate tensors for text-only input (e.g., used for KD training)
 ) -> datasets.SizedIterableDataset:
-    data_sets = [datasets.create_dataset(ds, data_args) for ds in dataset_names]
+    data_sets = [
+        datasets.create_dataset(data_args, dataset_config)
+        for dataset_config in dataset_configs
+    ]
     # If we're using epochs to train, validate the dataset length is appropriate.
     if train_args.max_steps == 0:
         for ds in data_sets:
@@ -57,15 +53,16 @@ def prepare_dataset(
                 len(ds) > 1
             ), f"Dataset {ds} has length {len(ds)} which is too short for epoch training"
 
-    interleave = datasets.InterleaveDataset(data_sets, stop_strategy=stop_strategy)
-    ds_with_proc = data_processing.UltravoxDataproc(
-        interleave,
+    interleaved_dataset = datasets.InterleaveDataset(
+        data_sets, stop_strategy=stop_strategy
+    )
+    dataset_with_proc = data_processing.UltravoxDataproc(
+        interleaved_dataset,
         processor=processor,
         train_on_inputs=train_on_inputs,
         include_alt_fields=include_alt_fields,
     )
-    limited_ds = datasets.Range(ds_with_proc, num_samples=num_samples)
-    return limited_ds
+    return dataset_with_proc
 
 
 def main() -> None:
@@ -80,7 +77,7 @@ def main() -> None:
         config_class=config_base.TrainConfig,
         config_path="ultravox/training/configs/meta_config.yaml",  # base config file
         add_config_path_arg=True,
-        args=[fix_hyphens(arg) for arg in sys.argv[1:]],
+        args=[string_helpers.fix_hyphens(arg) for arg in sys.argv[1:]],
     )
 
     transformers.set_seed(args.seed)
@@ -89,11 +86,6 @@ def main() -> None:
     is_master = local_rank == 0
 
     train(args)
-
-    if args.do_eval and is_master:
-        gc.collect()
-        torch.cuda.empty_cache()
-        evaluate(args)
 
 
 def train(args: config_base.TrainConfig):
@@ -194,66 +186,41 @@ def train(args: config_base.TrainConfig):
     # Prepare dataset, subsetting if needed
     train_dataset: data.IterableDataset
     val_datasets: Dict[str, data.IterableDataset]
-    # We use multiple validation sets here so that the results are comparable even when training set changes
-    # To make sure we can compare training and validation loss (e.g. for fine-tuning), we keep a special set
-    # called "matchtrain" that uses the same data as the training set.
-    val_sets = dict(
-        # [("matchtrain", args.data_sets)]  # FIXME: see issue https://github.com/fixie-ai/ultravox/issues/58
-        [(x, [x]) for x in args.val_sets]
-        + [(f"text_{x}", [x]) for x in args.val_sets]
-    )
+
     train_dataset = prepare_dataset(
         train_args=args,
-        dataset_names=args.data_sets,
+        dataset_configs=args.train_dataset_configs,
         train_on_inputs=args.train_on_inputs,
         stop_strategy=args.stop_strategy,
         processor=processor,
-        num_samples=args.num_samples,
-        data_args=datasets.VoiceDatasetArgs(
-            num_prompts=args.num_prompts,
-            data_dir=args.data_dir,
-            shuffle=args.shuffle_data,
-            shuffle_seed=args.shuffle_seed,
-            max_audio_duration_secs=args.max_audio_duration_secs,
-            use_mds=args.mds,
-            mds_batch_size=args.batch_size,
-        ),
+        data_args=args.train_dataset_args,
         include_alt_fields=model.loss_config.requires_alt_fields,
     )
     if is_master:
-        val_ds_args = datasets.VoiceDatasetArgs(
-            num_prompts=1,
-            split=datasets.DatasetSplit.VALIDATION,
-            data_dir=args.data_dir,
-            shuffle=False,
-            max_audio_duration_secs=16,
-            use_mds=args.mds,
-            mds_batch_size=args.batch_size,
-        )
-        val_ds_args_text = copy.copy(val_ds_args)
-        val_ds_args_text.include_audio = False
         val_datasets = {
-            k: prepare_dataset(
+            dataset_config.alias: prepare_dataset(
                 train_args=args,
-                dataset_names=val_sets[k],
+                dataset_configs=[dataset_config],
                 train_on_inputs=args.train_on_inputs,
                 stop_strategy=args.stop_strategy,
                 processor=processor,
-                num_samples=args.val_num_samples,
-                data_args=val_ds_args_text if k.startswith("text_") else val_ds_args,
+                data_args=args.val_dataset_args,
                 include_alt_fields=model.loss_config.requires_alt_fields,
             )
-            for k in val_sets
+            for dataset_config in args.val_dataset_configs
         }
         logging.info(
-            f"Loaded {args.data_sets} data sets, sample limit: {args.num_samples} (val sample limit: {args.val_num_samples})"
+            f"Loaded {len(args.train_dataset_configs)} train data sets, {len(args.val_dataset_configs)} val data sets"
         )
     else:
         # When using DDP with split_batches=True, the primary process will distribute the batches to the workers
         # The point of this is to avoid unnecessary data processing/downloading in the workers.
         # When using epochs to train, emptydataset must have a length equal to the training set
         train_dataset = datasets.EmptyDataset(len(train_dataset))
-        val_datasets = {k: datasets.EmptyDataset() for k in val_sets}
+        val_datasets = {
+            dataset_config.alias: datasets.EmptyDataset()
+            for dataset_config in args.val_dataset_configs
+        }
 
     # Set up the data loader
     data_collator = datasets.DataCollatorForSeq2SeqWithAudio(
@@ -284,7 +251,7 @@ def train(args: config_base.TrainConfig):
             logging_steps=args.logging_steps,
             # TODO (Farzad): reconsider for multi-node
             # In DDP world_size is set to num_gpus and we want process-0 to split the batches
-            per_device_train_batch_size=args.batch_size * world_size,
+            per_device_train_batch_size=args.train_dataset_args.batch_size * world_size,
             accelerator_config={"split_batches": True},
             gradient_accumulation_steps=args.grad_accum_steps,
             eval_accumulation_steps=args.val_accum_steps,
@@ -317,101 +284,46 @@ def train(args: config_base.TrainConfig):
         logging.info(f"train end time: {t_end}")
         logging.info(f"elapsed: {t_end - t_start}")
 
+    if args.do_eval:
+        logging.info("Starting evaluation...")
+        t_start = datetime.now()
+        logging.info(f"eval start time: {t_start}")
+
+        # Merge LoRA weights for better inference performance.
+        # Note: this is irreversible and changes model saving format
+        model.merge_and_unload()
+        # changing padding side to left for inference
+        text_tokenizer.padding_side = "left"
+        inference = infer.LocalInference(
+            model=model,
+            processor=processor,
+            tokenizer=text_tokenizer,
+            device=args.device,
+            dtype=dtype,
+        )
+
+        metrics, output_files = eval.run_infer(
+            inference,
+            args.eval_dataset_args,
+            args.eval_dataset_configs,
+            world_size,
+            local_rank,
+        )
+        if is_master:
+            trainer.log(metrics)
+            for output_file in output_files:
+                wandb.save(output_file)
+
+        t_end = datetime.now()
+        logging.info(f"eval end time: {t_end}")
+        logging.info(f"elapsed: {t_end - t_start}")
+
     if is_master:
         # Saving the model using pipeline to ensure its code is saved
         pipeline = ultravox_pipeline.UltravoxPipeline(
             model, tokenizer=text_tokenizer, device=device
         )
         pipeline.save_pretrained(args.output_dir)
-
-
-def evaluate(args: config_base.TrainConfig):
-    """
-    Evaluate the model on the audio and text datasets.
-
-    NOTE: This function must be run only on the primary process.
-    """
-    logging.info("Starting evaluation...")
-    t_start = datetime.now()
-    logging.info(f"eval start time: {t_start}")
-
-    if args.text_model_lora_config and args.text_model_lora_config.r:
-        logging.warn(
-            "Model has unmerged LoRA config. This can lead to slower inference."
-        )
-
-    logs_dir = wandb.run.dir if wandb.run else str(args.logs_dir)
-
-    # Run audio-based evaluations and log to W&B
-    audio_metrics_df = run_oaievalset(
-        log_dir=os.path.join(logs_dir, "oaieval/audio"),
-        model_dir=str(args.output_dir),
-        eval_set="audio-core",
-        num_samples=args.eval_num_samples,
-    )
-    # TODO: it would be best to do trainer.log, but then we'd risk keeping parts of the model
-    # in GPU memory, which could cause OOM errors.
-    if wandb.run:
-        wandb.run.log({"eval_audio": wandb.Table(data=audio_metrics_df)})
-
-    if args.eval_text_only:
-        # Run text-only evaluations and log to W&B
-        text_metrics_df = run_oaievalset(
-            log_dir=os.path.join(logs_dir, "oaieval/text"),
-            model_dir=str(args.output_dir),
-            eval_set="transcript-core",
-            num_samples=args.eval_num_samples,
-        )
-        if wandb.run:
-            wandb.run.log({"eval_text": wandb.Table(data=text_metrics_df)})
-
-    t_end = datetime.now()
-    logging.info(f"eval end time: {t_end}")
-    logging.info(f"elapsed: {t_end - t_start}")
-
-
-def run_oaievalset(
-    log_dir: str, model_dir: str, eval_set: str, num_samples: Optional[int] = None
-) -> pd.DataFrame:
-    env = os.environ.copy()
-
-    # num_gpus = max(1, torch.cuda.device_count())
-    env["EVALS_THREADS"] = "64"
-
-    # TODO: currently running this on a single GPU is faster than multiple GPUs :facepalm:
-    env["CUDA_VISIBLE_DEVICES"] = "0"
-
-    command = [
-        "oaievalset",
-        "--record_dir",
-        log_dir,
-        "generation/gpu/ultravox-dev",
-        eval_set,
-        f"--completion_args=model={model_dir}",
-    ]
-    if num_samples:
-        command.append(f"--max_samples={num_samples}")
-
-    # Run the evaluation set
-    subprocess.run(command, check=True, env=env)
-
-    # Extract the results from the log directory
-    subprocess.run(
-        [
-            "python",
-            "-m",
-            "evals.elsuite.audio.make_table",
-            "--out_dir",
-            log_dir,
-            "--log_dir",
-            log_dir,
-        ],
-        check=True,
-    )
-
-    df = pd.read_csv(os.path.join(log_dir, "results.csv"))
-
-    return df
 
 
 if __name__ == "__main__":

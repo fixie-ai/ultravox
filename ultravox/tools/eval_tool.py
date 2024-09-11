@@ -1,27 +1,23 @@
 #!/usr/bin/env python
 import dataclasses
-import json
+import datetime
 import os
-import time
 import sys
 from pathlib import Path
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 
-import yaml
-import numpy as np
 import simple_parsing
-from torch.utils import data as data_utils
 import torch
 import torch.distributed as dist
 import wandb
-import datetime
 
-from ultravox.data import datasets, dataset_config
-from ultravox.evaluation import eval, eval_types
+from ultravox.data import datasets
+from ultravox.evaluation import eval
 from ultravox.inference import ultravox_infer
-from ultravox.utils import device_helpers, string_helpers
 from ultravox.training import ddp_utils
-from ultravox.evaluation import inference
+from ultravox.utils import device_helpers
+from ultravox.utils import string_helpers
+
 
 @dataclasses.dataclass
 class EvalArgs:
@@ -30,7 +26,7 @@ class EvalArgs:
     # datasets
     dataset_configs: List[Dict[str, Any]] = simple_parsing.field()
     # Experiment name
-    exp_name: str = simple_parsing.field(default=None)
+    exp_name: Optional[str] = simple_parsing.field(default=None)
     # Device to use for inference
     device: Optional[str] = simple_parsing.field(default=None)
     # Data type to use for the model
@@ -45,9 +41,11 @@ class EvalArgs:
     output_dir: Optional[Path] = simple_parsing.field(default=None)
     # report results to wandb
     use_wandb: bool = simple_parsing.field(default=False)
-    
+
     def __post_init__(self):
-        self.dataset_configs = [dataset_config.DatasetConfig(**config) for config in self.dataset_configs]
+        self.dataset_configs = [
+            datasets.DatasetConfig(**config) for config in self.dataset_configs
+        ]
 
         if self.data_type not in ["bfloat16", "float16", "float32", None]:
             raise ValueError(
@@ -62,6 +60,7 @@ class EvalArgs:
 
         if self.exp_name is None:
             self.exp_name = datetime.datetime.now().strftime("exp--%Y-%m-%d--%H-%M-%S")
+
 
 def main():
     args = simple_parsing.parse(
@@ -84,7 +83,7 @@ def main():
                 config=dataclasses.asdict(args),
                 name=args.exp_name,
                 dir="runs",
-        )
+            )
 
     with ddp_utils.run_on_master_first(local_rank == 0):
         inference = ultravox_infer.UltravoxInference(
@@ -93,12 +92,18 @@ def main():
             data_type=device_helpers.get_dtype(args.data_type),
         )
 
-    inference.run_infer(inference, args, args.dataset_configs, world_size, local_rank)
+    metrics, output_files = eval.run_infer(
+        inference, args, args.dataset_configs, world_size, local_rank
+    )
 
     if args.use_wandb and local_rank == 0:
+        wandb.log(metrics)
+        for output_file in output_files:
+            wandb.save(output_file)
         wandb.finish()
     if world_size > 1:
         dist.destroy_process_group()
+
 
 if __name__ == "__main__":
     main()

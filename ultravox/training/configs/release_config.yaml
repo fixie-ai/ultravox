@@ -5,25 +5,34 @@ exp_name: "ultravox-v0_4"
 text_model: "meta-llama/Meta-Llama-3.1-8B-Instruct"
 audio_model: "openai/whisper-medium"
 
+# device: "cpu"
+# data_type: "float32"
 
 loss_config:
   # Choose from ["KL_Divergence", "CrossEntropy"], default is "KL_Divergence"
   loss_function: "KL_Divergence"
 
-# Temporarily remove heysquad_human from val_sets as it causes the training to fail.
-val_sets: ["anyinstruct", "soda", "peoplespeech"]
+report_logs_to: ["tensorboard"]
 
-batch_size: 24
 max_steps: 14400 # x8x24 = 2,764,800
 
-data_sets: ["anyinstruct"]
-data_dicts:
+train_dataset_args:
+  shuffle: True
+  batch_size: 24
+val_dataset_args:
+  batch_size: 24
+eval_dataset_args:
+  batch_size: 40
+  max_tokens: 512
+
+train_dataset_configs:
 # continuation
   - path: "fixie-ai/librispeech_asr"
     name: "clean"
     splits:
       - "train.100" # 28_539 samples
       - "train.360" # 104_014 samples
+    num_samples: 132_553
     user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
     assistant_template: "{{ continuation }}"
     transcript_template: "{{ text }}"
@@ -32,6 +41,7 @@ data_dicts:
     name: "other"
     splits:
       - "train.500" # 148_688 samples
+    num_samples: 148_688
     user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
     assistant_template: "{{ continuation }}"
     transcript_template: "{{ text }}"
@@ -40,6 +50,7 @@ data_dicts:
     name: "clean"
     splits:
       - "train" # 1_501_271 samples
+    num_samples: 1_501_271
     user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
     assistant_template: "{{ continuation }}"
     transcript_template: "{{ text_proc.format_asr_text(text) }}"
@@ -48,6 +59,7 @@ data_dicts:
     name: "en"
     splits:
       - "train" # 1_101_170 samples
+    num_samples: 1_101_170
     user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
     assistant_template: "{{ continuation }}"
     transcript_template: "{{ text_proc.format_asr_text(sentence) }}"
@@ -56,6 +68,7 @@ data_dicts:
     name: "ar"
     splits:
       - "train" # 28_369 samples
+    num_samples: 28_369
     user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
     assistant_template: "{{ continuation }}"
     transcript_template: "{{ sentence }}"
@@ -64,6 +77,7 @@ data_dicts:
     name: "de"
     splits:
       - "train" # 589_100 samples
+    num_samples: 589_100
     user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
     assistant_template: "{{ continuation }}"
     transcript_template: "{{ sentence }}"
@@ -72,6 +86,7 @@ data_dicts:
     name: "es"
     splits:
       - "train" # 336_846 samples
+    num_samples: 336_846
     user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
     assistant_template: "{{ continuation }}"
     transcript_template: "{{ sentence }}"
@@ -80,6 +95,7 @@ data_dicts:
     name: "fr"
     splits:
       - "train" # 558_054 samples
+    num_samples: 558_054
     user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
     assistant_template: "{{ continuation }}"
     transcript_template: "{{ sentence }}"
@@ -88,6 +104,7 @@ data_dicts:
     name: "it"
     splits:
       - "train" # 169_771 samples
+    num_samples: 169_771
     user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
     assistant_template: "{{ continuation }}"
     transcript_template: "{{ sentence }}"
@@ -96,6 +113,7 @@ data_dicts:
     name: "ja"
     splits:
       - "train" # 10_039 samples
+    num_samples: 10_039
     user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
     assistant_template: "{{ continuation }}"
     transcript_template: "{{ sentence }}"
@@ -104,6 +122,7 @@ data_dicts:
     name: "pt"
     splits:
       - "train" # 21_968 samples
+    num_samples: 21_968
     user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
     assistant_template: "{{ continuation }}"
     transcript_template: "{{ sentence }}"
@@ -112,6 +131,7 @@ data_dicts:
     name: "ru"
     splits:
       - "train" # 26_377 samples
+    num_samples: 26_377
     user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
     assistant_template: "{{ continuation }}"
     transcript_template: "{{ sentence }}"
@@ -122,6 +142,7 @@ data_dicts:
     splits:
       - "train.100" # 28_539 samples
       - "train.360" # 104_014 samples
+    num_samples: 132_553
     user_template: "{{ dataset._get_transcribe_prompt() }}"
     assistant_template: "{{ text }}"
     transcript_template: "{{ text }}"
@@ -130,6 +151,7 @@ data_dicts:
     name: "other"
     splits:
       - "train.500" # 148_688 samples
+    num_samples: 148_688
     user_template: "{{ dataset._get_transcribe_prompt() }}"
     assistant_template: "{{ text }}"
     transcript_template: "{{ text }}"
@@ -138,6 +160,7 @@ data_dicts:
     name: "clean"
     splits:
       - "train" # 1_501_271 samples
+    num_samples: 1_501_271
     user_template: "{{ dataset._get_transcribe_prompt() }}"
     assistant_template: "{{ text_proc.format_asr_text(text) }}"
     transcript_template: "{{ text_proc.format_asr_text(text) }}"
@@ -146,6 +169,7 @@ data_dicts:
     name: "en"
     splits:
       - "train" # 1_101_170 samples
+    num_samples: 1_101_170
     user_template: "{{ dataset._get_transcribe_prompt() }}"
     assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
     transcript_template: "{{ text_proc.format_asr_text(sentence) }}"
@@ -154,6 +178,7 @@ data_dicts:
     name: "ar"
     splits:
       - "train" # 28_369 samples
+    num_samples: 28_369
     user_template: "{{ dataset._get_transcribe_prompt() }}"
     assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
     transcript_template: "{{ sentence }}"
@@ -162,6 +187,7 @@ data_dicts:
     name: "de"
     splits:
       - "train" # 589_100 samples
+    num_samples: 589_100
     user_template: "{{ dataset._get_transcribe_prompt() }}"
     assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
     transcript_template: "{{ sentence }}"
@@ -170,6 +196,7 @@ data_dicts:
     name: "es"
     splits:
       - "train" # 336_846 samples
+    num_samples: 336_846
     user_template: "{{ dataset._get_transcribe_prompt() }}"
     assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
     transcript_template: "{{ sentence }}"
@@ -178,6 +205,7 @@ data_dicts:
     name: "fr"
     splits:
       - "train" # 558_054 samples
+    num_samples: 558_054
     user_template: "{{ dataset._get_transcribe_prompt() }}"
     assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
     transcript_template: "{{ sentence }}"
@@ -186,6 +214,7 @@ data_dicts:
     name: "it"
     splits:
       - "train" # 169_771 samples
+    num_samples: 169_771
     user_template: "{{ dataset._get_transcribe_prompt() }}"
     assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
     transcript_template: "{{ sentence }}"
@@ -194,6 +223,7 @@ data_dicts:
     name: "ja"
     splits:
       - "train" # 10_039 samples
+    num_samples: 10_039
     user_template: "{{ dataset._get_transcribe_prompt() }}"
     assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
     transcript_template: "{{ sentence }}"
@@ -202,6 +232,7 @@ data_dicts:
     name: "pt"
     splits:
       - "train" # 21_968 samples
+    num_samples: 21_968
     user_template: "{{ dataset._get_transcribe_prompt() }}"
     assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
     transcript_template: "{{ sentence }}"
@@ -210,7 +241,148 @@ data_dicts:
     name: "ru"
     splits:
       - "train" # 26_377 samples
+    num_samples: 26_377
     user_template: "{{ dataset._get_transcribe_prompt() }}"
     assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
     transcript_template: "{{ sentence }}"
     weight: 0.02
+
+
+
+val_dataset_configs:
+  - path: "fixie-ai/librispeech_asr"
+    alias: "librispeech-cont-val"
+    name: "clean"
+    splits:
+      - "validation"
+    active_samples: 1000
+    num_samples: 2703
+    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
+    assistant_template: "{{ continuation }}"
+    transcript_template: "{{ text }}"
+  - path: "fixie-ai/covost2"
+    alias: "covost2-en_zh-val"
+    name: "en_zh-CN"
+    splits:
+      - "validation"
+    active_samples: 1000
+    num_samples: 15531
+    user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
+    user_template_args:
+      target: "Chinese"
+    assistant_template: "{{ translation }}"
+    transcript_template: "{{ sentence }}"
+  - path: "fixie-ai/covost2"
+    alias: "covost2-zh_en-val"
+    name: "zh-CN_en"
+    splits:
+      - "validation"
+    active_samples: 1000
+    num_samples: 4843
+    user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
+    user_template_args:
+      target: "English"
+    assistant_template: "{{ translation }}"
+    transcript_template: "{{ sentence }}"
+
+eval_dataset_configs:
+  - alias: "covost2-en_de.2k"
+    path: "fixie-ai/covost2"
+    name: "en_de"
+    splits:
+      - "test"
+    user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
+    user_template_args:
+      target: "German"
+    assistant_template: "{{ translation }}"
+    transcript_template: "{{ sentence }}"
+    num_samples: 2000
+    total_samples: 15531
+    eval_config:
+      metric: "bleu"
+  - alias: "covost2-en_zh.2k"
+    path: "fixie-ai/covost2"
+    name: "en_zh-CN"
+    splits:
+      - "test"
+    user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
+    user_template_args:
+      target: "Chinese"
+    assistant_template: "{{ translation }}"
+    transcript_template: "{{ sentence }}"
+    num_samples: 2000
+    total_samples: 15531
+    eval_config:
+      metric: "bleu"
+      args:
+        tokenize: "zh"
+  - alias: "covost2-en_ar.2k"
+    path: "fixie-ai/covost2"
+    name: "en_ar"
+    splits:
+      - "test"
+    user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
+    user_template_args:
+      target: "Arabic"
+    assistant_template: "{{ translation }}"
+    transcript_template: "{{ sentence }}"
+    num_samples: 2000
+    total_samples: 15531
+    eval_config:
+      metric: "bleu"
+  - alias: "covost2-en_ca.2k"
+    path: "fixie-ai/covost2"
+    name: "en_ca"
+    splits:
+      - "test"
+    user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
+    user_template_args:
+      target: "Catalan"
+    assistant_template: "{{ translation }}"
+    transcript_template: "{{ sentence }}"
+    num_samples: 2000
+    total_samples: 15531
+    eval_config:
+      metric: "bleu"
+  - alias: "covost2-es_en.2k"
+    path: "fixie-ai/covost2"
+    name: "es_en"
+    splits:
+      - "test"
+    user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
+    user_template_args:
+      target: "English"
+    assistant_template: "{{ translation }}"
+    transcript_template: "{{ sentence }}"
+    num_samples: 2000
+    total_samples: 13221
+    eval_config:
+      metric: "bleu"
+  - alias: "covost2-ru_en.2k"
+    path: "fixie-ai/covost2"
+    name: "ru_en"
+    splits:
+      - "test"
+    user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
+    user_template_args:
+      target: "English"
+    assistant_template: "{{ translation }}"
+    transcript_template: "{{ sentence }}"
+    num_samples: 2000
+    total_samples: 6300
+    eval_config:
+      metric: "bleu"
+  - alias: "covost2-zh_en.2k"
+    path: "fixie-ai/covost2"
+    name: "zh-CN_en"
+    splits:
+      - "test"
+    user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
+    user_template_args:
+      target: "English"
+    assistant_template: "{{ translation }}"
+    transcript_template: "{{ sentence }}"
+    num_samples: 2000
+    total_samples: 4898
+    eval_config:
+      metric: "bleu"
