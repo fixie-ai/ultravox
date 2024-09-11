@@ -24,6 +24,7 @@ def main(override_sys_args: Optional[List[str]] = None):
                 repo_id=model_id, allow_patterns=ALLOW_PATTERNS
             )
             # A backstop to make sure the model is fully downloaded even if ALLOW_PATTERNS is not enough
+            # Using `device_map="meta"` to avoid loading the weights into memory or device
             transformers.AutoModel.from_pretrained(model_id, device_map="meta")
         except huggingface_hub.utils.GatedRepoError as e:
             raise e
