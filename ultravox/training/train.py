@@ -48,19 +48,21 @@ def prepare_dataset(
     stop_strategy: datasets.StopStrategy,
     num_samples: Optional[int] = None,
     include_alt_fields: bool = False,  # whether to generate tensors for text-only input (e.g., used for KD training)
-    is_val_set: bool = False,
+    enforce_ds_len_epoch: bool = False,
 ) -> datasets.SizedIterableDataset:
     data_sets = [datasets.create_dataset(ds, data_args) for ds in dataset_names]
     # If we're using epochs to train, validate the dataset length is appropriate.
     using_epochs = train_args.max_steps == 0
-    if using_epochs and not is_val_set:
+    if using_epochs and enforce_ds_len_epoch:
         for ds in data_sets:
             assert (
                 len(ds) > 1
             ), f"Dataset {ds} has length {len(ds)} which is too short for epoch training"
 
     interleave = datasets.InterleaveDataset(
-        data_sets, stop_strategy=stop_strategy, using_epochs=using_epochs
+        data_sets,
+        stop_strategy=stop_strategy,
+        use_dataset_multiplier=using_epochs,
     )
     ds_with_proc = data_processing.UltravoxDataproc(
         interleave,
@@ -223,6 +225,7 @@ def train(args: config_base.TrainConfig):
             mds_batch_size=args.batch_size,
         ),
         include_alt_fields=model.loss_config.requires_alt_fields,
+        enforce_ds_len_epoch=True,
     )
     if is_master:
         val_ds_args = datasets.VoiceDatasetArgs(
@@ -246,7 +249,6 @@ def train(args: config_base.TrainConfig):
                 num_samples=args.val_num_samples,
                 data_args=val_ds_args_text if k.startswith("text_") else val_ds_args,
                 include_alt_fields=model.loss_config.requires_alt_fields,
-                is_val_set=True,
             )
             for k in val_sets
         }

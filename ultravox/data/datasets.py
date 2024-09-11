@@ -1130,7 +1130,7 @@ class InterleaveDataset(SizedIterableDataset):
         stop_strategy: StopStrategy = StopStrategy.LAST_EXHAUSTED,
         seed: Optional[int] = 42,
         static: bool = False,
-        using_epochs: bool = False,
+        use_dataset_multiplier: bool = False,
     ) -> None:
         """
         Args:
@@ -1144,9 +1144,11 @@ class InterleaveDataset(SizedIterableDataset):
         self._static = static
 
         self._stop_strategy = stop_strategy
-        self._using_epochs = using_epochs
-        if not self._using_epochs:
-            weights = [int(getattr(ds, "weight", 1) * len(ds)) for ds in datasets]
+        self._use_dataset_multiplier = use_dataset_multiplier
+        if self._use_dataset_multiplier:
+            weights = [
+                int(getattr(ds, "dataset_multiplier", 1) * len(ds)) for ds in datasets
+            ]
         else:
             weights = [getattr(ds, "weight", 1) for ds in datasets]
 
@@ -1188,7 +1190,13 @@ class InterleaveDataset(SizedIterableDataset):
 
     def __len__(self) -> int:
         # TODO: Implement the length method for different stop strategies
-        return sum(int(getattr(ds, "weight", 1) * len(ds)) for ds in self._datasets)
+        if self._use_dataset_multiplier:
+            return sum(
+                int(getattr(ds, "dataset_multiplier", 1) * len(ds))
+                for ds in self._datasets
+            )
+        else:
+            return sum(len(ds) for ds in self._datasets)
 
 
 class Dataproc(SizedIterableDataset):
