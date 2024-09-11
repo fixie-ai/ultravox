@@ -21,8 +21,13 @@ def default_dtype():
         else torch.float16
     )
 
+
 def default_dtype_str():
-    return "bfloat16" if torch.cuda.is_available() or torch.backends.mps.is_available() else "float16"  
+    return (
+        "bfloat16"
+        if torch.cuda.is_available() or torch.backends.mps.is_available()
+        else "float16"
+    )
 
 
 def get_dtype(data_type: Optional[str] = None):

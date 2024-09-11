@@ -1,9 +1,10 @@
 import json
+import logging
 import os
 from typing import List, Optional
-import logging
 
 from tqdm import tqdm
+
 from ultravox.data import datasets
 from ultravox.evaluation import eval_helpers
 from ultravox.evaluation import eval_types
@@ -13,7 +14,7 @@ from ultravox.training import ddp_utils
 
 def dataset_infer(
     inference: infer.LocalInference,
-    dataset: datasets.VoiceDataset,
+    dataset: datasets.SizedIterableDataset,
     world_size: int = 1,
     local_rank: int = 0,
     batch_size: int = 1,
@@ -53,7 +54,7 @@ def dataset_infer(
                     hypothesis=output.text,
                 )
             )
-        
+
         if local_rank == 0:
             progress_bar.update(1)
     if local_rank == 0:
@@ -98,7 +99,9 @@ def run_infer(
                     f"Dataset: {dataset_alias}, Metric: {dataset_config.eval_config.metric}, Score: {eval_result.score:.2f}"
                 )
 
-                metrics[f"eval_{dataset_alias}-{dataset_config.eval_config.metric}"] = eval_result.score
+                metrics[f"eval_{dataset_alias}-{dataset_config.eval_config.metric}"] = (
+                    eval_result.score
+                )
 
             if output_dir:
                 output_file = os.path.join(output_dir, f"{dataset_alias}.json")

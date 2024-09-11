@@ -348,7 +348,12 @@ class SizedIterableDataset(data.IterableDataset):
     """
     A wrapper for an IterableDataset that provides a length method.
     """
-    def __init__(self, dataset: Optional[data.IterableDataset]=None, length: Optional[int]=None):
+
+    def __init__(
+        self,
+        dataset: Optional[data.IterableDataset] = None,
+        length: Optional[int] = None,
+    ):
         super().__init__()
         self._dataset = dataset
         self._length = length
@@ -362,6 +367,7 @@ class SizedIterableDataset(data.IterableDataset):
 
     def __len__(self):
         return self._length
+
 
 class VoiceDataset(SizedIterableDataset):
     """
@@ -458,7 +464,7 @@ class VoiceDataset(SizedIterableDataset):
                 else:
                     yield sample
             actual_length += 1
-            if actual_length > len(self):
+            if actual_length == len(self) + 1:
                 warnings.warn(
                     f"The actual number of samples ({actual_length}) has exceeded the presumed length ({self._length}) for dataset {self._config.alias}. Make sure to update."
                 )
@@ -597,7 +603,9 @@ class GenericVoiceDataset(VoiceDataset):
             dataset = dataset.shuffle(seed=self._args.shuffle_seed)
 
         if config.active_samples:
-            dataset = Range(SizedIterableDataset(dataset, config.num_samples), config.active_samples)
+            dataset = Range(
+                SizedIterableDataset(dataset, config.num_samples), config.active_samples
+            )
             num_samples = config.active_samples
 
         # super().__init__(args, config, dataset, num_samples)
@@ -641,326 +649,327 @@ class EmptyDataset(SizedIterableDataset):
     def __iter__(self):
         return iter([])
 
-# class AnyInstructDataset(VoiceDataset):
-#     """
-#     Metadata file format:
-#     {"chat": [
-#         {"role": "USER", "message": "Write a sentence based on this summary: iraqi embassy in jakarta removes saddam hussein 's photo", "speech": "chunk_00000/0001.mp3"},
-#         {"role": "AnyGPT", "message": "The building in Jakarta where people from Iraq work, took down a picture of a man named Saddam Hussein.", "speech": "chunk_00000/0002.mp3"}
-#     ]}
-#     """
 
-#     def __init__(self, args: VoiceDatasetArgs, config: DatasetConfig) -> None:
-#         # TODO(juberti): convert to MDS
-#         super().__init__(args, config)
-#         dataset = datasets.load_dataset(
-#             "json",
-#             "anyinstruct",
-#             data_files="https://huggingface.co/datasets/fnlp/AnyInstruct/resolve/main/speech_conv/metadata.jsonl",
-#             split="train",
-#         )
-#         dataset = dataset.train_test_split(
-#             test_size=0.01, seed=args.shuffle_seed, shuffle=True
-#         )
-#         if len(self._config.splits) > 1:
-#             raise ValueError(
-#                 "AnyInstructDataset is hardcoded to only support one split: train or test"
-#             )
-#         dataset = dataset["train" if self._config.splits[0] == "train" else "test"]
-#         # TODO: make num_shards configurable if need be
-#         dataset = dataset.to_iterable_dataset(num_shards=16)
-#         if args.shuffle:
-#             dataset = dataset.shuffle(seed=args.shuffle_seed)
-#         self._init_dataset(dataset, len(dataset))
+class AnyInstructDataset(VoiceDataset):
+    """
+    Metadata file format:
+    {"chat": [
+        {"role": "USER", "message": "Write a sentence based on this summary: iraqi embassy in jakarta removes saddam hussein 's photo", "speech": "chunk_00000/0001.mp3"},
+        {"role": "AnyGPT", "message": "The building in Jakarta where people from Iraq work, took down a picture of a man named Saddam Hussein.", "speech": "chunk_00000/0002.mp3"}
+    ]}
+    """
 
-#     def _load_anyinstruct_audio(self, filename: str):
-#         return super()._load_audio(
-#             "https://storage.googleapis.com/train-anyinstruct-speechconv-v1",
-#             "anyinstruct/speech",
-#             filename,
-#         )
+    def __init__(self, args: VoiceDatasetArgs, config: DatasetConfig) -> None:
+        # TODO(juberti): convert to MDS
+        super().__init__(args, config)
+        dataset = datasets.load_dataset(
+            "json",
+            "anyinstruct",
+            data_files="https://huggingface.co/datasets/fnlp/AnyInstruct/resolve/main/speech_conv/metadata.jsonl",
+            split="train",
+        )
+        dataset = dataset.train_test_split(
+            test_size=0.01, seed=args.shuffle_seed, shuffle=True
+        )
+        if len(self._config.splits) > 1:
+            raise ValueError(
+                "AnyInstructDataset is hardcoded to only support one split: train or test"
+            )
+        dataset = dataset["train" if self._config.splits[0] == "train" else "test"]
+        # TODO: make num_shards configurable if need be
+        dataset = dataset.to_iterable_dataset(num_shards=16)
+        if args.shuffle:
+            dataset = dataset.shuffle(seed=args.shuffle_seed)
+        self._init_dataset(dataset, len(dataset))
 
-
-# class AnyInstructAnswerDataset(AnyInstructDataset):
-#     def __init__(self, args: VoiceDatasetArgs, config: DatasetConfig) -> None:
-#         super().__init__(args, config)
-
-#     def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
-#         chat = row["chat"]
-#         return self._make_sample(
-#             self._get_answer_messages(chat[0]["message"], chat[1]["message"]),
-#             self._load_anyinstruct_audio(chat[0]["speech"]),
-#             audio_transcript=chat[0]["message"],
-#         )
+    def _load_anyinstruct_audio(self, filename: str):
+        return super()._load_audio(
+            "https://storage.googleapis.com/train-anyinstruct-speechconv-v1",
+            "anyinstruct/speech",
+            filename,
+        )
 
 
-# class AnyInstructInputDataset(AnyInstructDataset):
-#     def __init__(self, args: VoiceDatasetArgs, config: DatasetConfig) -> None:
-#         super().__init__(args, config)
+class AnyInstructAnswerDataset(AnyInstructDataset):
+    def __init__(self, args: VoiceDatasetArgs, config: DatasetConfig) -> None:
+        super().__init__(args, config)
 
-#     def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
-#         audio_transcript = row["chat"][0]["message"]
-#         return self._make_sample(
-#             self._get_transcribe_messages(audio_transcript),
-#             self._load_anyinstruct_audio(row["chat"][0]["speech"]),
-#             audio_transcript=audio_transcript,
-#         )
-
-
-# class AnyInstructOutputDataset(AnyInstructDataset):
-#     def __init__(self, args: VoiceDatasetArgs, config: DatasetConfig) -> None:
-#         super().__init__(args, config)
-
-#     def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
-#         audio_transcript = row["chat"][1]["message"]
-#         return self._make_sample(
-#             self._get_transcribe_messages(audio_transcript),
-#             self._load_anyinstruct_audio(row["chat"][1]["speech"]),
-#             audio_transcript=audio_transcript,
-#         )
+    def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
+        chat = row["chat"]
+        return self._make_sample(
+            self._get_answer_messages(chat[0]["message"], chat[1]["message"]),
+            self._load_anyinstruct_audio(chat[0]["speech"]),
+            audio_transcript=chat[0]["message"],
+        )
 
 
-# class BoolQDataset(GenericVoiceDataset):
-#     def __init__(self, args: VoiceDatasetArgs, config: DatasetConfig) -> None:
-#         config.path = config.path or "fixie-ai/boolq-audio"
-#         super().__init__(args, config)
+class AnyInstructInputDataset(AnyInstructDataset):
+    def __init__(self, args: VoiceDatasetArgs, config: DatasetConfig) -> None:
+        super().__init__(args, config)
 
-#     def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
-#         question = row["question"]
-#         answer = "True" if row["answer"] else "False"
-#         context = row["passage"] if self._args.include_context else None
-#         return self._make_sample(
-#             self._get_answer_messages(question, answer, context),
-#             self._get_audio(row),
-#             audio_transcript=row["question"],
-#         )
+    def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
+        audio_transcript = row["chat"][0]["message"]
+        return self._make_sample(
+            self._get_transcribe_messages(audio_transcript),
+            self._load_anyinstruct_audio(row["chat"][0]["speech"]),
+            audio_transcript=audio_transcript,
+        )
 
 
-# class BoolQInputDataset(BoolQDataset):
-#     def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
-#         return self._get_transcribe_sample(row, tcol="question")
+class AnyInstructOutputDataset(AnyInstructDataset):
+    def __init__(self, args: VoiceDatasetArgs, config: DatasetConfig) -> None:
+        super().__init__(args, config)
+
+    def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
+        audio_transcript = row["chat"][1]["message"]
+        return self._make_sample(
+            self._get_transcribe_messages(audio_transcript),
+            self._load_anyinstruct_audio(row["chat"][1]["speech"]),
+            audio_transcript=audio_transcript,
+        )
 
 
-# class QAVoiceDatasetMixin(VoiceDataset):
-#     SEPARATORS = ["\n\n", "\n", "\n----\n"]
-#     QUERY_PREFIX = ["Question: ", "Question:\n", "Q: ", "Q:\n", "Query: ", "Query:\n"]
-#     CONTEXT_PREFIX = [
-#         "Passage: ",
-#         "Passage:\n",
-#         "Context: ",
-#         "Context:\n",
-#         "Background: ",
-#         "Background:\n",
-#     ]
-#     ANSWER_PREFIX = [
-#         "Answer: ",
-#         "A: ",
-#         "",
-#         "The answer is: ",
-#         "Result: ",
-#         "Conclusion: ",
-#     ]
-#     # In most cases there is no extra prompt-suffix needed
-#     PROMPT_SUFFIXES = [""]
+class BoolQDataset(GenericVoiceDataset):
+    def __init__(self, args: VoiceDatasetArgs, config: DatasetConfig) -> None:
+        config.path = config.path or "fixie-ai/boolq-audio"
+        super().__init__(args, config)
 
-#     # TODO: combine `_get_query_prompt` and `_get_answer_messages` into a single method
-#     # and use this mixin for all non-ASR datasets.
-#     def _get_query_prompt(self, question_str: str, context: str) -> Optional[str]:
-#         """
-#         Creates a random prompt for a QA sample with a passage and question.
-
-#         Example prompt:
-#             Passage: {context}
-#             Question: {question}
-#             {optional-prompt-suffix}
-#         """
-#         if len(context) > self._args.max_context_length:
-#             # Skip samples with long context
-#             return None
-
-#         prompt = self._config.user_template or self._choice(self.PROMPT_SUFFIXES)
-#         # Separate either with 1 or 2 newlines
-#         separator = self._choice(self.SEPARATORS)
-
-#         query_prompt = self._choice(self.QUERY_PREFIX)
-#         question = "<|audio|>" if self._config.audio_field else question_str
-#         prompt = f"{query_prompt}{question}{separator}{prompt}"
-
-#         if self._args.include_context:
-#             context_prompt = self._choice(self.CONTEXT_PREFIX)
-#             prompt = f"{context_prompt}{context}{separator}{prompt}"
-
-#         return prompt.strip()
+    def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
+        question = row["question"]
+        answer = "True" if row["answer"] else "False"
+        context = row["passage"] if self._args.include_context else None
+        return self._make_sample(
+            self._get_answer_messages(question, answer, context),
+            self._get_audio(row),
+            audio_transcript=row["question"],
+        )
 
 
-# class BoolQWithExtendedAnswerDataset(BoolQDataset, QAVoiceDatasetMixin):
-#     """
-#     A version of BoolQ that includes the context in the prompt and a longer explanation in the answer.
-#     """
-
-#     PROMPT_SUFFIXES = [
-#         "Provide a short explanation, then respond with True/False on the last line",
-#         "Explain briefly, concluding with True/False on a new line."
-#         "Write a quick explanation, and finish with True/False on the last line"
-#         "Summarize in a few words, and end with True/False on a new line."
-#         "Give a brief explanation first, then answer with True/False on the final line",
-#         "Start with a concise explanation, and end with a True/False response on the last line.",
-#         "Explain briefly and follow up with True/False at the end",
-#         "Write a short explanation, then state True/False on a new line.",
-#         "First, offer a brief explanation, and then reply with True/False at the end.",
-#         "Present a concise explanation, ending with a True/False answer on the final line",
-#         "Start with a brief explanation, and then answer with True/False at the end.",
-#     ]
-
-#     def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
-#         """
-#         Example conversation:
-#             <|user|> Passage: {context}
-#             Question: {question}
-#             Provide a short explanation, then respond with True/False on the last line
-#             <|assistant|> {short_explanation}
-#             Answer: {answer}
-#         """
-#         answer = "True" if row["answer"] else "False"
-#         answer_prompt = self._choice(self.ANSWER_PREFIX)
-#         user_message = self._get_query_prompt(
-#             question_str=row["question"], context=row["passage"]
-#         )
-#         if user_message is None:
-#             # Skips samples with long context
-#             return None
-
-#         messages = _get_messages(
-#             user_message, f"{row['explanation']}\n{answer_prompt}{answer}"
-#         )
-
-#         return self._make_sample(
-#             messages, self._get_audio(row), audio_transcript=row["question"]
-#         )
+class BoolQInputDataset(BoolQDataset):
+    def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
+        return self._get_transcribe_sample(row, tcol="question")
 
 
-# class HeySQuADHumanDataset(QAVoiceDatasetMixin):
-#     """
-#     HeySQuAD is a large-scale Spoken Question Answering (SQA) dataset which includes 76k human-spoken questions,
-#     97k machine-generated questions, and their corresponding textual answers from the SQuAD QA dataset.
-#     https://arxiv.org/abs/2304.13689
+class QAVoiceDatasetMixin(VoiceDataset):
+    SEPARATORS = ["\n\n", "\n", "\n----\n"]
+    QUERY_PREFIX = ["Question: ", "Question:\n", "Q: ", "Q:\n", "Query: ", "Query:\n"]
+    CONTEXT_PREFIX = [
+        "Passage: ",
+        "Passage:\n",
+        "Context: ",
+        "Context:\n",
+        "Background: ",
+        "Background:\n",
+    ]
+    ANSWER_PREFIX = [
+        "Answer: ",
+        "A: ",
+        "",
+        "The answer is: ",
+        "Result: ",
+        "Conclusion: ",
+    ]
+    # In most cases there is no extra prompt-suffix needed
+    PROMPT_SUFFIXES = [""]
 
-#     This dataset is the human-spoken version of HeySQuAD.
-#     """
+    # TODO: combine `_get_query_prompt` and `_get_answer_messages` into a single method
+    # and use this mixin for all non-ASR datasets.
+    def _get_query_prompt(self, question_str: str, context: str) -> Optional[str]:
+        """
+        Creates a random prompt for a QA sample with a passage and question.
 
-#     def __init__(self, args: VoiceDatasetArgs, config: DatasetConfig) -> None:
-#         if config.path is None:
-#             config.path = "fixie-ai/HeySQuAD_human"
-#         super().__init__(args, config)
+        Example prompt:
+            Passage: {context}
+            Question: {question}
+            {optional-prompt-suffix}
+        """
+        if len(context) > self._args.max_context_length:
+            # Skip samples with long context
+            return None
 
-#     def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
-#         """
-#         Example conversation
-#             <|user|> Context: {context}
-#             Question: {question}
-#             <|assistant|> {answer}
-#         """
-#         if row["is_impossible"] or not row["answers"]:
-#             # Skip samples with no answer
-#             return None
+        prompt = self._config.user_template or self._choice(self.PROMPT_SUFFIXES)
+        # Separate either with 1 or 2 newlines
+        separator = self._choice(self.SEPARATORS)
 
-#         prompt = self._get_query_prompt(
-#             question_str=row["question"], context=row["context"]
-#         )
-#         if prompt is None:
-#             # Skips samples with long context
-#             return None
+        query_prompt = self._choice(self.QUERY_PREFIX)
+        question = "<|audio|>" if self._config.audio_field else question_str
+        prompt = f"{query_prompt}{question}{separator}{prompt}"
 
-#         messages = _get_messages(prompt, row["answers"][0]["text"])
-#         return self._make_sample(
-#             messages, self._get_audio(row), audio_transcript=row["question"]
-#         )
+        if self._args.include_context:
+            context_prompt = self._choice(self.CONTEXT_PREFIX)
+            prompt = f"{context_prompt}{context}{separator}{prompt}"
 
-
-# class SlueSQA5Dataset(QAVoiceDatasetMixin):
-#     """
-#     SLUE-SQA-5 Dataset contains question texts, question audio, answer text, document text, and document audio from these datasets:
-#       * SQuAD1.1 (for questions whose question_id starts with 'squad-')
-#       * Natural Questions (for questions whose question_id starts with 'nq-')
-#       * TriviaQA (for questions whose question_id starts with 'triviaqa-')
-#     The following datasets are supposed to be included, but I haven't found them everywhere:
-#       * WebQuestions (for questions whose question_id starts with 'wq-')
-#       * CuratedTREC (for questions whose question_id starts with 'trec-')
-#       * Spoken Wikipedia
-
-
-#     Splits: train, validation, test, verified_test
-#     """
-
-#     BASE_AUDIO_COLUMNS = ["question_audio", "document_audio"]
-
-#     def __init__(self, args: VoiceDatasetArgs, config: DatasetConfig) -> None:
-#         config.path = config.path or "asapp/slue-phase-2"
-#         config.name = config.name or "sqa5"
-#         super().__init__(args, config)
-
-#     def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
-#         """
-#         Example conversation
-#             <|user|> Context: {context}
-#             Question: {question}
-#             <|assistant|> {answer}
-#         """
-#         prompt = self._get_query_prompt(
-#             question_str=row["raw_question_text"], context=row["raw_document_text"]
-#         )
-#         if prompt is None:
-#             # Skips samples with long context
-#             return None
-
-#         messages = _get_messages(prompt, row["answer_spans"]["answer"][0])
-#         return self._make_sample(
-#             messages,
-#             self._get_audio(row, "question_audio"),
-#             audio_transcript=row["raw_question_text"],
-#         )
+        return prompt.strip()
 
 
-# class SodaDataset(GenericVoiceDataset):
-#     SYS_PROMPTS = [
-#         "Follow the flow of the conversation and respond just like a human would in the same situation.",
-#         "Engage in the conversation naturally, responding as a human would.",
-#         "Follow the dialogue and reply like a person in that situation.",
-#         "Participate in the chat and answer as if you were a human.",
-#         "Interact smoothly and respond just like a person would.",
-#         "Stay in the moment and reply as a human would in the conversation.",
-#         "Flow with the discussion and respond naturally, as a person would.",
-#         "Keep the dialogue going and answer like a human would.",
-#         "Follow along and reply in a way a person would in the chat.",
-#         "Stay engaged in the conversation and respond like a human.",
-#         "Maintain the flow of the chat and answer just as a person would.",
-#     ]
+class BoolQWithExtendedAnswerDataset(BoolQDataset, QAVoiceDatasetMixin):
+    """
+    A version of BoolQ that includes the context in the prompt and a longer explanation in the answer.
+    """
 
-#     def __init__(self, args: VoiceDatasetArgs, config: DatasetConfig) -> None:
-#         if config.path is None:
-#             config.path = "fixie-ai/soda-audio"
-#         if config.audio_field is None:
-#             config.audio_field = "audio_second_last_turn"
-#         super().__init__(args, config)
+    PROMPT_SUFFIXES = [
+        "Provide a short explanation, then respond with True/False on the last line",
+        "Explain briefly, concluding with True/False on a new line."
+        "Write a quick explanation, and finish with True/False on the last line"
+        "Summarize in a few words, and end with True/False on a new line."
+        "Give a brief explanation first, then answer with True/False on the final line",
+        "Start with a concise explanation, and end with a True/False response on the last line.",
+        "Explain briefly and follow up with True/False at the end",
+        "Write a short explanation, then state True/False on a new line.",
+        "First, offer a brief explanation, and then reply with True/False at the end.",
+        "Present a concise explanation, ending with a True/False answer on the final line",
+        "Start with a brief explanation, and then answer with True/False at the end.",
+    ]
 
-#     def _get_sample(self, row) -> VoiceSample:
-#         turns = row["dialogue"]
-#         # Make sure the last turn is the assistant's
-#         roles = ["user", "assistant"] if len(turns) % 2 == 0 else ["assistant", "user"]
+    def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
+        """
+        Example conversation:
+            <|user|> Passage: {context}
+            Question: {question}
+            Provide a short explanation, then respond with True/False on the last line
+            <|assistant|> {short_explanation}
+            Answer: {answer}
+        """
+        answer = "True" if row["answer"] else "False"
+        answer_prompt = self._choice(self.ANSWER_PREFIX)
+        user_message = self._get_query_prompt(
+            question_str=row["question"], context=row["passage"]
+        )
+        if user_message is None:
+            # Skips samples with long context
+            return None
 
-#         sys_prompt = self._choice(self.SYS_PROMPTS)
+        messages = _get_messages(
+            user_message, f"{row['explanation']}\n{answer_prompt}{answer}"
+        )
 
-#         messages = _get_messages(*turns[:-1], sys_prompt=sys_prompt)
+        return self._make_sample(
+            messages, self._get_audio(row), audio_transcript=row["question"]
+        )
 
-#         messages[-1]["content"] = row["alt_last_turn"]
-#         if self._config.audio_field:
-#             messages[-2]["content"] = "<|audio|>"
 
-#         return self._make_sample(
-#             messages,
-#             audio=self._get_audio(row, "audio_second_last_turn"),
-#             audio_transcript=turns[-2],
-#         )
+class HeySQuADHumanDataset(QAVoiceDatasetMixin):
+    """
+    HeySQuAD is a large-scale Spoken Question Answering (SQA) dataset which includes 76k human-spoken questions,
+    97k machine-generated questions, and their corresponding textual answers from the SQuAD QA dataset.
+    https://arxiv.org/abs/2304.13689
+
+    This dataset is the human-spoken version of HeySQuAD.
+    """
+
+    def __init__(self, args: VoiceDatasetArgs, config: DatasetConfig) -> None:
+        if config.path is None:
+            config.path = "fixie-ai/HeySQuAD_human"
+        super().__init__(args, config)
+
+    def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
+        """
+        Example conversation
+            <|user|> Context: {context}
+            Question: {question}
+            <|assistant|> {answer}
+        """
+        if row["is_impossible"] or not row["answers"]:
+            # Skip samples with no answer
+            return None
+
+        prompt = self._get_query_prompt(
+            question_str=row["question"], context=row["context"]
+        )
+        if prompt is None:
+            # Skips samples with long context
+            return None
+
+        messages = _get_messages(prompt, row["answers"][0]["text"])
+        return self._make_sample(
+            messages, self._get_audio(row), audio_transcript=row["question"]
+        )
+
+
+class SlueSQA5Dataset(QAVoiceDatasetMixin):
+    """
+    SLUE-SQA-5 Dataset contains question texts, question audio, answer text, document text, and document audio from these datasets:
+      * SQuAD1.1 (for questions whose question_id starts with 'squad-')
+      * Natural Questions (for questions whose question_id starts with 'nq-')
+      * TriviaQA (for questions whose question_id starts with 'triviaqa-')
+    The following datasets are supposed to be included, but I haven't found them everywhere:
+      * WebQuestions (for questions whose question_id starts with 'wq-')
+      * CuratedTREC (for questions whose question_id starts with 'trec-')
+      * Spoken Wikipedia
+
+
+    Splits: train, validation, test, verified_test
+    """
+
+    BASE_AUDIO_COLUMNS = ["question_audio", "document_audio"]
+
+    def __init__(self, args: VoiceDatasetArgs, config: DatasetConfig) -> None:
+        config.path = config.path or "asapp/slue-phase-2"
+        config.name = config.name or "sqa5"
+        super().__init__(args, config)
+
+    def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
+        """
+        Example conversation
+            <|user|> Context: {context}
+            Question: {question}
+            <|assistant|> {answer}
+        """
+        prompt = self._get_query_prompt(
+            question_str=row["raw_question_text"], context=row["raw_document_text"]
+        )
+        if prompt is None:
+            # Skips samples with long context
+            return None
+
+        messages = _get_messages(prompt, row["answer_spans"]["answer"][0])
+        return self._make_sample(
+            messages,
+            self._get_audio(row, "question_audio"),
+            audio_transcript=row["raw_question_text"],
+        )
+
+
+class SodaDataset(GenericVoiceDataset):
+    SYS_PROMPTS = [
+        "Follow the flow of the conversation and respond just like a human would in the same situation.",
+        "Engage in the conversation naturally, responding as a human would.",
+        "Follow the dialogue and reply like a person in that situation.",
+        "Participate in the chat and answer as if you were a human.",
+        "Interact smoothly and respond just like a person would.",
+        "Stay in the moment and reply as a human would in the conversation.",
+        "Flow with the discussion and respond naturally, as a person would.",
+        "Keep the dialogue going and answer like a human would.",
+        "Follow along and reply in a way a person would in the chat.",
+        "Stay engaged in the conversation and respond like a human.",
+        "Maintain the flow of the chat and answer just as a person would.",
+    ]
+
+    def __init__(self, args: VoiceDatasetArgs, config: DatasetConfig) -> None:
+        if config.path is None:
+            config.path = "fixie-ai/soda-audio"
+        if config.audio_field is None:
+            config.audio_field = "audio_second_last_turn"
+        super().__init__(args, config)
+
+    def _get_sample(self, row) -> VoiceSample:
+        turns = row["dialogue"]
+        # Make sure the last turn is the assistant's
+        roles = ["user", "assistant"] if len(turns) % 2 == 0 else ["assistant", "user"]
+
+        sys_prompt = self._choice(self.SYS_PROMPTS)
+
+        messages = _get_messages(*turns[:-1], sys_prompt=sys_prompt)
+
+        messages[-1]["content"] = row["alt_last_turn"]
+        if self._config.audio_field:
+            messages[-2]["content"] = "<|audio|>"
+
+        return self._make_sample(
+            messages,
+            audio=self._get_audio(row, "audio_second_last_turn"),
+            audio_transcript=turns[-2],
+        )
 
 
 def create_dataset(
@@ -968,15 +977,15 @@ def create_dataset(
 ) -> SizedIterableDataset:
     DATASET_MAP: Dict[str, Any] = {
         "generic": GenericVoiceDataset,
-        # "anyinstruct": AnyInstructAnswerDataset,
-        # "anyinstruct_in": AnyInstructInputDataset,
-        # "anyinstruct_out": AnyInstructOutputDataset,
-        # "boolq": BoolQDataset,
-        # "boolq_in": BoolQInputDataset,
-        # "boolq_extended": BoolQWithExtendedAnswerDataset,
-        # "heysquad_human": HeySQuADHumanDataset,
-        # "slue_sqa5": SlueSQA5Dataset,
-        # "soda": SodaDataset,
+        "anyinstruct": AnyInstructAnswerDataset,
+        "anyinstruct_in": AnyInstructInputDataset,
+        "anyinstruct_out": AnyInstructOutputDataset,
+        "boolq": BoolQDataset,
+        "boolq_in": BoolQInputDataset,
+        "boolq_extended": BoolQWithExtendedAnswerDataset,
+        "heysquad_human": HeySQuADHumanDataset,
+        "slue_sqa5": SlueSQA5Dataset,
+        "soda": SodaDataset,
     }
     return DATASET_MAP[config.type](args, config)
 
@@ -1099,4 +1108,3 @@ class Range(SizedIterableDataset):
             raise ValueError(
                 f"Dataset exhausted after {count} samples, expected {self._length}"
             )
-
