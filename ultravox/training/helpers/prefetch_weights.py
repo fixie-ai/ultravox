@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import List, Optional
 
 import huggingface_hub
+import transformers
 
 from ultravox.model import wandb_utils
 from ultravox.training import config_base
@@ -17,9 +18,13 @@ def main(override_sys_args: Optional[List[str]] = None):
 
     for model_id in [args.text_model, args.audio_model]:
         try:
+            # Download all model files that match ALLOW_PATTERNS
+            # This is faster than .from_pretrained due to parallel downloads
             huggingface_hub.snapshot_download(
                 repo_id=model_id, allow_patterns=ALLOW_PATTERNS
             )
+            # A backstop to make sure the model is fully downloaded even if ALLOW_PATTERNS is not enough
+            transformers.AutoModel.from_pretrained(model_id, device_map="meta")
         except huggingface_hub.utils.GatedRepoError as e:
             raise e
         except huggingface_hub.utils.RepositoryNotFoundError as e:
