@@ -51,8 +51,10 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         self.vocab_size = config.vocab_size
 
         self.audio_tower = self._create_audio_tower(config)
-        self.audio_tower_context_length = 3000  # the context window for the whisper model
-        
+        self.audio_tower_context_length = (
+            3000  # the context window for the whisper model
+        )
+
         self.multi_modal_projector = UltravoxProjector(config)
         self.language_model = self._create_language_model(config)
 
@@ -189,7 +191,6 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             ), "audio_token_start_idx, audio_token_len, and audio_values must have the same batch size."
 
             # Check if the audio_values T dimension is greater than whisper encoder's context window.
-            print("audio values shape: ", audio_values.shape)
             if audio_values.shape[2] > self.audio_tower_context_length:
                 audio_values_chunks = torch.split(
                     audio_values, self.audio_tower_context_length, dim=2
