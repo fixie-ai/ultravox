@@ -25,7 +25,7 @@ val_dataset_configs:
     name: "en_zh-CN"
     splits:
       - "validation"
-    active_samples: 1000
+    active_samples: 100
     num_samples: 15531
     user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
     user_template_args:
@@ -37,7 +37,7 @@ val_dataset_configs:
     name: "zh-CN_en"
     splits:
       - "validation"
-    active_samples: 1000
+    active_samples: 100
     num_samples: 4843
     user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
     user_template_args:
