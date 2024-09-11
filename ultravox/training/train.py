@@ -82,9 +82,6 @@ def main() -> None:
 
     transformers.set_seed(args.seed)
 
-    local_rank = int(os.environ.get("LOCAL_RANK", 0))
-    is_master = local_rank == 0
-
     train(args)
 
 
@@ -216,7 +213,7 @@ def train(args: config_base.TrainConfig):
         # When using DDP with split_batches=True, the primary process will distribute the batches to the workers
         # The point of this is to avoid unnecessary data processing/downloading in the workers.
         # When using epochs to train, emptydataset must have a length equal to the training set
-        train_dataset = datasets.EmptyDataset(len(train_dataset))
+        train_dataset = datasets.EmptyDataset()
         val_datasets = {
             dataset_config.alias: datasets.EmptyDataset()
             for dataset_config in args.val_dataset_configs

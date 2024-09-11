@@ -146,6 +146,10 @@ class DatasetConfig(BaseModel):
     mds_batch_size: int = 32
     """Batch size for MDS"""
 
+    class Config:
+        extra = "forbid"
+        # do not allow undefined parameters
+
     def model_post_init(self, __context: Any) -> None:
         if not self.splits:
             raise ValueError("At least one split must be provided")
@@ -456,11 +460,11 @@ class VoiceDataset(SizedIterableDataset):
             actual_length += 1
             if actual_length > len(self):
                 warnings.warn(
-                    f"The actual number of samples ({actual_length}) has exceeded the presumed length ({self._length}) for dataset {type(self._config.alias)}. Make sure to update."
+                    f"The actual number of samples ({actual_length}) has exceeded the presumed length ({self._length}) for dataset {self._config.alias}. Make sure to update."
                 )
         if actual_length != len(self):
             warnings.warn(
-                f"Mismatch between actual length ({actual_length}) and presumed length ({self._length}) for dataset {type(self._config.alias)}. Make sure to update."
+                f"Mismatch between actual length ({actual_length}) and presumed length ({self._length}) for dataset {self._config.alias}. Make sure to update."
             )
 
     @abc.abstractmethod
@@ -634,15 +638,8 @@ class GenericVoiceDataset(VoiceDataset):
 
 # Making EmptyDataset a SizedIterableDataset to be compatible with using epochs during training.
 class EmptyDataset(SizedIterableDataset):
-    def __init__(self, total_length: int = 1) -> None:
-        self._total_length = total_length
-
     def __iter__(self):
         return iter([])
-
-    def __len__(self):
-        return self._total_length
-
 
 # class AnyInstructDataset(VoiceDataset):
 #     """

@@ -34,18 +34,18 @@ val_dataset_configs:
       target: "Chinese"
     assistant_template: "{{ translation }}"
     transcript_template: "{{ sentence }}"
-  # - alias: "covost2-zh_en-val"
-  #   path: "fixie-ai/covost2"
-  #   name: "zh-CN_en"
-  #   splits:
-  #     - "validation"
-  #   active_samples: 100
-  #   num_samples: 4843
-  #   user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
-  #   user_template_args:
-  #     target: "English"
-  #   assistant_template: "{{ translation }}"
-  #   transcript_template: "{{ sentence }}"
+  - alias: "covost2-zh_en-val"
+    path: "fixie-ai/covost2"
+    name: "zh-CN_en"
+    splits:
+      - "validation"
+    active_samples: 100
+    num_samples: 4843
+    user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
+    user_template_args:
+      target: "English"
+    assistant_template: "{{ translation }}"
+    transcript_template: "{{ sentence }}"
 
 eval_dataset_args:
   batch_size: 40
@@ -61,8 +61,8 @@ eval_dataset_configs:
       target: "German"
     assistant_template: "{{ translation }}"
     transcript_template: "{{ sentence }}"
-    num_samples: 2000
-    total_samples: 15531
+    active_samples: 2000
+    num_samples: 15531
     eval_config:
       metric: "bleu"
   - alias: "covost2-en_zh.2k"
@@ -75,8 +75,8 @@ eval_dataset_configs:
       target: "Chinese"
     assistant_template: "{{ translation }}"
     transcript_template: "{{ sentence }}"
-    num_samples: 2000
-    total_samples: 15531
+    active_samples: 2000
+    num_samples: 15531
     eval_config:
       metric: "bleu"
       args:
@@ -91,8 +91,8 @@ eval_dataset_configs:
       target: "Arabic"
     assistant_template: "{{ translation }}"
     transcript_template: "{{ sentence }}"
-    num_samples: 2000
-    total_samples: 15531
+    active_samples: 2000
+    num_samples: 15531
     eval_config:
       metric: "bleu"
   - alias: "covost2-en_ca.2k"
@@ -105,8 +105,8 @@ eval_dataset_configs:
       target: "Catalan"
     assistant_template: "{{ translation }}"
     transcript_template: "{{ sentence }}"
-    num_samples: 2000
-    total_samples: 15531
+    active_samples: 2000
+    num_samples: 15531
     eval_config:
       metric: "bleu"
   - alias: "covost2-es_en.2k"
@@ -119,8 +119,8 @@ eval_dataset_configs:
       target: "English"
     assistant_template: "{{ translation }}"
     transcript_template: "{{ sentence }}"
-    num_samples: 2000
-    total_samples: 13221
+    active_samples: 2000
+    num_samples: 15531
     eval_config:
       metric: "bleu"
   - alias: "covost2-ru_en.2k"
@@ -133,8 +133,8 @@ eval_dataset_configs:
       target: "English"
     assistant_template: "{{ translation }}"
     transcript_template: "{{ sentence }}"
-    num_samples: 2000
-    total_samples: 6300
+    active_samples: 2000
+    num_samples: 15531
     eval_config:
       metric: "bleu"
   - alias: "covost2-zh_en.2k"
@@ -147,7 +147,7 @@ eval_dataset_configs:
       target: "English"
     assistant_template: "{{ translation }}"
     transcript_template: "{{ sentence }}"
-    num_samples: 2000
-    total_samples: 4898
+    active_samples: 2000
+    num_samples: 15531
     eval_config:
       metric: "bleu"

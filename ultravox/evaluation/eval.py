@@ -98,7 +98,7 @@ def run_infer(
                     f"Dataset: {dataset_alias}, Metric: {dataset_config.eval_config.metric}, Score: {eval_result.score:.2f}"
                 )
 
-                metrics[f"eval/{dataset_alias}-{dataset_config.eval_config.metric}"] = eval_result.score
+                metrics[f"eval_{dataset_alias}-{dataset_config.eval_config.metric}"] = eval_result.score
 
             if output_dir:
                 output_file = os.path.join(output_dir, f"{dataset_alias}.json")
