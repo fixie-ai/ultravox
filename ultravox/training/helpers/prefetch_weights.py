@@ -23,15 +23,20 @@ def main(override_sys_args: Optional[List[str]] = None):
             huggingface_hub.snapshot_download(
                 repo_id=model_id, allow_patterns=ALLOW_PATTERNS
             )
-            # A backstop to make sure the model is fully downloaded even if ALLOW_PATTERNS is not enough
-            # Using `device_map="meta"` to avoid loading the weights into memory or device
-            transformers.AutoModel.from_pretrained(model_id, device_map="meta")
         except huggingface_hub.utils.GatedRepoError as e:
             raise e
         except huggingface_hub.utils.RepositoryNotFoundError as e:
+            # We assume that the model is local if it's not found on HF Hub.
+            # The `.from_pretrained` call will verify the local case.
             print(
                 f"Model {args.text_model} not found on HF Hub. Skipping download. Error: {e}"
             )
+
+        # A backstop to make sure the model is fully downloaded. Scenarios to consider:
+        # - ALLOW_PATTERNS is not enough to download all files needed
+        # - The model is local
+        # Using `device_map="meta"` to avoid loading the weights into memory or device
+        transformers.AutoModel.from_pretrained(model_id, device_map="meta")
 
     if args.model_load_dir and wandb_utils.is_wandb_url(args.model_load_dir):
         wandb_utils.download_model_from_wandb(args.model_load_dir)
