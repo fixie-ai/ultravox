@@ -26,6 +26,7 @@ from ultravox.model import ultravox_pipeline
 from ultravox.model import ultravox_processing
 from ultravox.model import wandb_utils
 from ultravox.training import config_base
+from ultravox.training.helpers import prefetch_weights
 
 INPUT_EXAMPLE = {"text": "Transcribe\n<|audio|>", "audio": b"\x00\x00" * 16000}
 OUTPUT_EXAMPLE = {"text": "Hello, world!"}
@@ -87,8 +88,9 @@ def train(args: config_base.TrainConfig):
     world_size = int(os.environ.get("WORLD_SIZE", 1))
     local_rank = int(os.environ.get("LOCAL_RANK", 0))
     is_master = local_rank == 0
+    is_distributed = world_size > 1
 
-    if world_size > 1:
+    if is_distributed:
         torch.distributed.init_process_group(backend="nccl")
 
     # DDP blows up logging, so this is an attempt to suppress it to only logs from the master process
@@ -116,8 +118,17 @@ def train(args: config_base.TrainConfig):
 
     logging.info("Instantiating model...")
 
-    # We assume that the weights are already downloaded via prefetch_weights.py
-    # If the weights are not downloaded, we might see a race condition here when using DDP.
+    if is_distributed:
+        try:
+            prefetch_weights.raise_on_weights_not_downloaded(
+                [args.text_model, args.audio_model]
+            )
+        except Exception as e:
+            # We assume that the weights are already downloaded via prefetch_weights.py
+            # If the weights are not downloaded, we might see a race condition here when using DDP/FSDP.
+            logging.error("Weights are not downloaded. Please run prefetch_weights.py.")
+            raise e
+
     model = ultravox_model.UltravoxModel(config)
 
     assert model.get_input_embeddings().num_embeddings == len(

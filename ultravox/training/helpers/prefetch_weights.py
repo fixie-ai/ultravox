@@ -45,5 +45,16 @@ def main(override_sys_args: Optional[List[str]] = None):
     print(f"Weights are downloaded in {end - start} seconds")
 
 
+def raise_on_weights_not_downloaded(model_ids: List[str]):
+    """
+    This is an imperfect check to see if the model weights are downloaded,
+    but it can catch if prefetch_weights.py was not run.
+    """
+    for model_id in model_ids:
+        huggingface_hub.snapshot_download(
+            repo_id=model_id, allow_patterns=ALLOW_PATTERNS, local_files_only=True
+        )
+
+
 if __name__ == "__main__":
     main()
