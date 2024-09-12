@@ -42,7 +42,7 @@ def main(override_sys_args: Optional[List[str]] = None):
         wandb_utils.download_model_from_wandb(args.model_load_dir)
 
     end = datetime.now()
-    print(f"Weights are downloaded in {end - start} seconds")
+    print(f"Weights downloaded in {end - start} seconds")
 
 
 def raise_on_weights_not_downloaded(model_ids: List[str]):
