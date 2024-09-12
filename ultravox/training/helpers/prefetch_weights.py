@@ -34,7 +34,7 @@ def main(override_sys_args: Optional[List[str]] = None):
 
         # A backstop to make sure the model is fully downloaded. Scenarios to consider:
         # - ALLOW_PATTERNS is not enough to download all files needed
-        # - The model is local
+        # - The model is local, this will verify that everything is in order
         # Using `device_map="meta"` to avoid loading the weights into memory or device
         transformers.AutoModel.from_pretrained(model_id, device_map="meta")
 
