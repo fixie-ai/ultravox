@@ -1,18 +1,22 @@
 model: "fixie-ai/ultravox-v0_4"
 report_logs_to: ["wandb"]
-batch_size: 50
 output_dir: "./output"
-dataset_configs:
+eval_dataset_args:
+  batch_size: 40
+  max_tokens: 512
+eval_dataset_configs:
   - alias: "covost2-en_de.2k"
     path: "fixie-ai/covost2"
     name: "en_de"
     splits:
       - "test"
-    user_template: "Please translate the text to German. Your response should only include the German translation, without any additional words:\n\n<|audio|>"
+    user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
+    user_template_args:
+      target: "German"
     assistant_template: "{{ translation }}"
     transcript_template: "{{ sentence }}"
-    num_samples: 2000
-    total_samples: 15531
+    active_samples: 2000
+    num_samples: 15531
     eval_config:
       metric: "bleu"
   - alias: "covost2-en_zh.2k"
@@ -20,11 +24,13 @@ dataset_configs:
     name: "en_zh-CN"
     splits:
       - "test"
-    user_template: "Please translate the text to Chinese. Your response should only include the Chinese translation, without any additional words:\n\n<|audio|>"
+    user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
+    user_template_args:
+      target: "Chinese"
     assistant_template: "{{ translation }}"
     transcript_template: "{{ sentence }}"
-    num_samples: 2000
-    total_samples: 15531
+    active_samples: 2000
+    num_samples: 15531
     eval_config:
       metric: "bleu"
       args:
@@ -34,11 +40,13 @@ dataset_configs:
     name: "en_ar"
     splits:
       - "test"
-    user_template: "Please translate the text to Arabic. Your response should only include the Arabic translation, without any additional words:\n\n<|audio|>"
+    user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
+    user_template_args:
+      target: "Arabic"
     assistant_template: "{{ translation }}"
     transcript_template: "{{ sentence }}"
-    num_samples: 2000
-    total_samples: 15531
+    active_samples: 2000
+    num_samples: 15531
     eval_config:
       metric: "bleu"
   - alias: "covost2-en_ca.2k"
@@ -46,11 +54,13 @@ dataset_configs:
     name: "en_ca"
     splits:
       - "test"
-    user_template: "Please translate the text to Catalan. Your response should only include the Catalan translation, without any additional words:\n\n<|audio|>"
+    user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
+    user_template_args:
+      target: "Catalan"
     assistant_template: "{{ translation }}"
     transcript_template: "{{ sentence }}"
-    num_samples: 2000
-    total_samples: 15531
+    active_samples: 2000
+    num_samples: 15531
     eval_config:
       metric: "bleu"
   - alias: "covost2-es_en.2k"
@@ -58,11 +68,13 @@ dataset_configs:
     name: "es_en"
     splits:
       - "test"
-    user_template: "Please translate the text to English. Your response should only include the English translation, without any additional words:\n\n<|audio|>"
+    user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
+    user_template_args:
+      target: "English"
     assistant_template: "{{ translation }}"
     transcript_template: "{{ sentence }}"
-    num_samples: 2000
-    total_samples: 13221
+    active_samples: 2000
+    num_samples: 15531
     eval_config:
       metric: "bleu"
   - alias: "covost2-ru_en.2k"
@@ -70,11 +82,13 @@ dataset_configs:
     name: "ru_en"
     splits:
       - "test"
-    user_template: "Please translate the text to English. Your response should only include the English translation, without any additional words:\n\n<|audio|>"
+    user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
+    user_template_args:
+      target: "English"
     assistant_template: "{{ translation }}"
     transcript_template: "{{ sentence }}"
-    num_samples: 2000
-    total_samples: 6300
+    active_samples: 2000
+    num_samples: 15531
     eval_config:
       metric: "bleu"
   - alias: "covost2-zh_en.2k"
@@ -82,10 +96,12 @@ dataset_configs:
     name: "zh-CN_en"
     splits:
       - "test"
-    user_template: "Please translate the text to English. Your response should only include the English translation, without any additional words:\n\n<|audio|>"
+    user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
+    user_template_args:
+      target: "English"
     assistant_template: "{{ translation }}"
     transcript_template: "{{ sentence }}"
-    num_samples: 2000
-    total_samples: 4898
+    active_samples: 2000
+    num_samples: 15531
     eval_config:
       metric: "bleu"
