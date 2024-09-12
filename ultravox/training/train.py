@@ -62,7 +62,6 @@ def prepare_dataset(
     interleave = datasets.InterleaveDataset(
         data_sets,
         stop_strategy=stop_strategy,
-        use_dataset_multiplier=using_epochs,
     )
     ds_with_proc = data_processing.UltravoxDataproc(
         interleave,

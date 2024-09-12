@@ -12,9 +12,7 @@ class DataDictConfig(BaseModel):
     splits: List[str] = dataclasses.field(default_factory=list)
     num_samples: Optional[int] = None
     total_samples: int = 1
-    weight: float = 1.0
-    # This is used over weight when epoch mode is set
-    dataset_multiplier: float = 1.0
+    multiplier: float = 1.0
     streaming: bool = True
     user_template: str = "<|audio|>"
     assistant_template: str = "{{text}}"

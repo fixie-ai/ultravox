@@ -15,14 +15,14 @@ from ultravox.data import datasets
 class FakeSizedIterableDataset(datasets.SizedIterableDataset):
     """Fake version of datasets.SizedIterableDataset"""
 
-    def __init__(self, n, start=0, weight=1, estimated_length=1):
+    def __init__(self, n, start=0, multiplier=1, estimated_length=1):
         self.data = range(start, start + n)
-        self._weight = weight
+        self._multiplier = multiplier
         self._estimated_length = estimated_length
 
     @property
-    def weight(self) -> float:
-        return self._weight
+    def multiplier(self) -> float:
+        return self._multiplier
 
     def __iter__(self):
         for sample in self.data:
@@ -135,8 +135,8 @@ def test_interleaved_never_stop():
 
 
 def test_interleaved_random():
-    ds1 = FakeSizedIterableDataset(4, weight=10)
-    ds2 = FakeSizedIterableDataset(2, start=10, weight=1)
+    ds1 = FakeSizedIterableDataset(4, multiplier=10)
+    ds2 = FakeSizedIterableDataset(2, start=10, multiplier=1)
     s = datasets.InterleaveDataset(
         [ds1, ds2],
     )
