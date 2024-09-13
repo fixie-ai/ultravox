@@ -14,7 +14,7 @@ loss_config:
 # do_eval: false
 
 # Temporarily remove heysquad_human from val_sets as it causes the training to fail.
-val_sets: ["anyinstruct", "soda", "peoplespeech"]
+# val_sets: ["anyinstruct", "soda", "peoplespeech"]
 # val_sets: []
 
 report_logs_to: ["tensorboard"]
