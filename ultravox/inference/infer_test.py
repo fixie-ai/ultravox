@@ -60,7 +60,7 @@ class FakeInference(infer.LocalInference):
         )
         self.model.device = "cpu"
         self.model.generate = mock.MagicMock(side_effect=fake_generate)
-        self.model.audio_tower_context_length = 3000
+        self.model.audio_tower_context_length = None
 
 
 EXPECTED_TOKEN_IDS_START = [128000, 128006, 882, 128007]
