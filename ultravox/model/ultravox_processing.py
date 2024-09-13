@@ -2,6 +2,7 @@ from typing import Optional, Union
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 import transformers
 
 from .ultravox_config import UltravoxConfig
@@ -89,6 +90,7 @@ class UltravoxProcessor(transformers.ProcessorMixin):
         text: Optional[str] = None,
         audio: Optional[Union[np.ndarray, torch.Tensor]] = None,
         sampling_rate: Optional[int] = None,
+        audio_context_size: Optional[int] = None,
         return_tensors: Optional[
             Union[str, transformers.TensorType]
         ] = transformers.TensorType.PYTORCH,
@@ -141,6 +143,7 @@ class UltravoxProcessor(transformers.ProcessorMixin):
                 audio_len = 30 * sampling_rate
             else:
                 audio_len = audio.shape[-1]
+
             # It's guaranteed that the number of frames is less than or equal to this amount.
             # For Whisper this is exact AFAICT, but for Wav2Vec2 it's an upper bound.
             # Currently, StackAudioFrames makes sure an over-estimation won't cause issues by padding the audio embeddings.
@@ -157,9 +160,30 @@ class UltravoxProcessor(transformers.ProcessorMixin):
                 **kwargs,
             )
             if "input_features" in x:
-                data["audio_values"] = x.input_features
+                audio_values = x.input_features
             else:
-                data["audio_values"] = x.input_values
+                audio_values = x.input_values
+
+            audio_values = torch.from_numpy(audio_values)
+            if audio_context_size and audio_values.shape[2] > audio_context_size:
+                audio_values_chunks = list(
+                    torch.split(audio_values, audio_context_size, dim=2)
+                )
+                # Pad the last chunk to match audio_context_size
+                last_chunk = audio_values_chunks[-1]
+                pad_size = audio_context_size - last_chunk.shape[2]
+                if pad_size > 0:
+                    # Pad only the last dimension (T) in B,D,T format
+                    audio_values_chunks[-1] = F.pad(
+                        last_chunk, (0, pad_size, 0, 0, 0, 0)
+                    )
+            else:
+                audio_values_chunks = [audio_values]
+
+            data["audio_values"] = torch.cat(audio_values_chunks, dim=0)
+            num_audio_chunks = data["audio_values"].shape[0]
+
+            data["batch_size"] = [num_audio_chunks]
 
         if text is not None:
             assert isinstance(
@@ -177,6 +201,7 @@ class UltravoxProcessor(transformers.ProcessorMixin):
                         add_special_tokens=False,
                     )
                 )
+
                 data["audio_token_start_idx"] = [start_idx]
 
                 # Replace the audio placeholder with the audio token.
