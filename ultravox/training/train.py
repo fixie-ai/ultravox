@@ -26,6 +26,7 @@ from ultravox.model import ultravox_pipeline
 from ultravox.model import ultravox_processing
 from ultravox.model import wandb_utils
 from ultravox.training import config_base
+from ultravox.training import ddp_utils
 from ultravox.training.helpers import prefetch_weights
 
 INPUT_EXAMPLE = {"text": "Transcribe\n<|audio|>", "audio": b"\x00\x00" * 16000}
@@ -99,16 +100,13 @@ def train(args: config_base.TrainConfig):
     if is_distributed:
         torch.distributed.init_process_group(backend="nccl")
 
-        # make sure the weights are downloaded before initializing the model in distributed mode
-        try:
-            prefetch_weights.raise_on_weights_not_downloaded(
-                [args.text_model, args.audio_model]
-            )
-        except Exception as e:
-            # We assume that the weights are already downloaded via prefetch_weights.py
-            # If the weights are not downloaded, we might see a race condition here when using DDP/FSDP.
-            logging.error("Weights are not downloaded. Please run prefetch_weights.py.")
-            raise e
+    with ddp_utils.run_on_master_first(is_master):
+        # For larger models, we assume that the weights are already downloaded via prefetch_weights.py
+        # Otherwise the barrier call can timeout.
+        # This call is only here as a backstop in case prefetch_weights.py was not run, for example in a local/test run.
+        prefetch_weights.download_weights(
+            [args.text_model, args.audio_model], args.model_load_dir
+        )
 
     logging.info("Instantiating processor...")
     text_tokenizer: transformers.PreTrainedTokenizerFast = (
