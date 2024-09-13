@@ -47,12 +47,12 @@ def main(override_sys_args: Optional[List[str]] = None):
 
 def raise_on_weights_not_downloaded(model_ids: List[str]):
     """
-    This is an imperfect check to see if the model weights are downloaded,
-    but it can catch if prefetch_weights.py was not run.
+    This function checks to see if the model weights are downloaded and available locally.
+    If they are not, it raises an error.
     """
     for model_id in model_ids:
-        huggingface_hub.snapshot_download(
-            repo_id=model_id, allow_patterns=ALLOW_PATTERNS, local_files_only=True
+        transformers.AutoModel.from_pretrained(
+            model_id, device_map="meta", local_files_only=True
         )
 
 
