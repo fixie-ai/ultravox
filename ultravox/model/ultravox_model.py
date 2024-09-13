@@ -9,6 +9,7 @@ import torch.nn.functional as F
 import transformers
 import transformers.activations
 import transformers.modeling_outputs
+import transformers.modeling_utils
 import transformers.models
 from transformers.models.wav2vec2 import modeling_wav2vec2 as wav2vec2
 from transformers.models.wav2vec2.configuration_wav2vec2 import Wav2Vec2Config
@@ -62,7 +63,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         self.language_model = self._create_language_model(config)
 
         self.loss_config = LossConfig()
-        self.accumulated_losses = defaultdict(float)
+        self.accumulated_losses: Dict[str, float] = defaultdict(float)
         self.step_counter = 0
 
         self.post_init()
@@ -108,8 +109,8 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
 
     def _track_and_log_losses(
         self,
-        losses: Dict[LossFunction, torch.FloatTensor],
-        total_loss: torch.FloatTensor,
+        losses: Dict[LossFunction, torch.Tensor],
+        total_loss: torch.Tensor,
     ):
         """
         Track losses over multiple steps and log them at regular intervals.
@@ -161,15 +162,23 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         self.vocab_size = model_embeds.num_embeddings
         return model_embeds
 
-    def _insert_speech_placeholders(
+    def _insert_tokens(
         self,
         inputs_embeds: torch.Tensor,
         attention_mask: torch.Tensor,
-        audio_start_idx: torch.Tensor,
-        num_speech_tokens: torch.Tensor,
+        insert_idx: torch.Tensor,
+        insert_embeds: torch.Tensor,
+        insert_len: torch.Tensor,
+        labels: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.Tensor] = None,
         cache_position: Optional[torch.Tensor] = None,
-    ):
+    ) -> Tuple[
+        torch.Tensor,
+        torch.Tensor,
+        Optional[torch.Tensor],
+        Optional[torch.Tensor],
+        Optional[torch.Tensor],
+    ]:
         batch_size, seq_len, hidden_dim = inputs_embeds.shape
 
         if position_ids is not None and position_ids.shape != (batch_size, seq_len):
@@ -191,18 +200,18 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
                 raise ValueError(
                     f"The last position in cache_position should be {attention_mask.shape[1]-1}, but got {cache_position[-1]}"
                 )
-            input_offset = cache_position[0]
+            input_offset = int(cache_position[0].item())
         else:
-            input_offset = 0
+            input_offset = int(0)
         past_attention_mask = (
             attention_mask[:, :input_offset] if input_offset > 0 else None
         )
         attention_mask = attention_mask[:, input_offset:]
 
         # Calculate the actual length of each sample and the new length after insertion
-        sample_lengths = attention_mask.sum(dim=1)
-        new_sample_lengths = sample_lengths + num_speech_tokens
-        new_seq_len = new_sample_lengths.max().item()
+        num_tokens = attention_mask.sum(dim=1).long()
+        new_num_tokens = num_tokens + insert_len
+        new_seq_len = int(new_num_tokens.max().item())
 
         # Create new tensors with expanded size
         new_inputs_embeds = torch.zeros(
@@ -215,6 +224,16 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             device=attention_mask.device,
             dtype=attention_mask.dtype,
         )
+        new_labels = (
+            torch.full(
+                (batch_size, new_seq_len),
+                fill_value=-100,
+                device=labels.device,
+                dtype=labels.dtype,
+            )
+            if labels is not None
+            else None
+        )
         new_position_ids = (
             torch.zeros(
                 (batch_size, new_seq_len),
@@ -226,36 +245,53 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         )
 
         for i in range(batch_size):
-            insert_pos = audio_start_idx[i] - input_offset
-            insert_len = num_speech_tokens[i].item()
-            original_len = sample_lengths[i].item()
-            new_len = new_sample_lengths[i].item()
+            idx_i: int = int(insert_idx[i].item()) - input_offset
+            insert_len_i: int = int(insert_len[i].item())
+            orig_len_i: int = int(num_tokens[i].item())
+            new_len_i: int = int(new_num_tokens[i].item())
 
             # Update inputs_embeds
-            new_inputs_embeds[i, :insert_pos] = inputs_embeds[i, :insert_pos]
-            new_inputs_embeds[i, insert_pos + insert_len : new_len] = inputs_embeds[
-                i, insert_pos:original_len
+            new_inputs_embeds[i, :idx_i] = inputs_embeds[i, :idx_i]
+            if insert_len_i > 0:
+                new_inputs_embeds[i, idx_i : idx_i + insert_len_i] = insert_embeds[
+                    i, :insert_len_i
+                ]
+            new_inputs_embeds[i, idx_i + insert_len_i : new_len_i] = inputs_embeds[
+                i, idx_i:orig_len_i
             ]
 
             # Update attention_mask
-            new_attention_mask[i, :insert_pos] = attention_mask[i, :insert_pos]
-            new_attention_mask[i, insert_pos : insert_pos + insert_len] = (
-                1  # Set attention mask for audio tokens
-            )
-            new_attention_mask[i, insert_pos + insert_len : new_len] = attention_mask[
-                i, insert_pos:original_len
+            new_attention_mask[i, :idx_i] = attention_mask[i, :idx_i]
+            if insert_len_i > 0:
+                new_attention_mask[i, idx_i : idx_i + insert_len_i] = (
+                    1  # Set attention mask for new tokens
+                )
+            new_attention_mask[i, idx_i + insert_len_i : new_len_i] = attention_mask[
+                i, idx_i:orig_len_i
             ]
 
+            # Update labels if provided
+            if labels is not None and new_labels is not None:
+                new_labels[i, :idx_i] = labels[i, :idx_i]
+                if insert_len_i > 0:
+                    new_labels[i, idx_i : idx_i + insert_len_i] = -100
+                new_labels[i, idx_i + insert_len_i : new_len_i] = labels[
+                    i, idx_i:orig_len_i
+                ]
+
             # Update position_ids if provided
-            if position_ids is not None:
-                new_position_ids[i, :insert_pos] = position_ids[i, :insert_pos]
-                new_position_ids[
-                    i, insert_pos : insert_pos + insert_len
-                ] = position_ids[i, insert_pos] + torch.arange(
-                    insert_len, device=position_ids.device, dtype=position_ids.dtype
-                )
-                new_position_ids[i, insert_pos + insert_len : new_len] = (
-                    position_ids[i, insert_pos:original_len] + insert_len
+            if position_ids is not None and new_position_ids is not None:
+                new_position_ids[i, :idx_i] = position_ids[i, :idx_i]
+                if insert_len_i > 0:
+                    new_position_ids[i, idx_i : idx_i + insert_len_i] = position_ids[
+                        i, idx_i
+                    ].item() + torch.arange(
+                        insert_len_i,
+                        device=position_ids.device,
+                        dtype=position_ids.dtype,
+                    )
+                new_position_ids[i, idx_i + insert_len_i : new_len_i] = (
+                    position_ids[i, idx_i:orig_len_i] + insert_len_i
                 )
 
         # Add past attention mask if it exists
@@ -272,8 +308,8 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
                 [
                     cache_position,
                     torch.arange(
-                        cache_position[-1] + 1,
-                        cache_position[-1] + 1 + max_inserted,
+                        cache_position[-1].item() + 1,
+                        cache_position[-1].item() + 1 + max_inserted,
                         device=cache_position.device,
                         dtype=cache_position.dtype,
                     ),
@@ -283,43 +319,32 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         return (
             new_inputs_embeds,
             new_attention_mask,
+            new_labels,
             new_position_ids,
             new_cache_position,
         )
 
     def _compute_kl_loss(
         self,
-        lm_output: transformers.modeling_outputs.CausalLMOutputWithPast,
-        labels: Optional[torch.Tensor] = None,
-        audio_token_start_idx: Optional[torch.Tensor] = None,
-        audio_token_len: Optional[torch.Tensor] = None,
-        past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
-        alt_input_ids: Optional[torch.Tensor] = None,
-        alt_attention_mask: Optional[torch.Tensor] = None,
-        alt_labels: Optional[torch.Tensor] = None,
-        **kwargs,
-    ):
-        # disable gradient computation for the teacher model
-        with torch.no_grad():
-            # compute the teacher (text-only) model's distribution
-            alt_inputs_embeds = self.get_input_embeddings().forward(alt_input_ids)
-            alt_lm_output = self.language_model.forward(
-                inputs_embeds=alt_inputs_embeds,
-                labels=alt_labels,
-                attention_mask=alt_attention_mask,
-                past_key_values=past_key_values,
-                **kwargs,
-            )
-        losses: Dict[LossFunction, torch.FloatTensor] = {}
+        audio_output: transformers.modeling_outputs.CausalLMOutputWithPast,
+        transcript_output: transformers.modeling_outputs.CausalLMOutputWithPast,
+        audio_labels: torch.Tensor,
+        audio_start_idx: Optional[torch.Tensor] = None,
+        audio_len: Optional[torch.Tensor] = None,
+        transcript_labels: Optional[torch.Tensor] = None,
+        transcript_len: Optional[torch.Tensor] = None,
+    ) -> Dict[LossFunction, torch.Tensor]:
+        losses: Dict[LossFunction, torch.Tensor] = {}
         # compute the KL divergence loss between the two models
         if LossFunction.Response_KL in self.loss_config.loss_weights:
             loss = F.kl_div(
                 F.log_softmax(
-                    lm_output.logits[labels != -100] / self.loss_config.kl_temperature,
+                    audio_output.logits[audio_labels != -100]
+                    / self.loss_config.kl_temperature,
                     dim=-1,
                 ),
                 F.softmax(
-                    alt_lm_output.logits[alt_labels != -100]
+                    transcript_output.logits[transcript_labels != -100]
                     / self.loss_config.kl_temperature,
                     dim=-1,
                 ),
@@ -328,26 +353,35 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             losses[LossFunction.Response_KL] = loss
         if (
             LossFunction.Input_KL in self.loss_config.loss_weights
-            and audio_token_start_idx is not None
-            and audio_token_len is not None
+            and audio_len is not None
         ):
+            if audio_start_idx is None or transcript_len is None:
+                raise ValueError(
+                    "audio_labels, audio_start_idx, and transcript_len must be provided for computing input KL loss"
+                )
 
+            # Check that audio_len equals transcript_len
+            if not torch.all(torch.eq(audio_len, transcript_len)):
+                raise ValueError(
+                    "audio_len must be equal to transcript_len for all samples in the batch for computing input KL loss"
+                )
             # compute the KL divergence loss for audio tokens
             audio_mask = (
-                audio_token_start_idx.unsqueeze(1)
-                <= torch.arange(labels.size(1), device=labels.device)
+                audio_start_idx.unsqueeze(1)
+                <= torch.arange(audio_labels.size(1), device=audio_labels.device)
             ) & (
-                audio_token_start_idx.unsqueeze(1) + audio_token_len.unsqueeze(1)
-                > torch.arange(labels.size(1), device=labels.device)
+                audio_start_idx.unsqueeze(1) + audio_len.unsqueeze(1)
+                > torch.arange(audio_labels.size(1), device=audio_labels.device)
             )
 
             loss = F.kl_div(
                 F.log_softmax(
-                    lm_output.logits[audio_mask] / self.loss_config.kl_temperature,
+                    audio_output.logits[audio_mask] / self.loss_config.kl_temperature,
                     dim=-1,
                 ),
                 F.softmax(
-                    alt_lm_output.logits[audio_mask] / self.loss_config.kl_temperature,
+                    transcript_output.logits[audio_mask]
+                    / self.loss_config.kl_temperature,
                     dim=-1,
                 ),
                 reduction="batchmean",
@@ -358,17 +392,16 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
     def forward(
         self,
         input_ids: torch.Tensor,
-        audio_values: Optional[torch.FloatTensor] = None,
-        inputs_embeds: Optional[torch.FloatTensor] = None,
+        attention_mask: torch.Tensor,
+        inputs_embeds: Optional[torch.Tensor] = None,
         labels: Optional[torch.Tensor] = None,
-        attention_mask: Optional[torch.Tensor] = None,
-        audio_token_start_idx: Optional[torch.Tensor] = None,
-        audio_token_len: Optional[torch.Tensor] = None,
+        audio_values: Optional[torch.FloatTensor] = None,
+        audio_len: Optional[torch.Tensor] = None,
+        audio_start_idx: Optional[torch.Tensor] = None,
+        transcript_ids: Optional[torch.Tensor] = None,
+        transcript_embeds: Optional[torch.FloatTensor] = None,
+        transcript_len: Optional[torch.Tensor] = None,
         past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
-        # the alt_* fields are needed for KL divergence loss
-        alt_input_ids: Optional[torch.Tensor] = None,
-        alt_attention_mask: Optional[torch.Tensor] = None,
-        alt_labels: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> Union[Tuple, transformers.modeling_outputs.CausalLMOutputWithPast]:
         """
@@ -394,13 +427,19 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             # B x T  ->  B x T x D
             inputs_embeds = self.get_input_embeddings().forward(input_ids)
 
+        orig_input_embeds = inputs_embeds
+        orig_attention_mask = attention_mask
+        orig_labels = labels
+        orig_position_ids = kwargs.get("position_ids", None)
+        orig_cache_position = kwargs.get("cache_position", None)
+
         if audio_values is not None:
             assert (
-                audio_token_start_idx is not None and audio_token_len is not None
-            ), "audio_token_start_idx and audio_token_len must be provided if audio_values are provided."
+                audio_start_idx is not None and audio_len is not None
+            ), "audio_start_idx and audio_len must be provided if audio_values are provided."
             assert (
-                len(audio_token_start_idx) == len(audio_token_len) == len(audio_values)
-            ), "audio_token_start_idx, audio_token_len, and audio_values must have the same batch size."
+                len(audio_start_idx) == len(audio_len) == len(audio_values)
+            ), "audio_start_idx, audio_len, and audio_values must have the same batch size."
 
             # B x A/3200 x D
             audio_tower_output = self.audio_tower.forward(
@@ -408,33 +447,28 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             ).last_hidden_state
             audio_tower_output = audio_tower_output.to(inputs_embeds.dtype)
 
-            audio_embeds, pred_num_tokens = self.adapter.forward(
-                audio_tower_output, audio_token_len
+            audio_feature_len = self.audio_tower._get_feat_extract_output_lengths(
+                audio_len
             )
-            position_ids = kwargs.get("position_ids", None)
-            cache_position = kwargs.get("cache_position", None)
-            if torch.all(audio_token_len == 0):
-                inputs_embeds, attention_mask, position_ids, cache_position = (
-                    self._insert_speech_placeholders(
-                        inputs_embeds,
-                        attention_mask,
-                        audio_token_start_idx,
-                        pred_num_tokens,
-                        position_ids,
-                        cache_position
-                    )
-                )
-                audio_token_len = pred_num_tokens
-                kwargs["position_ids"] = position_ids
-                kwargs["cache_position"] = cache_position
 
-            # combine audio and text embeddings
-            input_offset = 0 if cache_position is None else cache_position[0]
-            for i, (audio, start, length) in enumerate(
-                zip(audio_embeds, audio_token_start_idx - input_offset, audio_token_len)
-            ):
-                length = min(length, audio.shape[0])
-                inputs_embeds[i, start : start + length] = audio[:length]
+            audio_embeds, num_audio_tokens = self.adapter.forward(
+                audio_tower_output, audio_feature_len, transcript_len
+            )
+
+            inputs_embeds, attention_mask, labels, position_ids, cache_position = (
+                self._insert_tokens(
+                    orig_input_embeds,
+                    orig_attention_mask,
+                    audio_start_idx,
+                    audio_embeds,
+                    num_audio_tokens,
+                    orig_labels,
+                    orig_position_ids,
+                    orig_cache_position,
+                )
+            )
+            kwargs["position_ids"] = position_ids
+            kwargs["cache_position"] = cache_position
 
         lm_output = self.language_model.forward(
             inputs_embeds=inputs_embeds,
@@ -444,18 +478,53 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             **kwargs,
         )
         if self.training:
-            losses = {}
+            losses: Dict[LossFunction, torch.Tensor] = {}
             if self.loss_config.contains_kl_loss:
+                assert (
+                    audio_start_idx is not None
+                    and transcript_len is not None
+                    and labels is not None
+                ), "audio_start_idx, transcript_len, and labels must be provided for computing KL loss"
+                if transcript_embeds is None:
+                    transcript_embeds = self.get_input_embeddings().forward(
+                        transcript_ids
+                    )
+                (
+                    teacher_inputs_embeds,
+                    teacher_attention_mask,
+                    teacher_labels,
+                    teacher_position_ids,
+                    teacher_cache_position,
+                ) = self._insert_tokens(
+                    orig_input_embeds,
+                    orig_attention_mask,
+                    audio_start_idx,
+                    transcript_embeds,
+                    transcript_len,
+                    orig_labels,
+                    orig_position_ids,
+                    orig_cache_position,
+                )
+                kwargs["position_ids"] = teacher_position_ids
+                kwargs["cache_position"] = teacher_cache_position
+
+                # disable gradient computation for the teacher model
+                with torch.no_grad():
+                    teacher_lm_output = self.language_model.forward(
+                        inputs_embeds=teacher_inputs_embeds,
+                        labels=teacher_labels,
+                        attention_mask=teacher_attention_mask,
+                        past_key_values=past_key_values,
+                        **kwargs,
+                    )
                 kl_loss = self._compute_kl_loss(
-                    lm_output=lm_output,
-                    labels=labels,
-                    audio_token_start_idx=audio_token_start_idx,
-                    audio_token_len=audio_token_len,
-                    past_key_values=past_key_values,
-                    alt_input_ids=alt_input_ids,
-                    alt_attention_mask=alt_attention_mask,
-                    alt_labels=alt_labels,
-                    **kwargs,
+                    audio_output=lm_output,
+                    audio_labels=labels,
+                    audio_start_idx=audio_start_idx,
+                    audio_len=num_audio_tokens,
+                    transcript_output=teacher_lm_output,
+                    transcript_labels=teacher_labels,
+                    transcript_len=transcript_len,
                 )
             for loss_fn, _ in self.loss_config.loss_weights.items():
                 if loss_fn == LossFunction.Response_CE:
@@ -465,9 +534,12 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
                 elif loss_fn == LossFunction.Input_KL:
                     losses[loss_fn] = kl_loss[LossFunction.Input_KL]
                 elif loss_fn == LossFunction.CIF_L1:
+                    assert (
+                        transcript_len is not None
+                    ), "transcript_len must be provided for computing CIF L1 loss"
                     losses[loss_fn] = F.l1_loss(
-                        pred_num_tokens / audio_token_len,
-                        torch.ones_like(audio_token_len),
+                        num_audio_tokens / transcript_len,
+                        torch.ones_like(transcript_len),
                         reduction="mean",
                     )
                 else:
@@ -831,8 +903,8 @@ class RMSNorm(transformers.models.llama.modeling_llama.LlamaRMSNorm):
 
 
 # currently attention_mask is not yet implemented in the forward method
-class UltravoxAdapter(nn.Module):
-    def __init__(self, config: UltravoxConfig):
+class UltravoxAdapter(nn.Module, transformers.modeling_utils.ModelMixin):
+    def __init__(self, config: UltravoxConfig) -> None:
         super().__init__()
         audio_config: Union[Wav2Vec2Config, WhisperConfig] = config.audio_config
         text_config: transformers.LlamaConfig = config.text_config
@@ -846,30 +918,17 @@ class UltravoxAdapter(nn.Module):
         self.text_proj = nn.Linear(self.hidden_size, self.output_size)
 
     def forward(
-        self, audio_features: torch.Tensor, num_tokens: Optional[torch.Tensor] = None
-    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
+        self,
+        audio_features: torch.Tensor,
+        num_frames: torch.Tensor,
+        num_text_tokens: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         raise NotImplementedError("Subclasses must implement this method")
 
     def project_to_text(self, hidden_states):
         hidden_states = self.post_ln(hidden_states)
         hidden_states = self.text_proj(hidden_states)
         return hidden_states
-
-    def get_audio_token_len(self, audio_frame_len: int, token_len: int) -> int:
-        raise NotImplementedError("Subclasses must implement this method")
-
-
-class RMSNorm(nn.Module):
-    def __init__(self, dim: int, init: float = 1.0):
-        super().__init__()
-        self.eps = 1e-6
-        self.weight = nn.Parameter(torch.ones(dim) * init)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        d = x.shape[-1]
-        rms = torch.sqrt(torch.sum(x * x, dim=-1, keepdim=True) / d + self.eps)
-        x = x / rms
-        return x * self.weight
 
 
 class SwiGLU(nn.Module):
@@ -883,13 +942,25 @@ class StackAudioFrames(nn.Module):
         super().__init__()
         self.stack_factor = stack_factor
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self, x: torch.Tensor, num_frames: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         if self.stack_factor == 1:
-            return x
+            return x, num_frames
+
         b, t, d = x.shape
+
+        # Pad the audio features
         pad = (self.stack_factor - (t % self.stack_factor)) % self.stack_factor
-        x = torch.nn.functional.pad(x, (0, 0, 0, pad))
-        return x.reshape(b, -1, d * self.stack_factor)
+        x = F.pad(x, (0, 0, 0, pad))
+
+        # Stack the audio features
+        x = x.reshape(b, -1, d * self.stack_factor)
+
+        # Calculate the new number of frames after stacking
+        num_frames = torch.ceil(num_frames.float() / self.stack_factor).long()
+
+        return x, num_frames
 
 
 class StackingAdapter(UltravoxAdapter):
@@ -912,18 +983,20 @@ class StackingAdapter(UltravoxAdapter):
             self.adapter_config.activation
         )
 
-    def get_audio_token_len(self, audio_frame_len: int, token_len: int) -> int:
-        return int(np.ceil(audio_frame_len / self.adapter_config.stack_factor))
-
     def forward(
-        self, audio_features: torch.Tensor, num_tokens: Optional[torch.Tensor] = None
-    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
-        hidden_states = self._pad_and_stack(audio_features)
+        self,
+        audio_features: torch.Tensor,
+        num_frames: torch.Tensor,
+        num_text_tokens: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        hidden_states, num_audio_tokens = self._pad_and_stack(
+            audio_features, num_frames
+        )
         hidden_states = self.ln_pre(hidden_states)
         hidden_states = self.linear_1(hidden_states)
         hidden_states = self.act(hidden_states)
         hidden_states = self.project_to_text(hidden_states)
-        return hidden_states, None
+        return hidden_states, num_audio_tokens
 
 
 class CFormerAdapter(UltravoxAdapter):
@@ -963,9 +1036,6 @@ class CFormerAdapter(UltravoxAdapter):
                 ]
             )
 
-    def get_audio_token_len(self, audio_frame_len: int, token_len: int) -> int:
-        return token_len
-
     # This implements the continuous integrate-and-fire mechanism adapted from this paper: https://arxiv.org/abs/1905.11235
     # TODO: add support for attention_mask
     def forward_cif(
@@ -973,11 +1043,11 @@ class CFormerAdapter(UltravoxAdapter):
         hidden_states: torch.Tensor,
         alphas: torch.Tensor,
         num_tokens: torch.Tensor,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> torch.Tensor:
         device = hidden_states.device
         B, T, _ = hidden_states.size()
 
-        max_num_tokens = num_tokens.max()
+        max_num_tokens = int(num_tokens.max().item())
 
         # loop vars
         integrate = torch.zeros(
@@ -991,7 +1061,9 @@ class CFormerAdapter(UltravoxAdapter):
         )  # num of fires that has happened
 
         # weights: B x max_num_tokens x T, weights[i, j, k] is the contribution of the k-th speech feature to the j-th text/speech token for the i-th sample
-        weights = torch.zeros((B, max_num_tokens, T), device=device)
+        weights = torch.zeros(
+            [B, max_num_tokens, T], device=device, dtype=hidden_states.dtype
+        )
         for t in range(T):
             if t > 0:
                 weights[:, :, t - 1].scatter_add_(
@@ -1029,8 +1101,18 @@ class CFormerAdapter(UltravoxAdapter):
         return hidden_states
 
     def forward(
-        self, audio_features: torch.Tensor, num_tokens: Optional[torch.Tensor] = None
-    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
+        self,
+        audio_features: torch.Tensor,
+        num_frames: torch.Tensor,
+        num_text_tokens: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        # num_required_audio_tokens needs to be provided in the training mode as it's used for scaling alphas
+        # in inference mode, num_required_audio_tokens is None as input and is determined by the accumulated predicted alpha values
+
+        attention_mask = torch.arange(
+            num_frames.max().item(), device=num_frames.device
+        ) < num_frames.unsqueeze(1)
+
         hidden_states = audio_features
         T = hidden_states.size(1)
 
@@ -1039,33 +1121,49 @@ class CFormerAdapter(UltravoxAdapter):
 
         # alphas is computed from the last element of hidden_states using a sigmoid function, and used to assign speech features to text/speech tokens.
         alphas = torch.sigmoid(hidden_states[:, :, -1])
-        pred_num_tokens = alphas.sum(-1)
+        alphas = alphas * attention_mask
+        num_audio_tokens = alphas.sum(-1)
 
         if self.training:
-            if num_tokens is None:
-                raise ValueError("num_tokens must be provided in training mode")
+            if num_text_tokens is None:
+                raise ValueError(
+                    "num_required_audio_tokens must be provided in training mode"
+                )
         else:
             # num_tokens is determined by accumulated predicted alpha values in inference mode
-            num_tokens = torch.round(pred_num_tokens).int()
+            num_text_tokens = torch.round(num_audio_tokens).int()
             # force the number of predicted tokens to be at least 1 in non-streaming mode
             # this will break streaming mode and needs to be updated
-            num_tokens[num_tokens < 1] = 1
-            pred_num_tokens = num_tokens
+            num_text_tokens[num_text_tokens < 1] = 1
+            num_audio_tokens = num_text_tokens
 
         # scale alphas so that the sum of alphas is equal to num_tokens
-        alphas = alphas * (num_tokens / pred_num_tokens)[:, None].repeat(1, T)
+        alphas = alphas * (num_text_tokens / num_audio_tokens)[:, None].repeat(1, T)
 
         # remove the last element of hidden_states and apply CIF mechanism
-        hidden_states = self.forward_cif(hidden_states[:, :, :-1], alphas, num_tokens)
+        hidden_states = self.forward_cif(
+            hidden_states[:, :, :-1], alphas, num_text_tokens
+        )
         # project back to self.hidden_size
         hidden_states = self.cif_proj(hidden_states)
-
+        # Create attention mask based on num_tokens
+        attention_mask = (
+            torch.arange(hidden_states.size(1), device=hidden_states.device)[None, :]
+            < num_text_tokens[:, None]
+        )
+        attention_mask = attention_mask.to(dtype=hidden_states.dtype)
+        extended_attention_mask = self.get_extended_attention_mask(
+            attention_mask,
+            num_text_tokens.shape,
+            attention_mask.device,
+            attention_mask.dtype,
+        )
         for layer in self.post_cif_layers:
-            hidden_states = layer(hidden_states, None, None)[0]
+            hidden_states = layer(hidden_states, extended_attention_mask, None)[0]
 
         hidden_states = self.project_to_text(hidden_states)
 
-        return hidden_states, pred_num_tokens
+        return hidden_states, num_audio_tokens
 
 
 transformers.activations.ACT2FN["swiglu"] = SwiGLU

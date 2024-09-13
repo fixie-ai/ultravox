@@ -36,7 +36,6 @@ class UltravoxPipeline(transformers.Pipeline):
         self.processor = UltravoxProcessor(
             audio_processor=audio_processor,
             tokenizer=tokenizer,
-            adapter=model.adapter,
         )
 
         super().__init__(model=model, tokenizer=tokenizer, **kwargs)

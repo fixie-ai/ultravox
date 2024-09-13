@@ -25,7 +25,9 @@ class DemoConfig:
     # model_path: str = "wandb://fixie/ultravox/model-zhuang_2024-08-12-ultravox_input_kd-1b:v4"
     # model_path: str = "artifacts/model-zhuang_2024-08-12-ultravox_input_kd-1b:v4"
     # model_path: str = "wandb://fixie/ultravox/model-zhuang_2024-08-12-ultravox_input_kd-1b:v13"
-    model_path: str = "wandb://fixie/ultravox/model-zhuang_2024-08-12-ultravox_input_kd-1c:v2"
+    model_path: str = (
+        "wandb://fixie/ultravox/model-zhuang_2024-08-12-ultravox_input_kd-1c:v2"
+    )
     device: Optional[str] = "cpu"
     data_type: Optional[str] = None
     default_prompt: str = ""
@@ -72,10 +74,10 @@ def process_turn(
         )
 
     output = inference.infer_stream(
-            sample,
-            max_tokens=max_new_tokens,
-            temperature=temperature,
-        )
+        sample,
+        max_tokens=max_new_tokens,
+        temperature=temperature,
+    )
     history[-1][1] = ""
     for chunk in output:
         if isinstance(chunk, infer_base.InferenceChunk):

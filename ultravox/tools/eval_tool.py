@@ -6,8 +6,6 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import yaml
-import numpy as np
 import simple_parsing
 import torch
 import torch.distributed as dist
@@ -120,6 +118,7 @@ def main():
         if self.logs_dir is None:
             self.logs_dir = self.output_dir / "logs"
 
+
 def dataset_infer(
     inference: ultravox_infer.UltravoxInference,
     dataset: datasets.VoiceDataset,
@@ -127,19 +126,23 @@ def dataset_infer(
     max_tokens: Optional[int] = None,
     temperature: float = 0.0,
     world_size: int = 1,
-    local_rank: int = 0
+    local_rank: int = 0,
 ) -> List[eval_types.Sample]:
     results = []
-    for batch_input in ddp_utils.sharded_batch_iterator(dataset, batch_size, world_size, local_rank):
+    for batch_input in ddp_utils.sharded_batch_iterator(
+        dataset, batch_size, world_size, local_rank
+    ):
         batch_indices = [idx for idx, _ in batch_input]
         batch_samples = [sample for _, sample in batch_input]
         batch_references = []
         for sample in batch_samples:
             assistant_message = sample.messages.pop()
-            if assistant_message['role'] != 'assistant':
-                raise ValueError(f"Expected assistant message but got: role={assistant_message['role']}, content={assistant_message['content']}")
+            if assistant_message["role"] != "assistant":
+                raise ValueError(
+                    f"Expected assistant message but got: role={assistant_message['role']}, content={assistant_message['content']}"
+                )
             batch_references.append(assistant_message["content"])
-        
+
         batch_output = inference.infer_batch(
             batch_samples,
             max_tokens=max_tokens,
@@ -148,50 +151,72 @@ def dataset_infer(
         for index, sample, output, reference in zip(
             batch_indices, batch_samples, batch_output, batch_references
         ):
-            
+
             results.append(
                 eval_types.Sample(
                     index=index,
-                    question=sample.messages[-1]['content'],
+                    question=sample.messages[-1]["content"],
                     reference=reference,
                     hypothesis=output.text,
                 )
             )
     return results
 
-def run_evaluation(inference: ultravox_infer.UltravoxInference, args: GenericInferArgs, dataset_configs: List[dataset_config.DatasetConfig], world_size: int, local_rank: int):
+
+def run_evaluation(
+    inference: ultravox_infer.UltravoxInference,
+    args: GenericInferArgs,
+    dataset_configs: List[dataset_config.DatasetConfig],
+    world_size: int,
+    local_rank: int,
+):
     use_wandb = "wandb" in args.report_logs_to
 
     dataset_args = datasets.VoiceDatasetArgs()
     for config in dataset_configs:
         dataset = datasets.GenericVoiceDataset(dataset_args, config)
-        results = dataset_infer(inference, dataset, batch_size=args.batch_size, max_tokens=args.max_tokens, temperature=args.temperature, world_size=world_size, local_rank=local_rank)
+        results = dataset_infer(
+            inference,
+            dataset,
+            batch_size=args.batch_size,
+            max_tokens=args.max_tokens,
+            temperature=args.temperature,
+            world_size=world_size,
+            local_rank=local_rank,
+        )
         results = ddp_utils.all_gather_list(results)
         if local_rank == 0:
             # Sort results based on index
             results.sort(key=lambda x: x.index)
             dataset_alias = config.alias
             if config.eval_config:
-                eval_result: eval_types.Result = eval.evaluate_answers(results, config.eval_config)
-                print(f"Dataset: {dataset_alias}, Metric: {config.eval_config.metric}, Score: {eval_result.score:.2f}")
-                
+                eval_result: eval_types.Result = eval.evaluate_answers(
+                    results, config.eval_config
+                )
+                print(
+                    f"Dataset: {dataset_alias}, Metric: {config.eval_config.metric}, Score: {eval_result.score:.2f}"
+                )
+
                 # Log to wandb
                 if use_wandb:
-                    wandb.log({
-                        f"eval/{dataset_alias}-{config.eval_config.metric}": eval_result.score,
-                    })
+                    wandb.log(
+                        {
+                            f"eval/{dataset_alias}-{config.eval_config.metric}": eval_result.score,
+                        }
+                    )
 
             filename = f"{dataset_alias}-{config.eval_config.metric}.results.json"
             output_file = args.output_dir / filename
-            
-            with open(output_file, "w") as f:   
+
+            with open(output_file, "w") as f:
                 results_json = [result.to_dict() for result in results]
-                json.dump(results_json, f, ensure_ascii=False,indent=2)
+                json.dump(results_json, f, ensure_ascii=False, indent=2)
             print(f"Results saved to {output_file}")
-            
+
             # Log results file to wandb
             if use_wandb:
                 wandb.save(str(output_file))
+
 
 def main():
     args = simple_parsing.parse(
@@ -211,7 +236,7 @@ def main():
     # Initialize wandb if it's in report_logs_to
     use_wandb = "wandb" in args.report_logs_to
     if local_rank == 0:
-            # Ensure output directory exists
+        # Ensure output directory exists
         output_dir.mkdir(parents=True, exist_ok=True)
         if use_wandb:
             wandb.init(
@@ -219,7 +244,7 @@ def main():
                 config=dataclasses.asdict(args),
                 name=args.exp_name,
                 dir="runs",
-        )
+            )
     with ddp_utils.run_on_master_first(local_rank == 0):
         inference = ultravox_infer.UltravoxInference(
             args.model,
@@ -232,6 +257,7 @@ def main():
     # Finish wandb run
     if use_wandb and local_rank == 0:
         wandb.finish()
+
 
 if __name__ == "__main__":
     main()

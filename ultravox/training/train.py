@@ -60,7 +60,6 @@ def prepare_dataset(
         interleaved_dataset,
         processor=processor,
         train_on_inputs=train_on_inputs,
-        include_alt_fields=include_alt_fields,
     )
     return dataset_with_proc
 
@@ -129,7 +128,7 @@ def train(args: config_base.TrainConfig):
 
     audio_processor = transformers.AutoProcessor.from_pretrained(args.audio_model)
     processor = ultravox_processing.UltravoxProcessor(
-        audio_processor=audio_processor, tokenizer=text_tokenizer, adapter=model.adapter
+        audio_processor=audio_processor, tokenizer=text_tokenizer
     )
 
     assert model.get_input_embeddings().num_embeddings == len(
@@ -227,7 +226,6 @@ def train(args: config_base.TrainConfig):
     # Set up the data loader
     data_collator = datasets.DataCollatorForSeq2SeqWithAudio(
         tokenizer=text_tokenizer,
-        include_alt_fields=model.loss_config.requires_alt_fields,
     )
 
     logging.info(f"Config Params: {args}")

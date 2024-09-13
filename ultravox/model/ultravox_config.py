@@ -1,6 +1,6 @@
 import dataclasses
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 import transformers
 
@@ -46,13 +46,6 @@ class LossConfig:
             LossFunction(key) if isinstance(key, str) else key: value
             for key, value in self.loss_weights.items()
         }
-
-    @property
-    def requires_alt_fields(self):
-        return any(
-            lf in self.loss_weights
-            for lf in [LossFunction.Input_KL, LossFunction.Response_KL]
-        )
 
     def add_adapter_losses(self, adapter_type: AdapterType):
         if (
@@ -158,9 +151,7 @@ class UltravoxConfig(transformers.PretrainedConfig):
         self,
         audio_config: Optional[Dict[str, Any]] = None,
         text_config: Optional[Dict[str, Any]] = None,
-        adapter_config: Optional[
-            Union[UltravoxStackingAdapterConfig, UltravoxCFormerAdapterConfig]
-        ] = None,
+        adapter_config: Optional[Dict[str, Any]] = None,
         audio_model_id: Optional[str] = None,
         text_model_id: Optional[str] = None,
         adapter_type: AdapterType = AdapterType.STACKING,

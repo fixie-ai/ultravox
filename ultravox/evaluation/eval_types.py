@@ -1,9 +1,14 @@
 import dataclasses
+<<<<<<< HEAD
 from typing import Any, Dict, List, Optional, Union
+=======
+from typing import Dict, List, Optional, Union
+>>>>>>> d4ef647 (Update)
 
 import dataclasses_json
 from pydantic import BaseModel
 
+<<<<<<< HEAD
 
 class EvalConfig(BaseModel):
     metric: str
@@ -12,6 +17,8 @@ class EvalConfig(BaseModel):
     class Config:
         extra = "forbid"
         # do not allow undefined parameters
+=======
+>>>>>>> d4ef647 (Update)
 
 class EvalConfig(BaseModel):
     metric: str

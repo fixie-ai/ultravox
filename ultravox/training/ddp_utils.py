@@ -4,9 +4,6 @@ from typing import List, TypeVar
 import torch.distributed
 from torch.utils import data
 
-from tqdm import tqdm
-
-
 
 @contextlib.contextmanager
 def run_on_master_first(is_master: bool):
@@ -38,7 +35,7 @@ def all_gather_list(data: List[T]) -> List[T]:
         return data
     world_size = torch.distributed.get_world_size()
     data_list = [None] * world_size
-    try: 
+    try:
         torch.distributed.all_gather_object(data_list, data)
     except Exception as e:
         print(f"Error in all_gather_object: {e}", flush=True)

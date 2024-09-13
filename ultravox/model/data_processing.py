@@ -15,7 +15,6 @@ class UltravoxDataproc(datasets.Dataproc):
         processor: ultravox_processing.UltravoxProcessor,
         train_on_inputs: bool = False,
         inference_mode: bool = False,
-        include_alt_fields: bool = False,
     ) -> None:
         """
         Pre-processing for the Ultravox model: applies tokenization and audio processing using the UltravoxProcessor
@@ -29,8 +28,6 @@ class UltravoxDataproc(datasets.Dataproc):
             inference_mode: If True, only the input message is included in input_ids and labels, and the assistant
                 message is removed from the sample. This is used for inference (e.g. testing) since the model should
                 generate the assistant message. For training and validation, this should be False.
-            include_alt_fields: If True, the alt_input_ids, alt_attention_mask, and alt_labels are included in the output,
-                computed with <|audio|> replaced by the audio transcript.
         """
         super().__init__(dataset)
         self.processor = processor
@@ -38,7 +35,6 @@ class UltravoxDataproc(datasets.Dataproc):
         self.inference_mode = inference_mode
         if self.inference_mode:
             self.train_on_inputs = True
-        self.include_alt_fields = include_alt_fields
 
     def _process(self, sample: datasets.VoiceSample) -> Dict[str, Any]:
         if self.inference_mode:
@@ -68,8 +64,9 @@ class UltravoxDataproc(datasets.Dataproc):
         inputs["attention_mask"].squeeze_(0)
         if "audio_values" in inputs:
             inputs["audio_values"].squeeze_(0)
-            inputs["audio_token_start_idx"].squeeze_(0)
-            inputs["audio_token_len"].squeeze_(0)
+            inputs["audio_len"].squeeze_(0)
+            inputs["transcript_start_idx"].squeeze_(0)
+            inputs["transcript_len"].squeeze_(0)
 
         # No need to shift the labels as the model does it internally
         labels = input_ids.clone()
@@ -93,29 +90,8 @@ class UltravoxDataproc(datasets.Dataproc):
             labels[:input_token_len] = -100
 
         inputs["labels"] = labels
-        # If include_alt_fields is True, also include alt_input_ids, alt_attention_mask, and alt_labels
-        if self.include_alt_fields:
-            if "alt_input_ids" in inputs:
-                alt_input_ids = inputs["alt_input_ids"].squeeze_(0)
-                # print(f"alt_input_ids size: {alt_input_ids.size(0)}")
-                inputs["alt_attention_mask"].squeeze_(0)
-                alt_labels = alt_input_ids.clone()
-                if (
-                    not self.train_on_inputs
-                    and sample.messages[-1]["role"] == "assistant"
-                ):
-                    alt_input_token_len = (
-                        input_token_len + len(alt_input_ids) - len(input_ids)
-                    )
-                    alt_labels[:alt_input_token_len] = -100
-                inputs["alt_labels"] = alt_labels
-            else:
-                inputs["alt_input_ids"] = inputs["input_ids"]
-                inputs["alt_attention_mask"] = inputs["attention_mask"]
-                inputs["alt_labels"] = inputs["labels"]
 
         return {
             # input_ids, attention_mask, labels, audio_values, audio_token_start_idx, audio_token_len
-            # if include_alt_fields is True, also include alt_input_ids, alt_attention_mask, alt_labels
             **inputs,
         }

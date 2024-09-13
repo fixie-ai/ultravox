@@ -2,11 +2,11 @@ from typing import Optional
 
 import transformers
 
-from ultravox.utils import device_helpers
 from ultravox.inference import infer
 from ultravox.model import ultravox_model
 from ultravox.model import ultravox_processing
 from ultravox.model import wandb_utils
+from ultravox.utils import device_helpers
 
 
 class UltravoxInference(infer.LocalInference):
@@ -32,8 +32,12 @@ class UltravoxInference(infer.LocalInference):
             data_type: data type to use for the model
             conversation_mode: if true, keep track of past messages in a conversation
         """
-        device = device or device_helpers.get_device()
-        dtype = device_helpers.get_dtype(data_type) if data_type else device_helpers.default_dtype()
+        device = device or device_helpers.default_device()
+        dtype = (
+            device_helpers.get_dtype(data_type)
+            if data_type
+            else device_helpers.default_dtype()
+        )
         if wandb_utils.is_wandb_url(model_path):
             model_path = wandb_utils.download_model_from_wandb(model_path)
         model = ultravox_model.UltravoxModel.from_pretrained(
@@ -58,7 +62,7 @@ class UltravoxInference(infer.LocalInference):
         )
 
         processor = ultravox_processing.UltravoxProcessor(
-            audio_processor=audio_processor, tokenizer=tokenizer, adapter=model.adapter
+            audio_processor=audio_processor, tokenizer=tokenizer
         )
 
         super().__init__(

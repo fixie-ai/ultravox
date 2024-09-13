@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import json
 import logging
 import os
@@ -7,6 +8,10 @@ from tqdm import tqdm
 
 from ultravox.data import datasets
 from ultravox.evaluation import eval_helpers
+=======
+from typing import List
+
+>>>>>>> d4ef647 (Update)
 from ultravox.evaluation import eval_types
 <<<<<<< HEAD
 from ultravox.inference import infer
@@ -29,6 +34,7 @@ METRIC_REGISTRY = {
 >>>>>>> ca4e476 (Update)
 
 
+<<<<<<< HEAD
 def dataset_infer(
     inference: infer.LocalInference,
     dataset: datasets.SizedIterableDataset,
@@ -128,3 +134,19 @@ def run_infer(
                 print(f"Results saved to {output_file}")
                 output_files.append(output_file)
     return metrics, output_files
+=======
+def evaluate_answer(sample: eval_types.Sample, metric: str) -> eval_types.Result:
+    if metric in METRIC_REGISTRY:
+        return METRIC_REGISTRY[metric](sample)
+    else:
+        raise ValueError(f"Unknown metric: {metric}")
+
+
+def evaluate_answers(
+    samples: List[eval_types.Sample], metric_config: eval_types.EvalConfig
+) -> eval_types.Result:
+    if metric_config.metric in METRIC_REGISTRY:
+        return METRIC_REGISTRY[metric_config.metric](samples, **metric_config.args)
+    else:
+        raise ValueError(f"Unknown metric: {metric_config.metric}")
+>>>>>>> d4ef647 (Update)
