@@ -12,7 +12,10 @@ integrations:
 scheduling:
   max_duration: 6  # 6 hours max for jobs to avoid hanging jobs
 command: >-
-  cd ultravox && poetry install --no-dev && poetry run torchrun --nproc_per_node=8 -m ultravox.training.train $TRAIN_ARGS
+  cd ultravox &&
+  poetry install --no-dev &&
+  poetry run python -m ultravox.training.helpers.prefetch_weights $TRAIN_ARGS &&
+  poetry run torchrun --nproc_per_node=8 -m ultravox.training.train $TRAIN_ARGS
 env_variables:
   MLFLOW_TRACKING_URI: databricks
   UV_BRANCH: main

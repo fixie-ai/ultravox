@@ -4,16 +4,13 @@ import gc
 import glob
 import logging
 import os
-import re
 import subprocess
-import sys
 from datetime import datetime
 from typing import Dict, List, Optional
 
 import datasets as hf_datasets
 import pandas as pd
 import safetensors.torch
-import simple_parsing
 import torch
 import torch.distributed
 import transformers
@@ -30,13 +27,10 @@ from ultravox.model import ultravox_processing
 from ultravox.model import wandb_utils
 from ultravox.training import config_base
 from ultravox.training import ddp_utils
+from ultravox.training.helpers import prefetch_weights
 
 INPUT_EXAMPLE = {"text": "Transcribe\n<|audio|>", "audio": b"\x00\x00" * 16000}
 OUTPUT_EXAMPLE = {"text": "Hello, world!"}
-
-
-def fix_hyphens(arg: str):
-    return re.sub(r"^--([^=]+)", lambda m: "--" + m.group(1).replace("-", "_"), arg)
 
 
 def prepare_dataset(
@@ -76,12 +70,7 @@ def main() -> None:
     os.environ["WANDB_LOG_MODEL"] = "checkpoint"
     os.environ["WANDB_PROJECT"] = "ultravox"
 
-    args = simple_parsing.parse(
-        config_class=config_base.TrainConfig,
-        config_path="ultravox/training/configs/meta_config.yaml",  # base config file
-        add_config_path_arg=True,
-        args=[fix_hyphens(arg) for arg in sys.argv[1:]],
-    )
+    args = config_base.get_train_args()
 
     transformers.set_seed(args.seed)
 
@@ -100,15 +89,24 @@ def train(args: config_base.TrainConfig):
     world_size = int(os.environ.get("WORLD_SIZE", 1))
     local_rank = int(os.environ.get("LOCAL_RANK", 0))
     is_master = local_rank == 0
-
-    if world_size > 1:
-        torch.distributed.init_process_group(backend="nccl")
+    is_distributed = world_size > 1
 
     # DDP blows up logging, so this is an attempt to suppress it to only logs from the master process
     logging.basicConfig(level=logging.INFO if is_master else logging.ERROR)
     # os.environ["TORCH_LOGS"] = "ERROR" if is_master else "WARNING"
     transformers.logging.set_verbosity(logging.WARNING if is_master else logging.ERROR)
     hf_datasets.logging.set_verbosity(logging.WARNING if is_master else logging.ERROR)
+
+    if is_distributed:
+        torch.distributed.init_process_group(backend="nccl")
+
+    with ddp_utils.run_on_master_first(is_master):
+        # For larger models, we assume that the weights are already downloaded via prefetch_weights.py
+        # Otherwise the barrier call can timeout.
+        # This call is only here as a backstop in case prefetch_weights.py was not run, for example in a local/test run.
+        prefetch_weights.download_weights(
+            [args.text_model, args.audio_model], args.model_load_dir
+        )
 
     logging.info("Instantiating processor...")
     text_tokenizer: transformers.PreTrainedTokenizerFast = (
@@ -128,11 +126,7 @@ def train(args: config_base.TrainConfig):
     )
 
     logging.info("Instantiating model...")
-
-    # Since the model downloads the language model and audio encoder weights, we want one process to finish up
-    # downloading before the others start in order to avoid race conditions.
-    with ddp_utils.run_on_master_first(is_master):
-        model = ultravox_model.UltravoxModel(config)
+    model = ultravox_model.UltravoxModel(config)
 
     assert model.get_input_embeddings().num_embeddings == len(
         text_tokenizer
@@ -166,9 +160,10 @@ def train(args: config_base.TrainConfig):
         logging.info(f"Loading model state dict from {args.model_load_dir}")
         load_path = args.model_load_dir
         if wandb_utils.is_wandb_url(load_path):
-            # Download the model from W&B. The main process should do the download while the others wait.
-            with ddp_utils.run_on_master_first(is_master):
-                load_path = wandb_utils.download_model_from_wandb(load_path)
+            # We assume that the weights are already downloaded via prefetch_weights.py
+            # and hence this is just resolving the path. If the weights are not downloaded,
+            # we might see a race condition here when using DDP.
+            load_path = wandb_utils.download_model_from_wandb(load_path)
         if os.path.isdir(load_path):
             load_path = os.path.join(load_path, "model*.safetensors")
         paths = glob.glob(load_path)
