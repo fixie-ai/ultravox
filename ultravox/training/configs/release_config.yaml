@@ -4,10 +4,10 @@
 text_model: "meta-llama/Meta-Llama-3.1-8B-Instruct"
 audio_model: "openai/whisper-medium"
 
+
 loss_config:
-  loss_weights: 
-    Response_KL: 1
-    Input_KL: 1
+  # Choose from ["KL_Divergence", "CrossEntropy"], default is "KL_Divergence"
+  loss_function: "KL_Divergence"
 
 max_steps: 14400 # x8x24 = 2,764,800
 
