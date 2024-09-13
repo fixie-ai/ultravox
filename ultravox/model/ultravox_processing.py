@@ -165,8 +165,6 @@ class UltravoxProcessor(transformers.ProcessorMixin):
                 audio_values = x.input_values
 
             audio_values = torch.tensor(audio_values)
-            print("audio values shape", audio_values.shape)
-            print("audio_context_size", audio_context_size)
             if audio_context_size and audio_values.shape[-1] > audio_context_size:
                 audio_values_chunks = list(
                     torch.split(
@@ -207,7 +205,6 @@ class UltravoxProcessor(transformers.ProcessorMixin):
                         add_special_tokens=False,
                     )
                 )
-
                 data["audio_token_start_idx"] = [start_idx]
 
                 # Replace the audio placeholder with the audio token.
