@@ -90,14 +90,25 @@ def train(args: config_base.TrainConfig):
     is_master = local_rank == 0
     is_distributed = world_size > 1
 
-    if is_distributed:
-        torch.distributed.init_process_group(backend="nccl")
-
     # DDP blows up logging, so this is an attempt to suppress it to only logs from the master process
     logging.basicConfig(level=logging.INFO if is_master else logging.ERROR)
     # os.environ["TORCH_LOGS"] = "ERROR" if is_master else "WARNING"
     transformers.logging.set_verbosity(logging.WARNING if is_master else logging.ERROR)
     hf_datasets.logging.set_verbosity(logging.WARNING if is_master else logging.ERROR)
+
+    if is_distributed:
+        torch.distributed.init_process_group(backend="nccl")
+
+        # make sure the weights are downloaded before initializing the model in distributed mode
+        try:
+            prefetch_weights.raise_on_weights_not_downloaded(
+                [args.text_model, args.audio_model]
+            )
+        except Exception as e:
+            # We assume that the weights are already downloaded via prefetch_weights.py
+            # If the weights are not downloaded, we might see a race condition here when using DDP/FSDP.
+            logging.error("Weights are not downloaded. Please run prefetch_weights.py.")
+            raise e
 
     logging.info("Instantiating processor...")
     text_tokenizer: transformers.PreTrainedTokenizerFast = (
@@ -117,18 +128,6 @@ def train(args: config_base.TrainConfig):
     )
 
     logging.info("Instantiating model...")
-
-    if is_distributed:
-        try:
-            prefetch_weights.raise_on_weights_not_downloaded(
-                [args.text_model, args.audio_model]
-            )
-        except Exception as e:
-            # We assume that the weights are already downloaded via prefetch_weights.py
-            # If the weights are not downloaded, we might see a race condition here when using DDP/FSDP.
-            logging.error("Weights are not downloaded. Please run prefetch_weights.py.")
-            raise e
-
     model = ultravox_model.UltravoxModel(config)
 
     assert model.get_input_embeddings().num_embeddings == len(
