@@ -1125,7 +1125,7 @@ class CFormerAdapter(UltravoxAdapter):
         T = hidden_states.size(1)
 
         attention_mask = torch.arange(
-            num_frames.max().item(), device=hidden_states.device
+            audio_features.shape[1], device=hidden_states.device
         ) < num_frames.unsqueeze(1)
 
 
@@ -1163,7 +1163,7 @@ class CFormerAdapter(UltravoxAdapter):
         hidden_states = self.cif_proj(hidden_states)
         # Create attention mask based on num_tokens
         attention_mask = (
-            torch.arange(hidden_states.size(1), device=hidden_states.device)[None, :]
+            torch.arange(hidden_states.shape[1], device=hidden_states.device)[None, :]
             < num_audio_tokens[:, None]
         )
         attention_mask = attention_mask.to(dtype=hidden_states.dtype)
