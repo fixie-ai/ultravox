@@ -205,6 +205,7 @@ class AudioExtensionTask:
                 function=self._map_sample_repeat,
                 num_proc=num_proc,
                 writer_batch_size=writer_batch_size,
+                remove_columns=ds_split.column_names,
             )
         elif self.extend_type == "combine":
             return ds_split.map(
