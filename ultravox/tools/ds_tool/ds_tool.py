@@ -446,7 +446,11 @@ class DatasetChunkProcessor:
             "split": split_name,
         }
         assert isinstance(self.args.upload_name, str)
-        ds_split_chunked.push_to_hub(self.args.upload_name, **hub_args)
+        try: 
+            ds_split_chunked.push_to_hub(self.args.upload_name, **hub_args)
+        except Exception as e:
+            print(f"Failed to upload chunk to hub: {e}")
+            raise e
 
 
 def main(args: DatasetToolArgs):
@@ -478,8 +482,6 @@ def main(args: DatasetToolArgs):
         if args.num_samples:
             ds_split = ds_split.select(range(args.num_samples))
 
-        if args.upload_split:
-            split_name = args.upload_split
         ds_chunk_proc.process_and_upload_split_rescursive(
             split_name, ds_split, 0, len(ds_split)
         )
