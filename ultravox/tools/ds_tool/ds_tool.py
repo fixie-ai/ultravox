@@ -232,6 +232,7 @@ class AudioExtensionTask:
         repeated_sentence = " ".join(sentence)
         repeated_translation = " ".join(translation)
         sample[self.audio_column_name]["array"] = repeated_audio
+        sample[self.audio_column_name].pop("path")
         sample[self.asr_column_name] = repeated_sentence
         sample[self.translation_column_name] = repeated_translation
 
@@ -243,15 +244,18 @@ class AudioExtensionTask:
         translations = batch[self.translation_column_name]
         ids = batch["id"]
 
-        combined_audio = {"array": np.concatenate([audio["array"] for audio in audios])}
+        combined_audio = {
+            "sampling_rate": audios[0]["sampling_rate"],
+            "array": np.concatenate([audio["array"] for audio in audios]),
+        }
         combined_sentences = " ".join(sentences)
         combined_translations = " ".join(translations)
         combined_ids = "+".join(ids)
 
         new_batch = {
-            self.audio_column_name: combined_audio,
-            self.asr_column_name: combined_sentences,
-            self.translation_column_name: combined_translations,
+            self.audio_column_name: [combined_audio],
+            self.asr_column_name: [combined_sentences],
+            self.translation_column_name: [combined_translations],
             "id": combined_ids,
         }
         return new_batch
