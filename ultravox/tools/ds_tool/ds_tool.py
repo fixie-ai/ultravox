@@ -243,16 +243,16 @@ class AudioExtensionTask:
         translations = batch[self.translation_column_name]
         ids = batch["id"]
 
-        combined_audios = np.concatenate(audios)
+        combined_audio = {"array": np.concatenate([audio["array"] for audio in audios])}
         combined_sentences = " ".join(sentences)
         combined_translations = " ".join(translations)
         combined_ids = "+".join(ids)
 
         new_batch = {
-            self.audio_column_name: combined_audios,
+            self.audio_column_name: combined_audio,
             self.asr_column_name: combined_sentences,
             self.translation_column_name: combined_translations,
-            self.id_column_name: combined_ids,
+            "id": combined_ids,
         }
         return new_batch
 
