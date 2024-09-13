@@ -1133,6 +1133,9 @@ class CFormerAdapter(UltravoxAdapter):
 
         # alphas is computed from the last element of hidden_states using a sigmoid function, and used to assign speech features to text/speech tokens.
         alphas = torch.sigmoid(hidden_states[:, :, -1])
+        print(f"alphas.shape: {alphas.shape}")
+        print(f"attention_mask.shape: {attention_mask.shape}")
+        print(f"hidden_states.shape: {hidden_states.shape}")
         alphas = alphas * attention_mask
         print(f"alphas.dtype: {alphas.dtype}")
         print(f"attention_mask.dtype: {attention_mask.dtype}")
