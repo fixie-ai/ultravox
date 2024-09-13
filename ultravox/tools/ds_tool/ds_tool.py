@@ -231,12 +231,15 @@ class AudioExtensionTask:
         repeated_audio = np.tile(audio_data, self.multiplier)
         repeated_sentence = " ".join([sentence] * self.multiplier)
         repeated_translation = " ".join([translation] * self.multiplier)
-        sample[self.audio_column_name]["array"] = repeated_audio
-        sample[self.audio_column_name].pop("path")
-        sample[self.asr_column_name] = repeated_sentence
-        sample[self.translation_column_name] = repeated_translation
 
-        return sample
+        new_sample = {}
+        new_sample[self.audio_column_name]["array"] = repeated_audio
+        new_sample[self.audio_column_name].pop("path")
+        new_sample[self.asr_column_name] = repeated_sentence
+        new_sample[self.translation_column_name] = repeated_translation
+        new_sample[self.id_column_name] = sample[self.id_column_name]
+
+        return new_sample
 
     def _map_batch_combine(self, batch):
         audios = batch[self.audio_column_name]
@@ -446,7 +449,7 @@ class DatasetChunkProcessor:
             "split": split_name,
         }
         assert isinstance(self.args.upload_name, str)
-        try: 
+        try:
             ds_split_chunked.push_to_hub(self.args.upload_name, **hub_args)
         except Exception as e:
             print(f"Failed to upload chunk to hub: {e}")
