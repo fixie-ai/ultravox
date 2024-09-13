@@ -229,8 +229,8 @@ class AudioExtensionTask:
             raise ValueError(f"Unsupported audio format: {type(audio)}")
 
         repeated_audio = np.tile(audio_data, self.multiplier)
-        repeated_sentence = " ".join(sentence)
-        repeated_translation = " ".join(translation)
+        repeated_sentence = " ".join([sentence] * self.multiplier)
+        repeated_translation = " ".join([translation] * self.multiplier)
         sample[self.audio_column_name]["array"] = repeated_audio
         sample[self.audio_column_name].pop("path")
         sample[self.asr_column_name] = repeated_sentence
@@ -398,7 +398,7 @@ class DatasetChunkProcessor:
                 failed_chunk_ranges.append((chunk_start, chunk_end))
         successful_chunks = self.args.num_chunks - len(failed_chunk_ranges)
         print(
-            f"Finished processing and uploading {successful_chunks}/{self.args.num_chunks} chunks for range [{start_index}, {end_index})"
+            f"Finished processing and uploading {successful_chunks}/{total_chunks} chunks for range [{start_index}, {end_index})"
         )
         if len(failed_chunk_ranges) > 0:
             for start, end in failed_chunk_ranges:
