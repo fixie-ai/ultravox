@@ -1153,7 +1153,7 @@ class CFormerAdapter(UltravoxAdapter):
             num_audio_tokens[num_audio_tokens < 1] = 1
 
         # scale alphas so that the sum of alphas is equal to num_tokens
-        alphas = alphas * (num_audio_tokens / num_pred_audio_tokens)[:, None].repeat(1, T)
+        alphas = alphas * (num_audio_tokens / num_pred_audio_tokens)[:, None].repeat(1, T).to(dtype=hidden_states.dtype)
 
         # remove the last element of hidden_states and apply CIF mechanism
         print(f"beefore cif")
