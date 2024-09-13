@@ -144,15 +144,7 @@ class UltravoxProcessor(transformers.ProcessorMixin):
                 f"Non-empty text of type str (found {type(text)}) must be provided, regardless of whether it contains audio_placeholder."
             )
 
-        data = {
-            "input_ids": [],
-            "attention_mask": [],
-            "audio_values": [],
-            "audio_len": [0],
-            "audio_start_idx": [0],
-            "transcript_ids": [],
-            "transcript_len": [0],
-        }
+        data = {}
         if audio is not None and len(audio) > 0:
             # We don't enforce non-empty transcript here, as the audio may not contain any speech or the transcript may not be provided as during inference.
             if self.audio_padding == "max_length":
@@ -177,14 +169,15 @@ class UltravoxProcessor(transformers.ProcessorMixin):
             # Note: ideally we should compute audio_len from x.attention_mask, but the HF WhisperFeatureExtractor implementation of attention_mask is off by 1 
             data["audio_len"] = [data["audio_values"].shape[-1]]
 
-        if transcript:
-            if audio is None or len(audio) == 0:
-                raise ValueError("audio must be provided when transcript is non-empty.")
-            tokenized_transcript = self.tokenizer(
-                transcript, add_special_tokens=False, **kwargs
-            )
-            data["transcript_ids"] = [tokenized_transcript.input_ids]
-            data["transcript_len"] = [len(tokenized_transcript.input_ids)]
+            if transcript:
+                tokenized_transcript = self.tokenizer(
+                    transcript, add_special_tokens=False, **kwargs
+                )
+                data["transcript_ids"] = [tokenized_transcript.input_ids]
+                data["transcript_len"] = [len(tokenized_transcript.input_ids)]
+            else:
+                data["transcript_ids"] = [[]]
+                data["transcript_len"] = [0]
 
         # Find and process audio placeholders
         matches = list(self.audio_placeholder_regex.finditer(text))
