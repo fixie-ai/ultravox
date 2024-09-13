@@ -1087,6 +1087,9 @@ class CFormerAdapter(UltravoxAdapter):
                 integrate = torch.where(ready_to_fire, integrate - 1, integrate)
                 alpha_integrated = torch.where(ready_to_fire, alpha_needed, alpha)
 
+                print(f"alpha_integrated.dtype: {alpha_integrated.dtype}")
+                print(f"token_index.dtype: {token_index.dtype}")
+                print(f"weights.dtype: {weights.dtype}")
                 weights[:, :, t].scatter_(
                     dim=1,
                     index=token_index.unsqueeze(1),
@@ -1131,6 +1134,9 @@ class CFormerAdapter(UltravoxAdapter):
         # alphas is computed from the last element of hidden_states using a sigmoid function, and used to assign speech features to text/speech tokens.
         alphas = torch.sigmoid(hidden_states[:, :, -1])
         alphas = alphas * attention_mask
+        print(f"alphas.dtype: {alphas.dtype}")
+        print(f"attention_mask.dtype: {attention_mask.dtype}")
+        print(f"hidden_states.dtype: {hidden_states.dtype}")
         num_pred_audio_tokens = alphas.sum(-1)
 
         if self.training:
@@ -1150,6 +1156,10 @@ class CFormerAdapter(UltravoxAdapter):
         alphas = alphas * (num_audio_tokens / num_pred_audio_tokens)[:, None].repeat(1, T)
 
         # remove the last element of hidden_states and apply CIF mechanism
+        print(f"beefore cif")
+        print(f"hidden_states.dtype: {hidden_states.dtype}")
+        print(f"alphas.dtype: {alphas.dtype}")
+        print(f"num_audio_tokens.dtype: {num_audio_tokens.dtype}")
         hidden_states = self.forward_cif(
             hidden_states[:, :, :-1], alphas, num_audio_tokens
         )
