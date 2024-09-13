@@ -242,7 +242,7 @@ class AudioExtensionTask:
         audios = batch[self.audio_column_name]
         sentences = batch[self.asr_column_name]
         translations = batch[self.translation_column_name]
-        ids = batch["id"]
+        ids = batch[self.id_column_name]
 
         combined_audio = {
             "sampling_rate": audios[0]["sampling_rate"],
@@ -256,7 +256,7 @@ class AudioExtensionTask:
             self.audio_column_name: [combined_audio],
             self.asr_column_name: [combined_sentences],
             self.translation_column_name: [combined_translations],
-            "id": combined_ids,
+            self.id_column_name: [combined_ids],
         }
         return new_batch
 
@@ -396,7 +396,7 @@ class DatasetChunkProcessor:
                     self.chunks_not_uploaded.append((start_index, end_index))
                     return None
                 failed_chunk_ranges.append((chunk_start, chunk_end))
-        successful_chunks = self.args.num_chunks - len(failed_chunk_ranges)
+        successful_chunks = total_chunks - len(failed_chunk_ranges)
         print(
             f"Finished processing and uploading {successful_chunks}/{total_chunks} chunks for range [{start_index}, {end_index})"
         )
