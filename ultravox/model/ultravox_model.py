@@ -1059,13 +1059,13 @@ class CFormerAdapter(UltravoxAdapter):
 
         # loop vars
         integrate = torch.zeros(
-            [B], device=device
+            [B], device=device, dtype=hidden_states.dtype
         )  # accumulated alpha value that hasn't benen fired yet
         remainds = torch.zeros(
-            [B], device=device
+            [B], device=device, dtype=hidden_states.dtype
         )  # reamining alpha value from recent firing
         token_index = torch.zeros(
-            [B], dtype=torch.long, device=device
+            [B], dtype=torch.long, device=device, dtype=hidden_states.dtype
         )  # num of fires that has happened
 
         # weights: B x max_num_tokens x T, weights[i, j, k] is the contribution of the k-th speech feature to the j-th text/speech token for the i-th sample
@@ -1117,12 +1117,13 @@ class CFormerAdapter(UltravoxAdapter):
         # num_required_audio_tokens needs to be provided in the training mode as it's used for scaling alphas
         # in inference mode, num_required_audio_tokens is None as input and is determined by the accumulated predicted alpha values
 
-        attention_mask = torch.arange(
-            num_frames.max().item(), device=num_frames.device
-        ) < num_frames.unsqueeze(1)
-
         hidden_states = audio_features
         T = hidden_states.size(1)
+
+        attention_mask = torch.arange(
+            num_frames.max().item(), device=hidden_states.device
+        ) < num_frames.unsqueeze(1)
+
 
         for layer in self.pre_cif_layers:
             hidden_states = layer(hidden_states, None, None)[0]
