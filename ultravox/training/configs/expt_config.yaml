@@ -19,8 +19,8 @@ val_sets: []
 
 report_logs_to: ["tensorboard"]
 
-# batch_size: 24
-batch_size: 4
+batch_size: 24
+# batch_size: 4
 max_steps: 14400 # x8x24 = 2,764,800
 
 
@@ -36,91 +36,91 @@ data_dicts:
     assistant_template: ""
     transcript_template: "{{ text }}"
     weight: 1
-  # - path: "fixie-ai/librispeech_asr"
-  #   name: "other"
-  #   splits:
-  #     - "train.500" # 148_688 samples
-  #   user_template: "<|audio|>"
-  #   assistant_template: ""
-  #   transcript_template: "{{ text }}"
-  #   weight: 1
-  # - path: "fixie-ai/peoples_speech"
-  #   name: "clean"
-  #   splits:
-  #     - "train" # 1_501_271 samples
-  #   user_template: "<|audio|>"
-  #   assistant_template: ""
-  #   transcript_template: "{{ text_proc.format_asr_text(text) }}"
-  #   weight: 8
-  # - path: "fixie-ai/common_voice_17_0"
-  #   name: "en"
-  #   splits:
-  #     - "train" # 1_101_170 samples
-  #   user_template: "<|audio|>"
-  #   assistant_template: ""
-  #   transcript_template: "{{ text_proc.format_asr_text(sentence) }}"
-  #   weight: 8
-  # - path: "fixie-ai/common_voice_17_0"
-  #   name: "ar"
-  #   splits:
-  #     - "train" # 28_369 samples
-  #   user_template: "<|audio|>"
-  #   assistant_template: ""
-  #   transcript_template: "{{ sentence }}"
-  #   weight: 0.2
-  # - path: "fixie-ai/common_voice_17_0"
-  #   name: "de"
-  #   splits:
-  #     - "train" # 589_100 samples
-  #   user_template: "<|audio|>"
-  #   assistant_template: ""
-  #   transcript_template: "{{ sentence }}"
-  #   weight: 4
-  # - path: "fixie-ai/common_voice_17_0"
-  #   name: "es"
-  #   splits:
-  #     - "train" # 336_846 samples
-  #   user_template: "<|audio|>"
-  #   assistant_template: ""
-  #   transcript_template: "{{ sentence }}"
-  #   weight: 3
-  # - path: "fixie-ai/common_voice_17_0"
-  #   name: "fr"
-  #   splits:
-  #     - "train" # 558_054 samples
-  #   user_template: "<|audio|>"
-  #   assistant_template: ""
-  #   transcript_template: "{{ sentence }}"
-  #   weight: 4
-  # - path: "fixie-ai/common_voice_17_0"
-  #   name: "it"
-  #   splits:
-  #     - "train" # 169_771 samples
-  #   user_template: "<|audio|>"
-  #   assistant_template: ""
-  #   transcript_template: "{{ sentence }}"
-  #   weight: 1.2
-  # - path: "fixie-ai/common_voice_17_0"
-  #   name: "ja"
-  #   splits:
-  #     - "train" # 10_039 samples
-  #   user_template: "<|audio|>"
-  #   assistant_template: ""
-  #   transcript_template: "{{ sentence }}"
-  #   weight: 0.1
-  # - path: "fixie-ai/common_voice_17_0"
-  #   name: "pt"
-  #   splits:
-  #     - "train" # 21_968 samples
-  #   user_template: "<|audio|>"
-  #   assistant_template: ""
-  #   transcript_template: "{{ sentence }}"
-  #   weight: 0.2
-  # - path: "fixie-ai/common_voice_17_0"
-  #   name: "ru"
-  #   splits:
-  #     - "train" # 26_377 samples
-  #   user_template: "<|audio|>"
-  #   assistant_template: ""
-  #   transcript_template: "{{ sentence }}"
-  #   weight: 0.2
+  - path: "fixie-ai/librispeech_asr"
+    name: "other"
+    splits:
+      - "train.500" # 148_688 samples
+    user_template: "<|audio|>"
+    assistant_template: ""
+    transcript_template: "{{ text }}"
+    weight: 1
+  - path: "fixie-ai/peoples_speech"
+    name: "clean"
+    splits:
+      - "train" # 1_501_271 samples
+    user_template: "<|audio|>"
+    assistant_template: ""
+    transcript_template: "{{ text_proc.format_asr_text(text) }}"
+    weight: 8
+  - path: "fixie-ai/common_voice_17_0"
+    name: "en"
+    splits:
+      - "train" # 1_101_170 samples
+    user_template: "<|audio|>"
+    assistant_template: ""
+    transcript_template: "{{ text_proc.format_asr_text(sentence) }}"
+    weight: 8
+  - path: "fixie-ai/common_voice_17_0"
+    name: "ar"
+    splits:
+      - "train" # 28_369 samples
+    user_template: "<|audio|>"
+    assistant_template: ""
+    transcript_template: "{{ sentence }}"
+    weight: 0.2
+  - path: "fixie-ai/common_voice_17_0"
+    name: "de"
+    splits:
+      - "train" # 589_100 samples
+    user_template: "<|audio|>"
+    assistant_template: ""
+    transcript_template: "{{ sentence }}"
+    weight: 4
+  - path: "fixie-ai/common_voice_17_0"
+    name: "es"
+    splits:
+      - "train" # 336_846 samples
+    user_template: "<|audio|>"
+    assistant_template: ""
+    transcript_template: "{{ sentence }}"
+    weight: 3
+  - path: "fixie-ai/common_voice_17_0"
+    name: "fr"
+    splits:
+      - "train" # 558_054 samples
+    user_template: "<|audio|>"
+    assistant_template: ""
+    transcript_template: "{{ sentence }}"
+    weight: 4
+  - path: "fixie-ai/common_voice_17_0"
+    name: "it"
+    splits:
+      - "train" # 169_771 samples
+    user_template: "<|audio|>"
+    assistant_template: ""
+    transcript_template: "{{ sentence }}"
+    weight: 1.2
+  - path: "fixie-ai/common_voice_17_0"
+    name: "ja"
+    splits:
+      - "train" # 10_039 samples
+    user_template: "<|audio|>"
+    assistant_template: ""
+    transcript_template: "{{ sentence }}"
+    weight: 0.1
+  - path: "fixie-ai/common_voice_17_0"
+    name: "pt"
+    splits:
+      - "train" # 21_968 samples
+    user_template: "<|audio|>"
+    assistant_template: ""
+    transcript_template: "{{ sentence }}"
+    weight: 0.2
+  - path: "fixie-ai/common_voice_17_0"
+    name: "ru"
+    splits:
+      - "train" # 26_377 samples
+    user_template: "<|audio|>"
+    assistant_template: ""
+    transcript_template: "{{ sentence }}"
+    weight: 0.2
