@@ -16,6 +16,7 @@ from transformers.models.wav2vec2.configuration_wav2vec2 import Wav2Vec2Config
 from transformers.models.whisper import modeling_whisper as whisper
 from transformers.models.whisper.configuration_whisper import WhisperConfig
 
+from ultravox.utils import device_helpers
 # We must use relative import in this directory to allow uploading to HF Hub
 # Even "from . import X" pattern doesn't work (undocumented and unclear why)
 from .ultravox_config import AdapterType
@@ -1133,7 +1134,7 @@ class CFormerAdapter(UltravoxAdapter):
 
         # alphas is computed from the last element of hidden_states using a sigmoid function, and used to assign speech features to text/speech tokens.
         alphas = torch.sigmoid(hidden_states[:, :, -1])
-        local_rank = torch.distributed.get_rank()
+        local_rank = device_helpers.get_local_rank()
         print(f"local_rank: {local_rank}, alphas.shape: {alphas.shape}, attention_mask.shape: {attention_mask.shape}, hidden_states.shape: {hidden_states.shape}")
         alphas = alphas * attention_mask
         num_pred_audio_tokens = alphas.sum(-1)

@@ -204,7 +204,7 @@ class DataCollatorForSeq2SeqWithAudio(transformers.DataCollatorForSeq2Seq):
             batch["transcript_ids"] = torch.stack(
                 [F.pad(x, (0, max_len - x.shape[-1])) for x in transcript_ids]
             )
-        local_rank = torch.distributed.get_rank()
+        local_rank = device_helpers.get_local_rank()
         print(f"local_rank: {local_rank}, num_features: {len(features)}, batch.input_ids.shape: {batch['input_ids'].shape}, batch.audio_values.shape: {batch['audio_values'].shape}")
         return batch
 
