@@ -1065,7 +1065,7 @@ class CFormerAdapter(UltravoxAdapter):
             [B], device=device, dtype=hidden_states.dtype
         )  # reamining alpha value from recent firing
         token_index = torch.zeros(
-            [B], dtype=torch.long, device=device, dtype=hidden_states.dtype
+            [B], device=device, dtype=torch.long
         )  # num of fires that has happened
 
         # weights: B x max_num_tokens x T, weights[i, j, k] is the contribution of the k-th speech feature to the j-th text/speech token for the i-th sample
