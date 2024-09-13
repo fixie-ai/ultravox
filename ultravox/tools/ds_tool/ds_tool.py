@@ -220,13 +220,20 @@ class AudioExtensionTask:
 
     def _map_sample_repeat(self, sample):
         audio = sample[self.audio_column_name]
+        sentence = sample[self.asr_column_name]
+        translation = sample[self.translation_column_name]
+
         if isinstance(audio, dict):
             audio_data = audio["array"]
         else:
             raise ValueError(f"Unsupported audio format: {type(audio)}")
 
         repeated_audio = np.tile(audio_data, self.multiplier)
+        repeated_sentence = " ".join(sentence)
+        repeated_translation = " ".join(translation)
         sample[self.audio_column_name]["array"] = repeated_audio
+        sample[self.asr_column_name] = repeated_sentence
+        sample[self.translation_column_name] = repeated_translation
 
         return sample
 
