@@ -185,7 +185,10 @@ def train(args: config_base.TrainConfig):
 
     model.print_trainable_parameters()
 
-    # TODO: move to device if not fsdp or will trainer do this?
+    if not args.use_fsdp:
+        # Moving to device in FSDP is handled by the Trainer
+        model.to(device=torch.device(args.device, index=local_rank))
+        logging.info(f"Using device (world_size): {model.device} ({world_size})")
 
     # Prepare dataset, subsetting if needed
     train_dataset: data.IterableDataset
