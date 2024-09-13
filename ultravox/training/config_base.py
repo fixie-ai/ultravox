@@ -120,7 +120,7 @@ class TrainConfig:
 
         # HF Pipeline gets tripped up if the path has a "." in it
         self.output_dir = self.output_dir.replace(".", "--")
-        
+
         if self.logs_dir is None:
             self.logs_dir = self.output_dir / "logs"
 
