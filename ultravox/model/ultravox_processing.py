@@ -168,17 +168,17 @@ class UltravoxProcessor(transformers.ProcessorMixin):
                 sampling_rate=sampling_rate,
                 padding="longest",
                 max_length=num_audio_samples,
-                return_attention_mask=True,
                 **kwargs,
             )
             if "input_features" in x:
                 data["audio_values"] = x.input_features
             else:
                 data["audio_values"] = x.input_values
-            data["audio_len"] = [x.attention_mask.sum(-1)]
+            # Note: ideally we should compute audio_len from x.attention_mask, but the HF WhisperFeatureExtractor implementation of attention_mask is off by 1 
+            data["audio_len"] = [data["audio_values"].shape[-1]]
 
         if transcript:
-            if audio is not None and len(audio) > 0:
+            if audio is None or len(audio) == 0:
                 raise ValueError("audio must be provided when transcript is non-empty.")
             tokenized_transcript = self.tokenizer(
                 transcript, add_special_tokens=False, **kwargs

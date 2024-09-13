@@ -183,6 +183,7 @@ class DatasetConfig(BaseModel):
 class DataCollatorForSeq2SeqWithAudio(transformers.DataCollatorForSeq2Seq):
     def __call__(self, features, *args, **kwargs):
         audio_values = [f.pop("audio_values", None) for f in features]
+        transcript_ids = [f.pop("transcript_ids", None) for f in features]
 
         input_ids_lens = torch.LongTensor([f["input_ids"].shape[-1] for f in features])
         batch = super().__call__(features, *args, **kwargs)
@@ -195,9 +196,14 @@ class DataCollatorForSeq2SeqWithAudio(transformers.DataCollatorForSeq2Seq):
             )
             if self.tokenizer.padding_side == "left":
                 displacement = batch["input_ids"].shape[-1] - input_ids_lens
-                batch["audio_token_start_idx"] += displacement.to(
-                    batch["audio_token_start_idx"].device
+                batch["audio_start_idx"] += displacement.to(
+                    batch["audio_start_idx"].device
                 )
+        if transcript_ids and transcript_ids[0] is not None:
+            max_len = max([x.shape[-1] for x in transcript_ids])
+            batch["transcript_ids"] = torch.stack(
+                [F.pad(x, (0, max_len - x.shape[-1])) for x in transcript_ids]
+            )
 
         return batch
 

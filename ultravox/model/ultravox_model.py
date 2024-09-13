@@ -451,7 +451,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
                 audio_len
             )
 
-            audio_embeds, num_audio_tokens = self.adapter.forward(
+            audio_embeds, num_audio_tokens, num_pred_audio_tokens = self.adapter.forward(
                 audio_tower_output, audio_feature_len, transcript_len
             )
 
@@ -538,7 +538,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
                         transcript_len is not None
                     ), "transcript_len must be provided for computing CIF L1 loss"
                     losses[loss_fn] = F.l1_loss(
-                        num_audio_tokens / transcript_len,
+                        num_pred_audio_tokens / transcript_len,
                         torch.ones_like(transcript_len),
                         reduction="mean",
                     )
@@ -787,6 +787,14 @@ class ModifiedWhisperEncoder(whisper.WhisperEncoder):
 
     base_model_prefix = "model.encoder"
 
+    def _get_feat_extract_output_lengths(self, input_lengths: torch.LongTensor):
+        """
+        Computes the output length of the convolutional layers
+        """
+        input_lengths = (input_lengths - 1) // 2 + 1
+
+        return input_lengths
+
     def forward(
         self,
         input_features,
@@ -903,7 +911,7 @@ class RMSNorm(transformers.models.llama.modeling_llama.LlamaRMSNorm):
 
 
 # currently attention_mask is not yet implemented in the forward method
-class UltravoxAdapter(nn.Module, transformers.modeling_utils.ModelMixin):
+class UltravoxAdapter(nn.Module, transformers.modeling_utils.ModuleUtilsMixin):
     def __init__(self, config: UltravoxConfig) -> None:
         super().__init__()
         audio_config: Union[Wav2Vec2Config, WhisperConfig] = config.audio_config
@@ -922,8 +930,8 @@ class UltravoxAdapter(nn.Module, transformers.modeling_utils.ModelMixin):
         audio_features: torch.Tensor,
         num_frames: torch.Tensor,
         num_text_tokens: Optional[torch.Tensor] = None,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        raise NotImplementedError("Subclasses must implement this method")
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        raise NotImplementedError("Subclasses must implement this method to return a tuple of (hidden_states, num_audio_tokens, num_pred_audio_tokens)")
 
     def project_to_text(self, hidden_states):
         hidden_states = self.post_ln(hidden_states)
@@ -967,20 +975,20 @@ class StackingAdapter(UltravoxAdapter):
     def __init__(self, config: UltravoxConfig):
         super().__init__(config)
 
-        self.adapter_config = UltravoxStackingAdapterConfig(**config.adapter_config)
+        self.config = UltravoxStackingAdapterConfig(**config.adapter_config)
 
-        self._pad_and_stack = StackAudioFrames(self.adapter_config.stack_factor)
-        stacked_size = self.input_size * self.adapter_config.stack_factor
+        self._pad_and_stack = StackAudioFrames(self.config.stack_factor)
+        stacked_size = self.input_size * self.config.stack_factor
         self.ln_pre = RMSNorm(stacked_size, init=config.norm_init)
         # swiglu reduces dimension by 2, so we double it here before swigu to keep effective hidden size consistent.
         intermediate_size = (
             self.hidden_size * 2
-            if self.adapter_config.activation == "swiglu"
+            if self.config.activation == "swiglu"
             else self.hidden_size
         )
         self.linear_1 = nn.Linear(stacked_size, intermediate_size, bias=False)
         self.act = transformers.activations.get_activation(
-            self.adapter_config.activation
+            self.config.activation
         )
 
     def forward(
@@ -996,17 +1004,17 @@ class StackingAdapter(UltravoxAdapter):
         hidden_states = self.linear_1(hidden_states)
         hidden_states = self.act(hidden_states)
         hidden_states = self.project_to_text(hidden_states)
-        return hidden_states, num_audio_tokens
+        return hidden_states, num_audio_tokens, num_audio_tokens
 
 
 class CFormerAdapter(UltravoxAdapter):
     def __init__(self, config: UltravoxConfig):
         super().__init__(config)
 
-        adapter_config = UltravoxCFormerAdapterConfig(**config.adapter_config)
+        self.config = UltravoxCFormerAdapterConfig(**config.adapter_config)
 
-        self.num_pre_cif_layers = adapter_config.num_pre_cif_layers
-        self.num_post_cif_layers = adapter_config.num_post_cif_layers
+        self.num_pre_cif_layers = self.config.num_pre_cif_layers
+        self.num_post_cif_layers = self.config.num_post_cif_layers
 
         if self.num_pre_cif_layers or self.num_post_cif_layers:
             if config.audio_config.model_type == "whisper":
@@ -1122,39 +1130,39 @@ class CFormerAdapter(UltravoxAdapter):
         # alphas is computed from the last element of hidden_states using a sigmoid function, and used to assign speech features to text/speech tokens.
         alphas = torch.sigmoid(hidden_states[:, :, -1])
         alphas = alphas * attention_mask
-        num_audio_tokens = alphas.sum(-1)
+        num_pred_audio_tokens = alphas.sum(-1)
 
         if self.training:
             if num_text_tokens is None:
                 raise ValueError(
                     "num_required_audio_tokens must be provided in training mode"
                 )
+            num_audio_tokens = num_text_tokens
         else:
             # num_tokens is determined by accumulated predicted alpha values in inference mode
-            num_text_tokens = torch.round(num_audio_tokens).int()
+            num_audio_tokens = torch.round(num_pred_audio_tokens).int()
             # force the number of predicted tokens to be at least 1 in non-streaming mode
             # this will break streaming mode and needs to be updated
-            num_text_tokens[num_text_tokens < 1] = 1
-            num_audio_tokens = num_text_tokens
+            num_audio_tokens[num_audio_tokens < 1] = 1
 
         # scale alphas so that the sum of alphas is equal to num_tokens
-        alphas = alphas * (num_text_tokens / num_audio_tokens)[:, None].repeat(1, T)
+        alphas = alphas * (num_audio_tokens / num_pred_audio_tokens)[:, None].repeat(1, T)
 
         # remove the last element of hidden_states and apply CIF mechanism
         hidden_states = self.forward_cif(
-            hidden_states[:, :, :-1], alphas, num_text_tokens
+            hidden_states[:, :, :-1], alphas, num_audio_tokens
         )
         # project back to self.hidden_size
         hidden_states = self.cif_proj(hidden_states)
         # Create attention mask based on num_tokens
         attention_mask = (
             torch.arange(hidden_states.size(1), device=hidden_states.device)[None, :]
-            < num_text_tokens[:, None]
+            < num_audio_tokens[:, None]
         )
         attention_mask = attention_mask.to(dtype=hidden_states.dtype)
         extended_attention_mask = self.get_extended_attention_mask(
             attention_mask,
-            num_text_tokens.shape,
+            num_audio_tokens.shape,
             attention_mask.device,
             attention_mask.dtype,
         )
@@ -1163,7 +1171,7 @@ class CFormerAdapter(UltravoxAdapter):
 
         hidden_states = self.project_to_text(hidden_states)
 
-        return hidden_states, num_audio_tokens
+        return hidden_states, num_audio_tokens, num_pred_audio_tokens
 
 
 transformers.activations.ACT2FN["swiglu"] = SwiGLU

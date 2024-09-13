@@ -72,6 +72,7 @@ class UltravoxCFormerAdapterConfig:
 
     num_pre_cif_layers: int = 2
     num_post_cif_layers: int = 2
+    is_decoder: bool = False
 
 
 @dataclasses.dataclass
@@ -84,6 +85,7 @@ class UltravoxStackingAdapterConfig:
 
     stack_factor: int = 8
     activation: str = "swiglu"
+    is_decoder: bool = False
 
 
 ADAPTER_CONFIG_MAP: Dict[AdapterType, Any] = {

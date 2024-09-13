@@ -65,7 +65,8 @@ class UltravoxDataproc(datasets.Dataproc):
         if "audio_values" in inputs:
             inputs["audio_values"].squeeze_(0)
             inputs["audio_len"].squeeze_(0)
-            inputs["transcript_start_idx"].squeeze_(0)
+            inputs["audio_start_idx"].squeeze_(0)
+            inputs["transcript_ids"].squeeze_(0)
             inputs["transcript_len"].squeeze_(0)
 
         # No need to shift the labels as the model does it internally
