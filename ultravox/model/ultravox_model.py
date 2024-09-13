@@ -51,8 +51,8 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         self.vocab_size = config.vocab_size
 
         self.audio_tower = self._create_audio_tower(config)
-        self.audio_tower_context_length = None
-        if "whisper" in config.audio_model_id is not None:
+        self.audio_tower_context_length: Optional[int] = None
+        if config.audio_model_id is not None and "whisper" in config.audio_model_id:
             self.audio_tower_context_length = 3000
 
         self.multi_modal_projector = UltravoxProjector(config)
@@ -186,11 +186,13 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         if audio_values is not None:
 
             assert (
-                audio_token_start_idx is not None and audio_token_len is not None
-            ), "audio_token_start_idx and audio_token_len must be provided if audio_values are provided."
+                audio_token_start_idx is not None
+                and audio_token_len is not None
+                and batch_size is not None
+            ), "audio_token_start_idx and audio_token_len and batch_size must be provided if audio_values are provided."
             assert (
                 len(audio_token_start_idx) == len(audio_token_len) == len(batch_size)
-            ), "audio_token_start_idx and audio_token_len must have the same batch size."
+            ), "audio_token_start_idx and audio_token_len and batch_size must have the same batch size."
 
             audio_tower_output = self.audio_tower.forward(
                 audio_values

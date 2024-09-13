@@ -1,4 +1,4 @@
-from typing import Optional, Union
+from typing import Any, Dict, Optional, Union
 
 import numpy as np
 import torch
@@ -134,7 +134,7 @@ class UltravoxProcessor(transformers.ProcessorMixin):
             - **audio_token_start_idx** -- The index in the tokenized text where the audio starts. Returned when `audio` is not `None`.
         """
         # TODO: Add support for multiple audio and text inputs.
-        data = {}
+        data: Dict[str, Any] = {}
         audio_embed_frames = 0
         if audio is not None and len(audio) > 0:
             if self.audio_padding == "max_length":
@@ -164,14 +164,20 @@ class UltravoxProcessor(transformers.ProcessorMixin):
             else:
                 audio_values = x.input_values
 
-            audio_values = torch.from_numpy(audio_values)
-            if audio_context_size and audio_values.shape[2] > audio_context_size:
+            audio_values = torch.tensor(audio_values)
+            print("audio values shape", audio_values.shape)
+            print("audio_context_size", audio_context_size)
+            if audio_context_size and audio_values.shape[-1] > audio_context_size:
                 audio_values_chunks = list(
-                    torch.split(audio_values, audio_context_size, dim=2)
+                    torch.split(
+                        audio_values,
+                        audio_context_size,
+                        dim=len(audio_values.shape) - 1,
+                    )
                 )
                 # Pad the last chunk to match audio_context_size
                 last_chunk = audio_values_chunks[-1]
-                pad_size = audio_context_size - last_chunk.shape[2]
+                pad_size = audio_context_size - last_chunk.shape[-1]
                 if pad_size > 0:
                     # Pad only the last dimension (T) in B,D,T format
                     audio_values_chunks[-1] = F.pad(
@@ -180,7 +186,7 @@ class UltravoxProcessor(transformers.ProcessorMixin):
             else:
                 audio_values_chunks = [audio_values]
 
-            data["audio_values"] = torch.cat(audio_values_chunks, dim=0)
+            data["audio_values"] = torch.cat(audio_values_chunks)
             num_audio_chunks = data["audio_values"].shape[0]
 
             data["batch_size"] = [num_audio_chunks]
