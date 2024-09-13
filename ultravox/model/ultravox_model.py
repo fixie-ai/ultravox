@@ -57,8 +57,8 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         # Determine no_split_modules dynamically to use with FSDP auto_wrap policy.
         # FSDP throws an error if some of the layer types are not found in the model.
         # This would be something like ["LlamaDecoderLayer", "WhisperEncoderLayer"]
-        self._no_split_modules = (
-            self.language_model._no_split_modules + self.audio_tower._no_split_modules
+        self._no_split_modules = (self.language_model._no_split_modules or []) + (
+            self.audio_tower._no_split_modules or []
         )
 
         self.loss_config = LossConfig()
