@@ -223,21 +223,23 @@ class AudioExtensionTask:
         sentence = sample[self.asr_column_name]
         translation = sample[self.translation_column_name]
 
-        if isinstance(audio, dict):
-            audio_data = audio["array"]
-        else:
+        if not isinstance(audio, dict) or "array" not in audio:
             raise ValueError(f"Unsupported audio format: {type(audio)}")
 
+        audio_data = audio["array"]
         repeated_audio = np.tile(audio_data, self.multiplier)
         repeated_sentence = " ".join([sentence] * self.multiplier)
         repeated_translation = " ".join([translation] * self.multiplier)
 
-        new_sample = {}
-        new_sample[self.audio_column_name]["array"] = repeated_audio
-        new_sample[self.audio_column_name].pop("path")
-        new_sample[self.asr_column_name] = repeated_sentence
-        new_sample[self.translation_column_name] = repeated_translation
-        new_sample[self.id_column_name] = sample[self.id_column_name]
+        new_audio = {key: value for key, value in audio.items() if key != "path"}
+        new_audio["array"] = repeated_audio
+
+        new_sample = {
+            self.audio_column_name: new_audio,
+            self.asr_column_name: repeated_sentence,
+            self.translation_column_name: repeated_translation,
+            self.id_column_name: sample[self.id_column_name],
+        }
 
         return new_sample
 
