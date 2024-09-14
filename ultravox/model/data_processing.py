@@ -93,6 +93,6 @@ class UltravoxDataproc(datasets.Dataproc):
         inputs["labels"] = labels
 
         return {
-            # input_ids, attention_mask, labels, audio_values, audio_token_start_idx, audio_token_len
+            # input_ids, attention_mask, labels, audio_values, audio_len, audio_start_idx, transcript_ids, transcript_len
             **inputs,
         }

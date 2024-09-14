@@ -1,8 +1,10 @@
 from dataclasses import dataclass
 from typing import Optional
 
+
 import gradio as gr
 import simple_parsing
+import warnings
 
 from ultravox.data import datasets
 from ultravox.inference import base as infer_base
@@ -26,7 +28,7 @@ class DemoConfig:
     # model_path: str = "artifacts/model-zhuang_2024-08-12-ultravox_input_kd-1b:v4"
     # model_path: str = "wandb://fixie/ultravox/model-zhuang_2024-08-12-ultravox_input_kd-1b:v13"
     model_path: str = (
-        "wandb://fixie/ultravox/model-zhuang_2024-08-12-ultravox_input_kd-1c:v2"
+        "wandb://fixie/ultravox/model-zhuang.2024-08-12-ultravox.input_kd-1d:v1"
     )
     device: Optional[str] = "cpu"
     data_type: Optional[str] = None
@@ -34,6 +36,13 @@ class DemoConfig:
     max_new_tokens: int = 200
     temperature: float = 0
 
+    def __post_init__(self):
+        if self.device == "mps":
+            warnings.warn(
+                "MPS is not supported as its torch.scatter_* implementation is buggy."
+                "Replacing device with CPU."
+            )
+            self.device = "cpu"
 
 args = simple_parsing.parse(config_class=DemoConfig)
 # This script will get loaded from both the python runtime as well as gradio's reloader,

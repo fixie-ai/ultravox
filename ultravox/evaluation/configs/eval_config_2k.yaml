@@ -1,4 +1,4 @@
-model: "fixie-ai/ultravox-v0_4"
+model: "wandb://fixie/ultravox/model-zhuang.2024-08-12-ultravox.input_kd-1d:v1"
 report_logs_to: ["wandb"]
 output_dir: "./output"
 eval_dataset_args:
