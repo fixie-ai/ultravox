@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 import dataclasses
 import datetime
+import logging
 import os
 import sys
 from pathlib import Path
 from typing import List, Optional
-import logging
 
 import simple_parsing
 import torch
@@ -20,6 +20,7 @@ from ultravox.utils import device_helpers
 from ultravox.utils import string_helpers
 
 logging.basicConfig(level=logging.INFO)
+
 
 @dataclasses.dataclass
 class EvalArgs:

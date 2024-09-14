@@ -1,10 +1,9 @@
+import warnings
 from dataclasses import dataclass
 from typing import Optional
 
-
 import gradio as gr
 import simple_parsing
-import warnings
 
 from ultravox.data import datasets
 from ultravox.inference import base as infer_base
@@ -43,6 +42,7 @@ class DemoConfig:
                 "Replacing device with CPU."
             )
             self.device = "cpu"
+
 
 args = simple_parsing.parse(config_class=DemoConfig)
 # This script will get loaded from both the python runtime as well as gradio's reloader,

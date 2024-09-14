@@ -26,8 +26,8 @@ from torch.utils import data
 
 from ultravox.data import text_proc
 from ultravox.evaluation.eval_types import EvalConfig
-from ultravox.utils import string_helpers
 from ultravox.utils import device_helpers
+from ultravox.utils import string_helpers
 
 SAMPLE_RATE = 16000
 
@@ -375,7 +375,7 @@ class VoiceDataset(SizedIterableDataset):
         if device_helpers.get_local_rank() == 0:
             logging.info(
                 f"Created VoiceDataset with config:\n{self._config.model_dump_json(indent=2)}"
-        )
+            )
 
     @property
     def weight(self) -> float:
