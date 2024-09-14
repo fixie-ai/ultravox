@@ -326,25 +326,25 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
 
     def _compute_kl_loss(
         self,
-        audio_output: transformers.modeling_outputs.CausalLMOutputWithPast,
-        transcript_output: transformers.modeling_outputs.CausalLMOutputWithPast,
-        audio_labels: torch.Tensor,
-        audio_start_idx: Optional[torch.Tensor] = None,
-        audio_len: Optional[torch.Tensor] = None,
-        transcript_labels: Optional[torch.Tensor] = None,
-        transcript_len: Optional[torch.Tensor] = None,
+        student_output: transformers.modeling_outputs.CausalLMOutputWithPast,
+        teacher_output: transformers.modeling_outputs.CausalLMOutputWithPast,
+        student_labels: torch.Tensor,
+        teacher_labels: Optional[torch.Tensor] = None,
+        student_input_len: Optional[torch.Tensor] = None,
+        teacher_input_len: Optional[torch.Tensor] = None,
+        input_start_idx: Optional[torch.Tensor] = None,
     ) -> Dict[LossFunction, torch.Tensor]:
         losses: Dict[LossFunction, torch.Tensor] = {}
         # compute the KL divergence loss between the two models
         if LossFunction.Response_KL in self.loss_config.loss_weights:
             loss = F.kl_div(
                 F.log_softmax(
-                    audio_output.logits[audio_labels != -100]
+                    student_output.logits[student_labels != -100]
                     / self.loss_config.kl_temperature,
                     dim=-1,
                 ),
                 F.softmax(
-                    transcript_output.logits[transcript_labels != -100]
+                    teacher_output.logits[teacher_labels != -100]
                     / self.loss_config.kl_temperature,
                     dim=-1,
                 ),
@@ -353,34 +353,34 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             losses[LossFunction.Response_KL] = loss
         if (
             LossFunction.Input_KL in self.loss_config.loss_weights
-            and audio_len is not None
+            and student_input_len is not None
         ):
-            if audio_start_idx is None or transcript_len is None:
+            if input_start_idx is None or teacher_input_len is None:
                 raise ValueError(
                     "audio_labels, audio_start_idx, and transcript_len must be provided for computing input KL loss"
                 )
 
             # Check that audio_len equals transcript_len
-            if not torch.all(torch.eq(audio_len, transcript_len)):
+            if not torch.all(torch.eq(student_input_len, teacher_input_len)):
                 raise ValueError(
                     "audio_len must be equal to transcript_len for all samples in the batch for computing input KL loss"
                 )
             # compute the KL divergence loss for audio tokens
             audio_mask = (
-                audio_start_idx.unsqueeze(1)
-                <= torch.arange(audio_labels.size(1), device=audio_labels.device)
+                input_start_idx.unsqueeze(1)
+                <= torch.arange(student_labels.size(1), device=student_labels.device)
             ) & (
-                audio_start_idx.unsqueeze(1) + audio_len.unsqueeze(1)
-                > torch.arange(audio_labels.size(1), device=audio_labels.device)
+                input_start_idx.unsqueeze(1) + student_input_len.unsqueeze(1)
+                > torch.arange(student_labels.size(1), device=student_labels.device)
             )
 
             loss = F.kl_div(
                 F.log_softmax(
-                    audio_output.logits[audio_mask] / self.loss_config.kl_temperature,
+                    student_output.logits[audio_mask] / self.loss_config.kl_temperature,
                     dim=-1,
                 ),
                 F.softmax(
-                    transcript_output.logits[audio_mask]
+                    teacher_output.logits[audio_mask]
                     / self.loss_config.kl_temperature,
                     dim=-1,
                 ),
@@ -520,13 +520,13 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
                         **kwargs,
                     )
                 kl_loss = self._compute_kl_loss(
-                    audio_output=lm_output,
-                    audio_labels=labels,
-                    audio_start_idx=audio_start_idx,
-                    audio_len=num_audio_tokens,
-                    transcript_output=teacher_lm_output,
-                    transcript_labels=teacher_labels,
-                    transcript_len=transcript_len,
+                    student_output=lm_output,
+                    teacher_output=teacher_lm_output,
+                    student_labels=labels,
+                    teacher_labels=teacher_labels,
+                    student_input_len=num_audio_tokens,
+                    teacher_input_len=transcript_len,
+                    input_start_idx=audio_start_idx,
                 )
             for loss_fn, _ in self.loss_config.loss_weights.items():
                 if loss_fn == LossFunction.Response_CE:

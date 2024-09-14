@@ -14,7 +14,7 @@ grad_accum_steps: 1
 lr_warmup_steps: 1000
 max_steps: 10_000
 
-save_steps: 0.25
+save_steps: 0.1
 logging_steps: 100
 
 report_logs_to: ["tensorboard", "wandb"]

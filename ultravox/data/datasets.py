@@ -414,7 +414,8 @@ class VoiceDataset(SizedIterableDataset):
             )
         else:
             dataset = datasets.load_dataset(
-                path, name, split=split, trust_remote_code=True, streaming=streaming
+                path, name, split=split, trust_remote_code=True, streaming=streaming,
+                download_config=datasets.DownloadConfig(max_retries=100)
             )
             for column_name in self._base_audio_columns:
                 dataset = dataset.cast_column(
