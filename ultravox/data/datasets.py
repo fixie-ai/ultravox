@@ -204,8 +204,6 @@ class DataCollatorForSeq2SeqWithAudio(transformers.DataCollatorForSeq2Seq):
             batch["transcript_ids"] = torch.stack(
                 [F.pad(x, (0, max_len - x.shape[-1])) for x in transcript_ids]
             )
-        local_rank = device_helpers.get_local_rank()
-        print(f"local_rank: {local_rank}, num_features: {len(features)}, batch.input_ids.shape: {batch['input_ids'].shape}, batch.audio_values.shape: {batch['audio_values'].shape}")
         return batch
 
 
@@ -373,6 +371,9 @@ class VoiceDataset(SizedIterableDataset):
         self._base_audio_columns = (
             [self._config.audio_field] if self._config.audio_field else []
         )
+        logging.info(
+            f"Created VoiceDataset with config:\n{self._config.model_dump_json(indent=2)}"
+        )
 
     @property
     def weight(self) -> float:
@@ -390,7 +391,6 @@ class VoiceDataset(SizedIterableDataset):
         shuffle: Optional[bool] = None,
         streaming: bool = True,
     ) -> data.Dataset:
-        logging.info(f"Loading dataset {path} {name} {split} {shuffle} {streaming}")
         if shuffle is None:
             shuffle = self._args.shuffle
         if self._args.use_mds:

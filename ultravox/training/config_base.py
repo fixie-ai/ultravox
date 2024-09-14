@@ -99,6 +99,9 @@ class TrainConfig:
     Path to load pretrained ultravox model from. Can be local path, HF hub model_id, or W&B artifact.
     """
 
+    resume_from_checkpoint: Optional[bool] = False
+    """Whether to resume from checkpoint, specified by model_load_dir."""
+
     text_model_lora_config: Optional[ultravox_config.LoraConfigSimplified] = None
     """LoRA configuration for the text model."""
 
@@ -224,3 +227,8 @@ class TrainConfig:
         if self.loss_config is None:
             self.loss_config = ultravox_config.LossConfig()
         self.loss_config.add_adapter_losses(self.adapter_type)
+
+        if self.resume_from_checkpoint and self.model_load_dir is None:
+            raise ValueError(
+                "resume_from_checkpoint=True requires model_load_dir to be specified"
+            )

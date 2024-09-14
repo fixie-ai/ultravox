@@ -1,6 +1,0 @@
-# SLM with ultravox & llama3
-exp_name: "llama3_whisper_s"
-
-# Make sure to accept the license agreement on huggingface hub
-text_model: "meta-llama/Meta-Llama-3-8B-Instruct"
-audio_model: "openai/whisper-small"

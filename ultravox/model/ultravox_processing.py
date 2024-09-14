@@ -166,7 +166,7 @@ class UltravoxProcessor(transformers.ProcessorMixin):
                 data["audio_values"] = x.input_features
             else:
                 data["audio_values"] = x.input_values
-            # Note: ideally we should compute audio_len from x.attention_mask, but the HF WhisperFeatureExtractor implementation of attention_mask is off by 1 
+            # Note: ideally we should compute audio_len from x.attention_mask, but the HF WhisperFeatureExtractor implementation of attention_mask is off by 1
             data["audio_len"] = [data["audio_values"].shape[-1]]
 
             if transcript:

@@ -30,7 +30,6 @@ def flatten(data: List[List[T]]) -> List[T]:
 
 
 def all_gather_list(data: List[T]) -> List[T]:
-    local_rank = torch.distributed.get_rank()
     if not torch.distributed.is_initialized():
         return data
     world_size = torch.distributed.get_world_size()

@@ -1,14 +1,9 @@
 import dataclasses
-<<<<<<< HEAD
 from typing import Any, Dict, List, Optional, Union
-=======
-from typing import Dict, List, Optional, Union
->>>>>>> d4ef647 (Update)
 
 import dataclasses_json
 from pydantic import BaseModel
 
-<<<<<<< HEAD
 
 class EvalConfig(BaseModel):
     metric: str
@@ -17,12 +12,6 @@ class EvalConfig(BaseModel):
     class Config:
         extra = "forbid"
         # do not allow undefined parameters
-=======
->>>>>>> d4ef647 (Update)
-
-class EvalConfig(BaseModel):
-    metric: str
-    args: Optional[Dict[str, str]] = dataclasses.field(default_factory=dict)
 
 
 @dataclasses.dataclass
@@ -31,11 +20,7 @@ class Sample(dataclasses_json.DataClassJsonMixin):
     question: str
     hypothesis: str
     reference: str
-<<<<<<< HEAD
     history: List[Dict[str, Any]] = dataclasses.field(default_factory=list)
-=======
-    history: List[Dict[str, str]] = dataclasses.field(default_factory=list)
->>>>>>> ca4e476 (Update)
 
 
 @dataclasses.dataclass

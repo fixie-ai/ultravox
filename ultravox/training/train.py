@@ -155,6 +155,7 @@ def train(args: config_base.TrainConfig):
             save_code=True,
         )
 
+    resume_from_checkpoint = None
     if args.model_load_dir:
         logging.info(f"Loading model state dict from {args.model_load_dir}")
         load_path = args.model_load_dir
@@ -162,6 +163,8 @@ def train(args: config_base.TrainConfig):
             # Download the model from W&B. The main process should do the download while the others wait.
             with ddp_utils.run_on_master_first(is_master):
                 load_path = wandb_utils.download_model_from_wandb(load_path)
+        if args.resume_from_checkpoint:
+            resume_from_checkpoint = load_path
         if os.path.isdir(load_path):
             load_path = os.path.join(load_path, "model*.safetensors")
         paths = glob.glob(load_path)
@@ -195,7 +198,6 @@ def train(args: config_base.TrainConfig):
         stop_strategy=args.stop_strategy,
         processor=processor,
         data_args=args.train_dataset_args,
-        include_alt_fields=model.loss_config.requires_alt_fields,
     )
     if is_master:
         val_datasets = {
@@ -206,7 +208,6 @@ def train(args: config_base.TrainConfig):
                 stop_strategy=args.stop_strategy,
                 processor=processor,
                 data_args=args.val_dataset_args,
-                include_alt_fields=model.loss_config.requires_alt_fields,
             )
             for dataset_config in args.val_dataset_configs
         }
@@ -252,6 +253,7 @@ def train(args: config_base.TrainConfig):
             # TODO (Farzad): reconsider for multi-node
             # In DDP world_size is set to num_gpus and we want process-0 to split the batches
             per_device_train_batch_size=args.train_dataset_args.batch_size * world_size,
+            per_device_eval_batch_size=args.val_dataset_args.batch_size * world_size,
             accelerator_config={"split_batches": True},
             gradient_accumulation_steps=args.grad_accum_steps,
             eval_accumulation_steps=args.val_accum_steps,
@@ -266,6 +268,7 @@ def train(args: config_base.TrainConfig):
             use_cpu=args.device == "cpu",
             seed=args.seed + local_rank,
             report_to=args.report_logs_to,
+            resume_from_checkpoint=resume_from_checkpoint,
             # torch_compile=True,
             # fsdp="full_shard auto_wrap",
             # fsdp_transformer_layer_cls_to_wrap='LlamaDecoderLayer',

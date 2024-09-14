@@ -22,7 +22,6 @@ def default_dtype():
     )
 
 
-<<<<<<< HEAD
 def default_dtype_str():
     return (
         "bfloat16"
@@ -31,8 +30,6 @@ def default_dtype_str():
     )
 
 
-=======
->>>>>>> d4ef647 (Update)
 def get_dtype(data_type: Optional[str] = None):
     if data_type is None:
         return default_dtype()

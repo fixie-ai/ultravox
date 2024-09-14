@@ -16,7 +16,6 @@ from transformers.models.wav2vec2.configuration_wav2vec2 import Wav2Vec2Config
 from transformers.models.whisper import modeling_whisper as whisper
 from transformers.models.whisper.configuration_whisper import WhisperConfig
 
-from ultravox.utils import device_helpers
 # We must use relative import in this directory to allow uploading to HF Hub
 # Even "from . import X" pattern doesn't work (undocumented and unclear why)
 from .ultravox_config import AdapterType
@@ -111,7 +110,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
     def _track_and_log_losses(
         self,
         losses: Dict[LossFunction, torch.Tensor],
-        total_loss: torch.Tensor,
+        total_loss: float,
     ):
         """
         Track losses over multiple steps and log them at regular intervals.
@@ -123,7 +122,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         # Accumulate losses
         for loss_fn, value in losses.items():
             self.accumulated_losses[loss_fn] += value.item()
-        self.accumulated_losses["total"] += total_loss.item()
+        self.accumulated_losses["total"] += total_loss
 
         self.step_counter += 1
 
@@ -452,8 +451,10 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
                 audio_len
             )
 
-            audio_embeds, num_audio_tokens, num_pred_audio_tokens = self.adapter.forward(
-                audio_tower_output, audio_feature_len, transcript_len
+            audio_embeds, num_audio_tokens, num_pred_audio_tokens = (
+                self.adapter.forward(
+                    audio_tower_output, audio_feature_len, transcript_len
+                )
             )
 
             inputs_embeds, attention_mask, labels, position_ids, cache_position = (
@@ -551,9 +552,12 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
                 weight * losses[loss_fn]
                 for loss_fn, weight in self.loss_config.loss_weights.items()
             )
+            assert isinstance(
+                total_loss, torch.Tensor
+            ), f"total_loss is not a tensor: {total_loss}"
 
             # Track and log losses
-            self._track_and_log_losses(losses, total_loss)
+            self._track_and_log_losses(losses, total_loss.item())
 
             lm_output.loss = total_loss
         return lm_output
@@ -788,7 +792,7 @@ class ModifiedWhisperEncoder(whisper.WhisperEncoder):
 
     base_model_prefix = "model.encoder"
 
-    def _get_feat_extract_output_lengths(self, input_lengths: torch.LongTensor):
+    def _get_feat_extract_output_lengths(self, input_lengths: torch.Tensor):
         """
         Computes the output length of the convolutional layers
         """
@@ -932,7 +936,9 @@ class UltravoxAdapter(nn.Module, transformers.modeling_utils.ModuleUtilsMixin):
         num_frames: torch.Tensor,
         num_text_tokens: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        raise NotImplementedError("Subclasses must implement this method to return a tuple of (hidden_states, num_audio_tokens, num_pred_audio_tokens)")
+        raise NotImplementedError(
+            "Subclasses must implement this method to return a tuple of (hidden_states, num_audio_tokens, num_pred_audio_tokens)"
+        )
 
     def project_to_text(self, hidden_states):
         hidden_states = self.post_ln(hidden_states)
@@ -988,16 +994,14 @@ class StackingAdapter(UltravoxAdapter):
             else self.hidden_size
         )
         self.linear_1 = nn.Linear(stacked_size, intermediate_size, bias=False)
-        self.act = transformers.activations.get_activation(
-            self.config.activation
-        )
+        self.act = transformers.activations.get_activation(self.config.activation)
 
     def forward(
         self,
         audio_features: torch.Tensor,
         num_frames: torch.Tensor,
         num_text_tokens: Optional[torch.Tensor] = None,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         hidden_states, num_audio_tokens = self._pad_and_stack(
             audio_features, num_frames
         )
@@ -1117,7 +1121,7 @@ class CFormerAdapter(UltravoxAdapter):
         audio_features: torch.Tensor,
         num_frames: torch.Tensor,
         num_text_tokens: Optional[torch.Tensor] = None,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # num_required_audio_tokens needs to be provided in the training mode as it's used for scaling alphas
         # in inference mode, num_required_audio_tokens is None as input and is determined by the accumulated predicted alpha values
 
@@ -1128,14 +1132,11 @@ class CFormerAdapter(UltravoxAdapter):
             audio_features.shape[1], device=hidden_states.device
         ) < num_frames.unsqueeze(1)
 
-
         for layer in self.pre_cif_layers:
             hidden_states = layer(hidden_states, None, None)[0]
 
         # alphas is computed from the last element of hidden_states using a sigmoid function, and used to assign speech features to text/speech tokens.
         alphas = torch.sigmoid(hidden_states[:, :, -1])
-        local_rank = device_helpers.get_local_rank()
-        print(f"local_rank: {local_rank}, alphas.shape: {alphas.shape}, attention_mask.shape: {attention_mask.shape}, hidden_states.shape: {hidden_states.shape}")
         alphas = alphas * attention_mask
         num_pred_audio_tokens = alphas.sum(-1)
 
@@ -1153,7 +1154,9 @@ class CFormerAdapter(UltravoxAdapter):
             num_audio_tokens[num_audio_tokens < 1] = 1
 
         # scale alphas so that the sum of alphas is equal to num_tokens
-        alphas = alphas * (num_audio_tokens / num_pred_audio_tokens)[:, None].repeat(1, T).to(dtype=hidden_states.dtype)
+        alphas = alphas * (num_audio_tokens / num_pred_audio_tokens)[:, None].repeat(
+            1, T
+        ).to(dtype=hidden_states.dtype)
 
         # remove the last element of hidden_states and apply CIF mechanism
         hidden_states = self.forward_cif(

@@ -6,6 +6,7 @@ import sacrebleu
 
 from ultravox.evaluation import eval_types
 
+
 def wer(sample: eval_types.Sample):
     transforms = jiwer.Compose(
         [

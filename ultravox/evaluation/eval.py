@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import json
 import logging
 import os
@@ -8,33 +7,13 @@ from tqdm import tqdm
 
 from ultravox.data import datasets
 from ultravox.evaluation import eval_helpers
-=======
-from typing import List
-
->>>>>>> d4ef647 (Update)
 from ultravox.evaluation import eval_types
-<<<<<<< HEAD
 from ultravox.inference import infer
 from ultravox.training import ddp_utils
-=======
-from ultravox.evaluation import gpt_eval_boolq
-from ultravox.evaluation import gpt_eval_conv
-from ultravox.evaluation import gpt_eval_instruct
-from ultravox.evaluation import string_based
-from ultravox.evaluation import wer
 
-METRIC_REGISTRY = {
-    "asr": wer.evaluate_answer_asr,
-    "boolq": gpt_eval_boolq.evaluate_answer_boolq,
-    "instruct": gpt_eval_instruct.evaluate_answer_instruct,
-    "conversation": gpt_eval_conv.evaluate_conversation_response,
-    "exact_match_last_word": string_based.match_last_word,
-    "bleu": string_based.bleu,
-}
->>>>>>> ca4e476 (Update)
+logging.basicConfig(level=logging.INFO)
 
 
-<<<<<<< HEAD
 def dataset_infer(
     inference: infer.LocalInference,
     dataset: datasets.SizedIterableDataset,
@@ -118,8 +97,8 @@ def run_infer(
                 eval_result: eval_types.Result = eval_helpers.evaluate_answers(
                     results, dataset_config.eval_config
                 )
-                print(
-                    f"Dataset: {dataset_alias}, Metric: {dataset_config.eval_config.metric}, Score: {eval_result.score:.2f}"
+                logging.info(
+                    f"Eval: {dataset_alias}, {dataset_config.eval_config.metric}: {eval_result.score:.2f}"
                 )
 
                 metrics[f"eval_{dataset_alias}-{dataset_config.eval_config.metric}"] = (
@@ -134,19 +113,3 @@ def run_infer(
                 print(f"Results saved to {output_file}")
                 output_files.append(output_file)
     return metrics, output_files
-=======
-def evaluate_answer(sample: eval_types.Sample, metric: str) -> eval_types.Result:
-    if metric in METRIC_REGISTRY:
-        return METRIC_REGISTRY[metric](sample)
-    else:
-        raise ValueError(f"Unknown metric: {metric}")
-
-
-def evaluate_answers(
-    samples: List[eval_types.Sample], metric_config: eval_types.EvalConfig
-) -> eval_types.Result:
-    if metric_config.metric in METRIC_REGISTRY:
-        return METRIC_REGISTRY[metric_config.metric](samples, **metric_config.args)
-    else:
-        raise ValueError(f"Unknown metric: {metric_config.metric}")
->>>>>>> d4ef647 (Update)
