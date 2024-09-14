@@ -5,6 +5,7 @@ import os
 import sys
 from pathlib import Path
 from typing import List, Optional
+import logging
 
 import simple_parsing
 import torch
@@ -18,6 +19,7 @@ from ultravox.training import ddp_utils
 from ultravox.utils import device_helpers
 from ultravox.utils import string_helpers
 
+logging.basicConfig(level=logging.INFO)
 
 @dataclasses.dataclass
 class EvalArgs:
@@ -114,12 +116,12 @@ def main():
                 wandb.save(output_file)
             wandb.finish()
         else:
-            print(f"Evaluation Scores:\n")
+            logging.info(f"Evaluation Scores:\n")
             for metric, score in metrics.items():
-                print(f"  {metric}: {score}")
-            print("Output Files:\n")
+                logging.info(f"  {metric}: {score}")
+            logging.info("Output Files:\n")
             for output_file in output_files:
-                print(f"  {output_file}")
+                logging.info(f"  {output_file}")
     if world_size > 1:
         dist.destroy_process_group()
 

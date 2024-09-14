@@ -2,8 +2,8 @@
 # Make sure to accept the license agreement on huggingface hub
 text_model: "meta-llama/Meta-Llama-3.1-8B-Instruct"
 audio_model: "openai/whisper-medium"
-model_load_dir: "wandb://fixie/ultravox/model-zhuang.2024-08-12-ultravox.input_kd-1d:v1"
-resume_from_checkpoint: True
+# model_load_dir: "wandb://fixie/ultravox/model-zhuang.2024-08-12-ultravox.input_kd-1d:v1"
+# resume_from_checkpoint: True
 
 adapter_type: "CFORMER"
 loss_config:
@@ -24,8 +24,8 @@ train_dataset_configs:
       - "train.100" # 28_539 samples
       - "train.360" # 104_014 samples
     num_samples: 132_553
-    user_template: "<|audio|>"
-    assistant_template: ""
+    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
+    assistant_template: "{{ continuation }}"
     transcript_template: "{{ text }}"
     weight: 1
   - path: "fixie-ai/librispeech_asr"
@@ -33,8 +33,8 @@ train_dataset_configs:
     splits:
       - "train.500" # 148_688 samples
     num_samples: 148_688
-    user_template: "<|audio|>"
-    assistant_template: ""
+    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
+    assistant_template: "{{ continuation }}"
     transcript_template: "{{ text }}"
     weight: 1
   - path: "fixie-ai/peoples_speech"
@@ -42,8 +42,8 @@ train_dataset_configs:
     splits:
       - "train" # 1_501_271 samples
     num_samples: 1_501_271
-    user_template: "<|audio|>"
-    assistant_template: ""
+    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
+    assistant_template: "{{ continuation }}"
     transcript_template: "{{ text_proc.format_asr_text(text) }}"
     weight: 8
   - path: "fixie-ai/common_voice_17_0"
@@ -51,8 +51,8 @@ train_dataset_configs:
     splits:
       - "train" # 1_101_170 samples
     num_samples: 1_101_170
-    user_template: "<|audio|>"
-    assistant_template: ""
+    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
+    assistant_template: "{{ continuation }}"
     transcript_template: "{{ text_proc.format_asr_text(sentence) }}"
     weight: 8
   - path: "fixie-ai/common_voice_17_0"
@@ -60,8 +60,8 @@ train_dataset_configs:
     splits:
       - "train" # 28_369 samples
     num_samples: 28_369
-    user_template: "<|audio|>"
-    assistant_template: ""
+    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
+    assistant_template: "{{ continuation }}"
     transcript_template: "{{ sentence }}"
     weight: 0.2
   - path: "fixie-ai/common_voice_17_0"
@@ -69,8 +69,8 @@ train_dataset_configs:
     splits:
       - "train" # 589_100 samples
     num_samples: 589_100
-    user_template: "<|audio|>"
-    assistant_template: ""
+    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
+    assistant_template: "{{ continuation }}"
     transcript_template: "{{ sentence }}"
     weight: 4
   - path: "fixie-ai/common_voice_17_0"
@@ -78,8 +78,8 @@ train_dataset_configs:
     splits:
       - "train" # 336_846 samples
     num_samples: 336_846
-    user_template: "<|audio|>"
-    assistant_template: ""
+    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
+    assistant_template: "{{ continuation }}"
     transcript_template: "{{ sentence }}"
     weight: 3
   - path: "fixie-ai/common_voice_17_0"
@@ -87,8 +87,8 @@ train_dataset_configs:
     splits:
       - "train" # 558_054 samples
     num_samples: 558_054
-    user_template: "<|audio|>"
-    assistant_template: ""
+    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
+    assistant_template: "{{ continuation }}"
     transcript_template: "{{ sentence }}"
     weight: 4
   - path: "fixie-ai/common_voice_17_0"
@@ -96,8 +96,8 @@ train_dataset_configs:
     splits:
       - "train" # 169_771 samples
     num_samples: 169_771
-    user_template: "<|audio|>"
-    assistant_template: ""
+    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
+    assistant_template: "{{ continuation }}"
     transcript_template: "{{ sentence }}"
     weight: 1.2
   - path: "fixie-ai/common_voice_17_0"
@@ -105,8 +105,8 @@ train_dataset_configs:
     splits:
       - "train" # 10_039 samples
     num_samples: 10_039
-    user_template: "<|audio|>"
-    assistant_template: ""
+    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
+    assistant_template: "{{ continuation }}"
     transcript_template: "{{ sentence }}"
     weight: 0.1
   - path: "fixie-ai/common_voice_17_0"
@@ -114,8 +114,8 @@ train_dataset_configs:
     splits:
       - "train" # 21_968 samples
     num_samples: 21_968
-    user_template: "<|audio|>"
-    assistant_template: ""
+    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
+    assistant_template: "{{ continuation }}"
     transcript_template: "{{ sentence }}"
     weight: 0.2
   - path: "fixie-ai/common_voice_17_0"
@@ -123,8 +123,117 @@ train_dataset_configs:
     splits:
       - "train" # 26_377 samples
     num_samples: 26_377
-    user_template: "<|audio|>"
-    assistant_template: ""
+    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
+    assistant_template: "{{ continuation }}"
     transcript_template: "{{ sentence }}"
     weight: 0.2
-  
+# ASR task
+  - path: "fixie-ai/librispeech_asr"
+    name: "clean"
+    splits:
+      - "train.100" # 28_539 samples
+      - "train.360" # 104_014 samples
+    num_samples: 132_553
+    user_template: "{{ dataset._get_transcribe_prompt() }}"
+    assistant_template: "{{ text }}"
+    transcript_template: "{{ text }}"
+    weight: 0.1
+  - path: "fixie-ai/librispeech_asr"
+    name: "other"
+    splits:
+      - "train.500" # 148_688 samples
+    num_samples: 148_688
+    user_template: "{{ dataset._get_transcribe_prompt() }}"
+    assistant_template: "{{ text }}"
+    transcript_template: "{{ text }}"
+    weight: 0.1
+  - path: "fixie-ai/peoples_speech"
+    name: "clean"
+    splits:
+      - "train" # 1_501_271 samples
+    num_samples: 1_501_271
+    user_template: "{{ dataset._get_transcribe_prompt() }}"
+    assistant_template: "{{ text_proc.format_asr_text(text) }}"
+    transcript_template: "{{ text_proc.format_asr_text(text) }}"
+    weight: 0.8
+  - path: "fixie-ai/common_voice_17_0"
+    name: "en"
+    splits:
+      - "train" # 1_101_170 samples
+    num_samples: 1_101_170
+    user_template: "{{ dataset._get_transcribe_prompt() }}"
+    assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
+    transcript_template: "{{ text_proc.format_asr_text(sentence) }}"
+    weight: 0.8
+  - path: "fixie-ai/common_voice_17_0"
+    name: "ar"
+    splits:
+      - "train" # 28_369 samples
+    num_samples: 28_369
+    user_template: "{{ dataset._get_transcribe_prompt() }}"
+    assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
+    transcript_template: "{{ sentence }}"
+    weight: 0.02
+  - path: "fixie-ai/common_voice_17_0"
+    name: "de"
+    splits:
+      - "train" # 589_100 samples
+    num_samples: 589_100
+    user_template: "{{ dataset._get_transcribe_prompt() }}"
+    assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
+    transcript_template: "{{ sentence }}"
+    weight: 0.4
+  - path: "fixie-ai/common_voice_17_0"
+    name: "es"
+    splits:
+      - "train" # 336_846 samples
+    num_samples: 336_846
+    user_template: "{{ dataset._get_transcribe_prompt() }}"
+    assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
+    transcript_template: "{{ sentence }}"
+    weight: 0.3
+  - path: "fixie-ai/common_voice_17_0"
+    name: "fr"
+    splits:
+      - "train" # 558_054 samples
+    num_samples: 558_054
+    user_template: "{{ dataset._get_transcribe_prompt() }}"
+    assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
+    transcript_template: "{{ sentence }}"
+    weight: 0.4
+  - path: "fixie-ai/common_voice_17_0"
+    name: "it"
+    splits:
+      - "train" # 169_771 samples
+    num_samples: 169_771
+    user_template: "{{ dataset._get_transcribe_prompt() }}"
+    assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
+    transcript_template: "{{ sentence }}"
+    weight: 0.12
+  - path: "fixie-ai/common_voice_17_0"
+    name: "ja"
+    splits:
+      - "train" # 10_039 samples
+    num_samples: 10_039
+    user_template: "{{ dataset._get_transcribe_prompt() }}"
+    assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
+    transcript_template: "{{ sentence }}"
+    weight: 0.01
+  - path: "fixie-ai/common_voice_17_0"
+    name: "pt"
+    splits:
+      - "train" # 21_968 samples
+    num_samples: 21_968
+    user_template: "{{ dataset._get_transcribe_prompt() }}"
+    assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
+    transcript_template: "{{ sentence }}"
+    weight: 0.02
+  - path: "fixie-ai/common_voice_17_0"
+    name: "ru"
+    splits:
+      - "train" # 26_377 samples
+    num_samples: 26_377
+    user_template: "{{ dataset._get_transcribe_prompt() }}"
+    assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
+    transcript_template: "{{ sentence }}"
+    weight: 0.02

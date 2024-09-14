@@ -75,7 +75,6 @@ def run_infer(
     metrics = {}
     output_files = []
     for dataset_config in dataset_configs:
-        logging.info(f"Evaluating dataset: {dataset_config.alias}")
         dataset = datasets.create_dataset(dataset_args, dataset_config)
         results = dataset_infer(
             inference,
