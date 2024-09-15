@@ -119,6 +119,10 @@ class TrainConfig:
             self.exp_name = datetime.datetime.now().strftime("exp--%Y-%m-%d--%H-%M-%S")
         if self.output_dir is None:
             self.output_dir = Path("runs") / self.exp_name
+
+        # HF Pipeline gets tripped up if the path has a "." in it
+        self.output_dir = self.output_dir.replace(".", "--")
+
         if self.logs_dir is None:
             self.logs_dir = self.output_dir / "logs"
 
