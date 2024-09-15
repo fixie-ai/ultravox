@@ -9,7 +9,7 @@ val_steps: 1000
 
 optimizer: "adamw_torch"  # options: adamw_torch, adamw_bnb_8bit
 lr_scheduler: "cosine"  # options: linear, cosine, cosine_with_restarts, etc.
-lr:  2.e-3
+lr:  1e-4
 grad_accum_steps: 1
 lr_warmup_steps: 1000
 max_steps: 10_000
