@@ -112,7 +112,7 @@ val_dataset_configs:
     name: "clean"
     splits:
       - "validation" # 18_622 samples
-    active_samples: 2
+    active_samples: 200
     num_samples: 18_622
     user_template: "Transcribe\n{{ text_proc.format_asr_text(text) }}"
     assistant_template: "{{ text_proc.format_asr_text(text) }}"
