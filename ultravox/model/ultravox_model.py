@@ -51,12 +51,11 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         self.vocab_size = config.vocab_size
 
         self.audio_tower = self._create_audio_tower(config)
-        self.multi_modal_projector = UltravoxProjector(config)
+        self.multi_modal_projector = self._create_multi_modal_projector(config)
         self.language_model = self._create_language_model(config)
 
         self.loss_config = LossConfig()
         self.post_init()
-        self.multi_modal_projector.to(dtype=config.torch_dtype)
 
     def get_input_embeddings(self):
         return self.language_model.get_input_embeddings()
@@ -265,6 +264,14 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             model_input["audio_token_len"] = audio_token_len
 
         return model_input
+
+    @classmethod
+    def _create_multi_modal_projector(
+        cls, config: UltravoxConfig
+    ) -> "UltravoxProjector":
+        projector = UltravoxProjector(config)
+        projector.to(config.torch_dtype)
+        return projector
 
     @classmethod
     def _create_audio_tower(

@@ -75,7 +75,9 @@ class TrainConfig:
     optimizer: str = "adamw_torch"
     num_epochs: int = 1
     max_steps: int = 0
+    # Run an evaluation every X steps. If smaller than 1, will be interpreted as ratio of total training steps.
     val_steps: Optional[float] = None
+    # Save checkpoint every X steps. If smaller than 1, will be interpreted as ratio of total training steps.
     save_steps: float = 0
     logging_steps: int = 1
     grad_accum_steps: int = 1
@@ -141,6 +143,12 @@ class TrainConfig:
                 "FSDP is enabled: Saving checkpoints is going to be extremely slow and results in a full save."
                 " Consider setting save_steps=0."
             )
+
+        if self.use_fsdp and self.do_eval:
+            logging.warning(
+                "FSDP is enabled: Evaluation is not supported with FSDP. Disabling evaluation."
+            )
+            self.do_eval = False
 
 
 def fix_hyphens(arg: str):

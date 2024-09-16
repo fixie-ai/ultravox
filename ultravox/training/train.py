@@ -324,6 +324,8 @@ def train(args: config_base.TrainConfig):
         logging.info(f"elapsed: {t_end - t_start}")
 
     if args.use_fsdp:
+        # For training checkpoints, we want to use SHARDED_STATE_DICT which should be faster,
+        # but for the final save we want FULL_STATE_DICT so it can be serialized properly.
         trainer.accelerator.state.fsdp_plugin.set_state_dict_type("FULL_STATE_DICT")
 
     if is_master:
