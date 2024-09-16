@@ -6,17 +6,17 @@ compute:
   cluster: r14z3p1
 integrations:
   - integration_type: git_repo
-    git_repo: fixie-ai/ultravox-expts
+    git_repo: fixie-ai/ultravox
     git_branch: $UV_BRANCH
     pip_install: poetry==1.7.1
 scheduling:
   max_duration: 2  # 2 hours max for jobs to avoid hanging jobs
 command: >-
-  cd ultravox-expts &&
+  cd ultravox &&
   poetry install --no-dev &&
   poetry run python -m ultravox.training.helpers.prefetch_weights $EVAL_ARGS &&
   poetry run torchrun --nproc_per_node=8 -m ultravox.tools.eval_tool $EVAL_ARGS --exp_name $UV_BRANCH
 env_variables:
   MLFLOW_TRACKING_URI: databricks
-  UV_BRANCH: zhuang.2024-08-12-ultravox.merge_p1
+  UV_BRANCH: zhuang/unified_dataset_specification
   EVAL_ARGS: --config_path ultravox/evaluation/configs/eval_config_2k.yaml
