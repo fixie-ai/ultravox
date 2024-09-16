@@ -12,6 +12,7 @@ loss_config:
     Input_KL: 1
 
 max_steps: 14400 # x8x24 
+save_steps: 1440
 
 train_dataset_args:
   shuffle: True
