@@ -8,104 +8,183 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import simple_parsing
-import torch
 
-from ultravox.data import dataset_config
 from ultravox.data import datasets
 from ultravox.model import ultravox_config
+from ultravox.utils import device_helpers, string_helpers
 
 
 @dataclasses.dataclass
 class TrainConfig:
-    data_sets: List[str]
-    val_sets: List[str]
-    # language model to use
-    text_model: str
-    # audio encoder model to use
-    audio_model: str
+    """Configuration class for training settings."""
 
-    # The data_dicts field complements data_sets, allowing for the inclusion of
-    # new datasets in the config.
-    #
-    # Due to simple_parsing's lack of support for containers of dataclass types,
-    # we first parse the data_dicts as a list of dictionaries. After parsing,
-    # we convert these dictionaries to DataDictConfig objects using Pydantic
-    # to enforce type constraints and validation, in the __post_init__ method.
-    data_dicts: Optional[List[Dict[str, Any]]] = None
+    text_model: str
+    """Language model to use; could be a huggingface model id, wandb path, or local path."""
+
+    audio_model: str
+    """Audio encoder model to use; could be a huggingface model id, wandb path, or local path."""
+
+    adapter_type: ultravox_config.AdapterType = ultravox_config.AdapterType.STACKING
+    """Type of adapter to use for fine-tuning. Defaults to STACKING."""
+
+    adapter_config: Optional[Dict[str, Any]] = None
+    """Optional configuration dictionary for the adapter. If None, default settings will be used."""
+
+    train_dataset_configs: List[datasets.DatasetConfig] = dataclasses.field(
+        default_factory=list
+    )
+    """
+    List of training dataset configurations.
+    Initially parsed as dictionaries (due to limitations of simple_parsing), then converted to DatasetConfig objects in __post_init__.
+    """
+
+    val_dataset_configs: List[datasets.DatasetConfig] = dataclasses.field(
+        default_factory=list
+    )
+    """
+    List of validation dataset configurations.
+    Initially parsed as dictionaries (due to limitations of simple_parsing), then converted to DatasetConfig objects in __post_init__.
+    """
+
+    eval_dataset_configs: List[datasets.DatasetConfig] = dataclasses.field(
+        default_factory=list
+    )
+    """
+    List of evaluation dataset configurations.
+    Initially parsed as dictionaries (due to limitations of simple_parsing), then converted to DatasetConfig objects in __post_init__.
+    """
+
+    train_dataset_args: datasets.VoiceDatasetArgs = dataclasses.field(
+        default_factory=datasets.VoiceDatasetArgs
+    )
+    """Global arguments for the training dataset."""
+
+    val_dataset_args: datasets.VoiceDatasetArgs = dataclasses.field(
+        default_factory=datasets.VoiceDatasetArgs
+    )
+    """Global arguments for the validation dataset."""
+
+    eval_dataset_args: datasets.VoiceDatasetArgs = dataclasses.field(
+        default_factory=datasets.VoiceDatasetArgs
+    )
+    """Global Arguments for the evaluation dataset."""
 
     do_train: bool = True
-    do_eval: bool = True
+    """Whether to perform training."""
 
-    # In InterleaveDataset, when to stop interleave: choose from last_exhausted (default), first_exhausted, or never_stop
+    do_eval: bool = True
+    """Whether to perform evaluation."""
+
     stop_strategy: datasets.StopStrategy = datasets.StopStrategy.LAST_EXHAUSTED
-    data_dir: Optional[str] = None
-    mds: bool = False
-    num_samples: Optional[int] = None
-    val_num_samples: int = 100
-    eval_num_samples: int = 100
-    eval_max_new_tokens: Optional[int] = None
-    eval_num_procs: int = 8
-    eval_text_only: bool = False
-    num_prompts: int = 1
-    # number of data loader workers
-    num_workers: int = 8 if torch.cuda.is_available() else 1
+    """
+    The stop strategy for InterleaveDataset when combining multiple datasets for training, 
+    choose from last_exhausted (default), first_exhausted, or never_stop (rely on max_steps or num_epochs to stop, and should be used as the default.
+    """
+
+    num_workers: int = device_helpers.get_world_size()
+    """Number of data loader workers."""
+
     train_on_inputs: bool = False
-    shuffle_data: bool = False
-    # Maximum audio duration in seconds. Samples with longer audio will be skipped.
-    # This is usually due to GPU memory constraints and also dependends on the dataset.
-    max_audio_duration_secs: Optional[float] = None
+    """Whether to train on inputs."""
 
     verbose: bool = False
+    """Whether to enable verbose output."""
 
-    device: str = "cuda"
-    data_type: str = "bfloat16"
-    # Path to load the model from. Can be local path, HF hub model_id, or W&B artifact
+    device: str = device_helpers.default_device()
+    """Device to use for training (e.g., 'cuda', 'cpu', 'mps')."""
+
+    data_type: str = device_helpers.default_dtype_str()
+    """Data type to use for training (e.g., 'bfloat16', 'float16', 'float32')."""
+
     model_load_dir: Optional[str] = None
+    """
+    Path to load pretrained ultravox model from. Can be local path, HF hub model_id, or W&B artifact.
+    """
+
     text_model_lora_config: Optional[ultravox_config.LoraConfigSimplified] = None
+    """LoRA configuration for the text model."""
+
     audio_model_lora_config: Optional[ultravox_config.LoraConfigSimplified] = None
+    """LoRA configuration for the audio model."""
+
     disable_layerdrop: bool = False
+    """Whether to disable layerdrop."""
 
-    # The experiment name
     exp_name: Optional[str] = None
-    output_dir: Optional[Path] = None
-    logs_dir: Optional[Path] = None
-    optimizer: str = "adamw_torch"
-    num_epochs: int = 1
-    max_steps: int = 0
-    val_steps: Optional[int] = None
-    save_steps: float = 0
-    logging_steps: int = 1
-    grad_accum_steps: int = 1
-    val_accum_steps: int = 1
-    batch_size: int = 2
-    lr: float = 1e-5
-    lr_scheduler: str = "cosine"
-    lr_warmup_steps: int = 0
-    weight_decay: float = 0.0
-    seed: int = 42
-    shuffle_seed: int = 42
-    # Experiment logging destinations: tensorboard, wandb, neptune, mlflow, etc
-    report_logs_to: List[str] = simple_parsing.list_field("tensorboard")
-    # A list of tags for filtering runs. Only used for wandb.
-    run_tags: List[str] = simple_parsing.list_field()
+    """The experiment name."""
 
-    # loss function to use
-    loss_config: Optional[ultravox_config.LossConfig] = None
+    output_dir: Optional[Path] = None
+    """Directory to save output files."""
+
+    logs_dir: Optional[Path] = None
+    """Directory to save log files."""
+
+    optimizer: str = "adamw_torch"
+    """Optimizer to use for training."""
+
+    num_epochs: int = 1
+    """Number of training epochs, only used when max_steps is 0."""
+
+    max_steps: int = 0
+    """Maximum number of training steps, if 0, use num_epochs."""
+
+    val_steps: Optional[int] = None
+    """Number of steps between validations."""
+
+    save_steps: float = 0
+    """Number of steps between model saves."""
+
+    logging_steps: int = 1
+    """Number of steps between logging."""
+
+    grad_accum_steps: int = 1
+    """Number of gradient accumulation steps."""
+
+    val_accum_steps: int = 1
+    """Number of validation accumulation steps."""
+
+    lr: float = 1e-5
+    """Learning rate."""
+
+    lr_scheduler: str = "cosine"
+    """Learning rate scheduler type."""
+
+    lr_warmup_steps: int = 0
+    """Number of learning rate warmup steps."""
+
+    weight_decay: float = 0.0
+    """Weight decay for optimizer."""
+
+    seed: int = 42
+    """Random seed for reproducibility."""
+
+    report_logs_to: List[str] = simple_parsing.list_field("tensorboard")
+    """Experiment logging destinations: tensorboard, wandb, etc."""
+
+    run_tags: List[str] = simple_parsing.list_field()
+    """A list of tags for filtering runs. Only used for wandb."""
+
+    loss_config: ultravox_config.LossConfig = dataclasses.field(
+        default_factory=ultravox_config.LossConfig
+    )
+    """Configuration for the loss function."""
 
     def __post_init__(self):
-        if self.data_dicts:
-            self.data_dicts = [
-                dataset_config.DataDictConfig(**data_dict)
-                for data_dict in self.data_dicts
-            ]
-            # For now, self.data_dicts is a hack to allow for the inclusion of new datasets using the
-            # GenericVoiceDataset class, without changing how existing datasets are specified in
-            # self.data_sets. In the future, all datasets will be updated to use the DataDictConfig class.
-            self.data_sets.extend(self.data_dicts)
+        self.train_dataset_configs = [
+            datasets.DatasetConfig(**data_dict)
+            for data_dict in self.train_dataset_configs
+        ]
+        self.val_dataset_configs = [
+            datasets.DatasetConfig(**data_dict)
+            for data_dict in self.val_dataset_configs
+        ]
+        self.eval_dataset_configs = [
+            datasets.DatasetConfig(**data_dict)
+            for data_dict in self.eval_dataset_configs
+        ]
 
         assert self.data_type in ["bfloat16", "float16", "float32"]
-        if self.device == "cuda" and not torch.cuda.is_available():
-            self.device = "mps" if torch.backends.mps.is_available() else "cpu"
+        assert self.device in ["cuda", "cpu", "mps"]
         if self.device != "cuda":
             if self.data_type == "bfloat16":
                 self.data_type = "float32"
@@ -117,11 +196,15 @@ class TrainConfig:
 
         if self.exp_name is None:
             self.exp_name = datetime.datetime.now().strftime("exp--%Y-%m-%d--%H-%M-%S")
+        sanitized_exp_name = string_helpers.sanitize_name(self.exp_name)
+        if sanitized_exp_name != self.exp_name:
+            logging.warning(
+                f"Experiment name {self.exp_name} has been sanitized to {sanitized_exp_name} for use as a valid file/directory/module name."
+            )
+            self.exp_name = sanitized_exp_name
+
         if self.output_dir is None:
             self.output_dir = Path("runs") / self.exp_name
-
-        # HF Pipeline gets tripped up if the path has a "." in it
-        self.output_dir = self.output_dir.replace(".", "--")
 
         if self.logs_dir is None:
             self.logs_dir = self.output_dir / "logs"
@@ -137,11 +220,6 @@ class TrainConfig:
             )
             self.disable_layerdrop = True
 
-
-def fix_hyphens(arg: str):
-    return re.sub(r"^--([^=]+)", lambda m: "--" + m.group(1).replace("-", "_"), arg)
-
-
 def get_train_args(override_sys_args: Optional[List[str]] = None) -> TrainConfig:
     """
     Parse the command line arguments and return a TrainConfig object.
@@ -156,5 +234,5 @@ def get_train_args(override_sys_args: Optional[List[str]] = None) -> TrainConfig
         config_class=TrainConfig,
         config_path=os.path.join(os.path.dirname(__file__), "configs/meta_config.yaml"),
         add_config_path_arg=True,
-        args=[fix_hyphens(arg) for arg in args],
+        args=[string_helpers.fix_hyphens(arg) for arg in args],
     )

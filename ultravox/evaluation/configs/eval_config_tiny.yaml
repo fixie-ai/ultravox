@@ -1,0 +1,40 @@
+model_path: "fixie-ai/ultravox-v0_4"
+report_logs_to: ["wandb"]
+output_dir: "./output"
+
+eval_dataset_args:
+  batch_size: 4
+  max_tokens: 50
+
+# tiny test sets for debugging
+eval_dataset_configs:
+  - alias: "covost2-en_zh-test-20"
+    path: "fixie-ai/covost2"
+    name: "en_zh-CN"
+    splits:
+      - "test"
+    user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
+    user_template_args:
+      target: "Chinese"
+    assistant_template: "{{ translation }}"
+    transcript_template: "{{ sentence }}"
+    active_samples: 20
+    num_samples: 15531
+    eval_config:
+      metric: "bleu"
+      args:
+        tokenize: "zh"
+  - alias: "covost2-zh_en-test-20"
+    path: "fixie-ai/covost2"
+    name: "zh-CN_en"
+    splits:
+      - "test"
+    user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
+    user_template_args:
+      target: "English"
+    assistant_template: "{{ translation }}"
+    transcript_template: "{{ sentence }}"
+    active_samples: 20
+    num_samples: 15531
+    eval_config:
+      metric: "bleu"

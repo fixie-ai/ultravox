@@ -1,15 +1,26 @@
 import dataclasses
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import dataclasses_json
+from pydantic import BaseModel
+
+# Eval config for a single metric, added to the dataset config
+class EvalConfig(BaseModel):
+    metric: str
+    args: Dict[str, Any] = dataclasses.field(default_factory=dict)
+
+    class Config:
+        extra = "forbid"
+        # do not allow undefined parameters
 
 
 @dataclasses.dataclass
 class Sample(dataclasses_json.DataClassJsonMixin):
+    index: int  # index of the sample in the dataset, used for preserving order after ddp all_gather
     question: str
-    generated_answer: str
-    expected_answer: str
-    history: List[Dict[str, str]] = dataclasses.field(default_factory=list)
+    hypothesis: str
+    reference: str
+    history: List[Dict[str, Any]] = dataclasses.field(default_factory=list)
 
 
 @dataclasses.dataclass
@@ -45,4 +56,4 @@ class BleuResult:
     score: float
 
 
-Result = Union[InstructResult, WerResult, ExactMatchResult]
+Result = Union[InstructResult, WerResult, ExactMatchResult, BleuResult]

@@ -17,8 +17,8 @@ Conversation:
 {%- for turn in history + [ {"role": "user", "content": question} ] %}
     {% if turn["role"] == "user" %}A{% else %}B{% endif %}: {{ turn["content"] }}
 {% endfor %}
-    Model (as B): {{ generated_answer }}
-    Correct: {{ expected_answer }}
+    Model (as B): {{ hypothesis }}
+    Correct: {{ reference }}
 """
 
 
