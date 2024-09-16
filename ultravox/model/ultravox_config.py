@@ -70,8 +70,8 @@ class UltravoxCFormerAdapterConfig:
     CIF+Transformer-based adapter to segment speech into continuous speech tokens with 1:1 correspondence to text tokens.
     """
 
-    num_pre_cif_layers: int = 2
-    num_post_cif_layers: int = 2
+    num_pre_cif_layers: int = 4
+    num_post_cif_layers: int = 4
     is_decoder: bool = False
 
 

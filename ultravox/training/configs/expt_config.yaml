@@ -11,11 +11,11 @@ loss_config:
     Response_KL: 1
     Input_KL: 1
 
-max_steps: 7200 # x8x24 
+max_steps: 14400 # x8x24 
 
 train_dataset_args:
   shuffle: True
-  batch_size: 24
+  batch_size: 12
 train_dataset_configs:
   - path: "fixie-ai/librispeech_asr"
     name: "clean"
