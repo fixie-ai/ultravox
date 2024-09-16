@@ -2,7 +2,6 @@ import dataclasses
 import glob
 import logging
 import os
-import sys
 from datetime import datetime
 from typing import Dict, List
 

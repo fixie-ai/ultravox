@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional, Union
 import dataclasses_json
 from pydantic import BaseModel
 
+
 # Eval config for a single metric, added to the dataset config
 class EvalConfig(BaseModel):
     metric: str

@@ -180,14 +180,20 @@ class DatasetConfig(BaseModel):
             raise ValueError(
                 "num_samples must be non-negative for determing dataset size in all cases (streaming or not)"
             )
-        
+
         # Ensure the audio field is always included
-        if self.audio_field is not None and self.audio_field not in self.base_audio_columns:
+        if (
+            self.audio_field is not None
+            and self.audio_field not in self.base_audio_columns
+        ):
             self.base_audio_columns.append(self.audio_field)
 
 
 @dataclasses.dataclass
 class DataCollatorForSeq2SeqWithAudio(transformers.DataCollatorForSeq2Seq):
+    # when enabled, the alt_input_ids, alt_attention_mask, and alt_labels fields are used for computing the KL loss in UltravoxModel
+    include_alt_fields: bool = False
+
     def __call__(self, features, *args, **kwargs):
         audio_values = [f.pop("audio_values", None) for f in features]
         if self.include_alt_fields:
@@ -374,10 +380,6 @@ class VoiceDataset(SizedIterableDataset):
                 f"Created VoiceDataset with config:\n{self._config.model_dump_json(indent=2)}"
             )
 
-        # _dataset and _length are initialized in _init_dataset
-        self._dataset = None
-        self._length = 0
-
     def _init_dataset(self, dataset: data.Dataset, num_samples: int) -> None:
         self._dataset = dataset
         self._length = num_samples
@@ -388,7 +390,7 @@ class VoiceDataset(SizedIterableDataset):
 
     def __len__(self):
         return self._length
-    
+
     def _load_audio_dataset(
         self,
         path: str,
@@ -420,8 +422,12 @@ class VoiceDataset(SizedIterableDataset):
         else:
             # HF datasets sometimes fails to download due to network issues, so retry a few times.
             dataset = datasets.load_dataset(
-                path, name, split=split, trust_remote_code=True, streaming=streaming,
-                download_config=datasets.DownloadConfig(max_retries=10)
+                path,
+                name,
+                split=split,
+                trust_remote_code=True,
+                streaming=streaming,
+                download_config=datasets.DownloadConfig(max_retries=10),
             )
             for column_name in self._config.base_audio_columns:
                 dataset = dataset.cast_column(
@@ -465,11 +471,11 @@ class VoiceDataset(SizedIterableDataset):
             actual_length += 1
             if actual_length == len(self) + 1:
                 warnings.warn(
-                    f"The actual number of samples ({actual_length}) has exceeded the presumed length ({self._length}) for dataset {self._config.alias}. Make sure to update."
+                    f"The presumed length {self._length} has been exceeded for dataset {self._config.alias}. Make sure to update."
                 )
         if actual_length != len(self):
             warnings.warn(
-                f"Mismatch between actual length ({actual_length}) and presumed length ({self._length}) for dataset {self._config.alias}. Make sure to update."
+                f"Mismatch between presumed length ({self._length}) and actual length ({actual_length}) for dataset {self._config.alias}. Make sure to update."
             )
 
     @abc.abstractmethod
@@ -505,7 +511,7 @@ class VoiceDataset(SizedIterableDataset):
         return _get_messages(prompt, text)
 
     def _get_audio(
-        self, row: transformers.BatchFeature, column_name: str = "audio"
+        self, row: transformers.BatchFeature, column_name: Optional[str] = "audio"
     ) -> np.ndarray:
         if column_name not in self._config.base_audio_columns:
             raise ValueError(
@@ -602,12 +608,9 @@ class GenericVoiceDataset(VoiceDataset):
             dataset = dataset.shuffle(seed=self._args.shuffle_seed)
 
         if config.active_samples:
-            dataset = Range(
-                SizedIterableDataset(dataset, config.num_samples), config.active_samples
-            )
+            dataset = Range(dataset, config.active_samples, config.num_samples)
             num_samples = config.active_samples
 
-        # super().__init__(args, config, dataset, num_samples)
         super()._init_dataset(dataset, num_samples)
 
     def _get_sample(self, row) -> Optional[VoiceSample]:
@@ -647,6 +650,9 @@ class GenericVoiceDataset(VoiceDataset):
 class EmptyDataset(SizedIterableDataset):
     def __iter__(self):
         return iter([])
+
+    def __len__(self):
+        return 0
 
 
 class AnyInstructDataset(VoiceDataset):
@@ -1082,18 +1088,29 @@ class Range(SizedIterableDataset):
 
     def __init__(
         self,
-        dataset: SizedIterableDataset,
+        dataset: data.IterableDataset,
+        active_samples: Optional[int] = None,
         num_samples: Optional[int] = None,
     ) -> None:
         self._dataset = dataset
-        if num_samples is None:
-            self._length = len(dataset)
-        else:
-            if num_samples > len(dataset):
+
+        if isinstance(dataset, SizedIterableDataset):
+            if num_samples is not None and num_samples != len(dataset):
                 raise ValueError(
-                    f"num_samples {num_samples} is greater than the number of samples in the dataset {len(dataset)}"
+                    f"The presumed num_samples ({num_samples}) is not equal to the number of samples in the dataset ({len(dataset)}). Please update."
                 )
-            self._length = num_samples
+            num_samples = len(dataset)
+        else:
+            if num_samples is None:
+                raise ValueError(
+                    "num_samples must be provided for non-SizedIterableDatasets"
+                )
+            
+        self._length = active_samples or num_samples
+        if self._length > num_samples:
+            raise ValueError(
+                f"The number of samples to limit to ({self._length}) is greater than the number of samples in the dataset ({num_samples}). Please update."
+            )
 
     def __iter__(self):
         count = 0
@@ -1107,3 +1124,6 @@ class Range(SizedIterableDataset):
             raise ValueError(
                 f"Dataset exhausted after {count} samples, expected {self._length}"
             )
+
+    def __len__(self):
+        return self._length

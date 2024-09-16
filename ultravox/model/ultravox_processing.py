@@ -63,8 +63,10 @@ class UltravoxProcessor(transformers.ProcessorMixin):
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path, **kwargs):
-        config: UltravoxConfig = transformers.AutoConfig.from_pretrained(
-            pretrained_model_name_or_path, **kwargs
+        config: UltravoxConfig = (  # type: ignore
+            transformers.AutoConfig.from_pretrained(
+                pretrained_model_name_or_path, **kwargs
+            )
         )
         audio_processor = transformers.AutoProcessor.from_pretrained(
             config.audio_model_id

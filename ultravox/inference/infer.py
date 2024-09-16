@@ -38,6 +38,7 @@ class LocalInference(base.VoiceInference):
         )
         self.data_collator = datasets.DataCollatorForSeq2SeqWithAudio(
             tokenizer=self.tokenizer,
+            include_alt_fields=False,
         )
 
         assert self.tokenizer.padding_side == "left"
@@ -60,18 +61,18 @@ class LocalInference(base.VoiceInference):
     def _build_past_messages(
         self,
         query_messages: List[Dict[str, str]],
-        num_audio_tokens: int,
+        audio_token_len: int,
         response_content: str,
     ) -> List[Dict[str, str]]:
         messages = copy.copy(query_messages)
-        if num_audio_tokens > 0:
+        if audio_token_len > 0:
             user_content = messages[-1]["content"]
             if user_content.count("<|audio|>") != 1:
                 raise ValueError(
                     f"Expected 1 audio placeholder, found {user_content.count('<|audio|>')}"
                 )
             messages[-1]["content"] = user_content.replace(
-                "<|audio|>", self.tokenizer.eos_token * num_audio_tokens
+                "<|audio|>", self.tokenizer.eos_token * audio_token_len
             )
         messages.append({"role": "assistant", "content": response_content})
         return messages
@@ -92,11 +93,9 @@ class LocalInference(base.VoiceInference):
         output_text = self.tokenizer.decode(output_tokens, skip_special_tokens=True)
         output_len = len(output_tokens)
         if self.conversation_mode:
-            num_audio_tokens = (
-                output.past_key_values[0][0].shape[2] - input_len - output_len
-            )
+            audio_token_len = inputs.get("audio_token_len", [0])[0]
             past_messages = self._build_past_messages(
-                extended_sample.messages, num_audio_tokens, output_text
+                extended_sample.messages, audio_token_len, output_text
             )
             self.update_conversation(past_messages, output.past_key_values)
         return base.VoiceOutput(output_text, input_len, output_len)
@@ -142,7 +141,7 @@ class LocalInference(base.VoiceInference):
     ) -> base.InferenceGenerator:
         extended_sample = self._get_sample_with_past(sample)
         inputs = self._dataproc(extended_sample)
-        input_len = inputs["input_ids"].shape[1]
+        input_tokens = inputs["input_ids"].shape[1]
         streamer = transformers.TextIteratorStreamer(
             self.tokenizer, skip_prompt=True, skip_special_tokens=True
         )
@@ -159,24 +158,21 @@ class LocalInference(base.VoiceInference):
         thread = threading.Thread(target=thunk, args=(future,))
         thread.start()
         output_text = ""
+        output_token_len = 0
         for chunk in streamer:
             if chunk:
                 output_text += chunk
+                output_token_len += 1
                 yield base.InferenceChunk(chunk)
         thread.join()
-        output_len = len(
-            self.tokenizer(output_text, add_special_tokens=False).input_ids
-        )
         output = future.result()
         if self.conversation_mode:
-            num_audio_tokens = (
-                output.past_key_values[0][0].shape[2] - input_len - output_len
-            )
+            audio_token_len = inputs.get("audio_token_len", [0])[0]
             past_messages = self._build_past_messages(
-                extended_sample.messages, num_audio_tokens, output_text
+                extended_sample.messages, audio_token_len, output_text
             )
             self.update_conversation(past_messages, output.past_key_values)
-        yield base.InferenceStats(input_len, output_len)
+        yield base.InferenceStats(input_tokens, output_token_len)
 
     def _dataproc(self, sample: datasets.VoiceSample):
         text_input = self.tokenizer.apply_chat_template(
@@ -228,10 +224,8 @@ class LocalInference(base.VoiceInference):
         do_sample = temperature is not None
 
         terminators = [self.tokenizer.eos_token_id]
-        if "" in self.tokenizer.added_tokens_encoder:
-            terminators.append(
-                self.tokenizer.convert_tokens_to_ids("<|end_header_id|>")
-            )
+        if "<|eot_id|>" in self.tokenizer.added_tokens_encoder:
+            terminators.append(self.tokenizer.convert_tokens_to_ids("<|eot_id|>"))
 
         return self.model.generate(
             **inputs,

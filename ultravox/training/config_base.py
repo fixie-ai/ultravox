@@ -2,7 +2,6 @@ import dataclasses
 import datetime
 import logging
 import os
-import re
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -11,7 +10,8 @@ import simple_parsing
 
 from ultravox.data import datasets
 from ultravox.model import ultravox_config
-from ultravox.utils import device_helpers, string_helpers
+from ultravox.utils import device_helpers
+from ultravox.utils import string_helpers
 
 
 @dataclasses.dataclass
@@ -23,9 +23,6 @@ class TrainConfig:
 
     audio_model: str
     """Audio encoder model to use; could be a huggingface model id, wandb path, or local path."""
-
-    adapter_type: ultravox_config.AdapterType = ultravox_config.AdapterType.STACKING
-    """Type of adapter to use for fine-tuning. Defaults to STACKING."""
 
     adapter_config: Optional[Dict[str, Any]] = None
     """Optional configuration dictionary for the adapter. If None, default settings will be used."""
@@ -219,6 +216,7 @@ class TrainConfig:
                 "LayerDrop cannot be used in DDP when encoder is not frozen. Disabling LayerDrop."
             )
             self.disable_layerdrop = True
+
 
 def get_train_args(override_sys_args: Optional[List[str]] = None) -> TrainConfig:
     """
