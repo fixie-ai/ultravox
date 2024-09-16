@@ -155,7 +155,7 @@ def train(args: config_base.TrainConfig):
             save_code=True,
         )
 
-    resume_from_checkpoint = None
+    resume_from_checkpoint = False
     if args.model_load_dir:
         logging.info(f"Loading model state dict from {args.model_load_dir}")
         load_path = args.model_load_dir
@@ -268,7 +268,7 @@ def train(args: config_base.TrainConfig):
             use_cpu=args.device == "cpu",
             seed=args.seed + local_rank,
             report_to=args.report_logs_to,
-            resume_from_checkpoint=resume_from_checkpoint,
+            save_total_limit=args.save_total_limit,
             # torch_compile=True,
             # fsdp="full_shard auto_wrap",
             # fsdp_transformer_layer_cls_to_wrap='LlamaDecoderLayer',
@@ -282,7 +282,7 @@ def train(args: config_base.TrainConfig):
         logging.info(f"train start time: {t_start}")
         if args.val_steps:
             trainer.evaluate()
-        trainer.train()
+        trainer.train(resume_from_checkpoint=resume_from_checkpoint)
         t_end = datetime.now()
         logging.info(f"train end time: {t_end}")
         logging.info(f"elapsed: {t_end - t_start}")

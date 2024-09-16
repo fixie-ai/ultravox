@@ -102,6 +102,9 @@ class TrainConfig:
     resume_from_checkpoint: Optional[bool] = False
     """Whether to resume from checkpoint, specified by model_load_dir."""
 
+    save_total_limit: Optional[int] = None
+    """Maximum number of checkpoints to save."""
+
     text_model_lora_config: Optional[ultravox_config.LoraConfigSimplified] = None
     """LoRA configuration for the text model."""
 

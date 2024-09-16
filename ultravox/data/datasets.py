@@ -128,7 +128,7 @@ class DatasetConfig(BaseModel):
     """Weight of the dataset, used for weighting the dataset in the training loop"""
     streaming: bool = True
     """Whether to stream the dataset"""
-    num_prompts: int = 1
+    num_prompts: Optional[int] = None
     """If `user_template` is not set, the number of predefined prompts to use"""
     user_template: str = "<|audio|>"
     """Template for the user's message"""
@@ -138,7 +138,7 @@ class DatasetConfig(BaseModel):
     """Template for the assistant's message"""
     transcript_template: str = "{{text}}"
     """Template for the transcript"""
-    audio_field: str = "audio"
+    audio_field: Optional[str] = "audio"
     """Field in the dataset that contains the audio, use None if the dataset does not contain audio"""
     eval_config: Optional[EvalConfig] = None
     """Evaluation configuration: metric and arguments"""
@@ -501,6 +501,8 @@ class VoiceDataset(SizedIterableDataset):
     def _get_audio(
         self, row: transformers.BatchFeature, column_name: str = "audio"
     ) -> np.ndarray:
+        if column_name is None:
+            return None
         if column_name not in self._base_audio_columns:
             raise ValueError(
                 f"Unknown audio column: {column_name}. This is likely a bug and the audio might not be resampled to {SAMPLE_RATE} Hz."
@@ -563,10 +565,10 @@ class VoiceDataset(SizedIterableDataset):
     def _make_sample(
         self,
         messages: List[Dict[str, str]],
-        audio: np.ndarray,
+        audio: Optional[np.ndarray] = None,
         audio_transcript: Optional[str] = None,
     ) -> VoiceSample:
-        if self._config.audio_field is None:
+        if audio is None:
             return VoiceSample(messages)
         return VoiceSample(messages, audio, audio_transcript=audio_transcript)
 
@@ -632,7 +634,7 @@ class GenericVoiceDataset(VoiceDataset):
 
         return self._make_sample(
             _get_messages(user_content, assistant_content),
-            self._get_audio(row),
+            self._get_audio(row, self._config.audio_field),
             audio_transcript=transcript,
         )
 
