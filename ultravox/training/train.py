@@ -312,12 +312,22 @@ def train(args: config_base.TrainConfig):
         logging.info(f"train end time: {t_end}")
         logging.info(f"elapsed: {t_end - t_start}")
 
-    if is_master:
-        # Saving the model using pipeline to ensure its code is saved
-        pipeline = ultravox_pipeline.UltravoxPipeline(
-            model, tokenizer=text_tokenizer, device=device
-        )
-        pipeline.save_pretrained(args.output_dir)
+    # We use both pipeline.save_pretrained and trainer.save_model to save everything.
+    # This is because pipeline.save_pretrained knows how to save the pipeline (code and config),
+    # but it doesn't know how to save FSDP models correctly (the final tensors could be flattened).
+    # on the other hand, trainer.save_model knows how to save FSDP models correctly, but it won't save the pipeline.
+    # Saving FSDP models is already quite slow though, so we don't want to save the model twice.
+    pipeline = ultravox_pipeline.UltravoxPipeline(
+        model, tokenizer=text_tokenizer, device=model.device
+    )
+    old_save_pretrained = model.save_pretrained
+    model.save_pretrained = lambda *_, **__: None  # type: ignore[method-assign]
+    # saves the pipeline code and populates the config
+    pipeline.save_pretrained(args.output_dir)
+    model.save_pretrained = old_save_pretrained  # type: ignore[method-assign]
+
+    # saves the model weights correctly (FSDP or otherwise)
+    trainer.save_model(args.output_dir)
 
 
 def evaluate(args: config_base.TrainConfig):
