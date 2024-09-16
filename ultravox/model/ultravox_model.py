@@ -51,7 +51,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         self.vocab_size = config.vocab_size
 
         self.audio_tower = self._create_audio_tower(config)
-        self.multi_modal_projector = UltravoxProjector(config)
+        self.multi_modal_projector = self._create_multi_modal_projector(config)
         self.language_model = self._create_language_model(config)
 
         # Determine no_split_modules dynamically to use with FSDP auto_wrap policy.
@@ -195,7 +195,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
 
             # B x A/3200 x D
             audio_tower_output = self.audio_tower.forward(
-                audio_values
+                audio_values.to(self.audio_tower.dtype)
             ).last_hidden_state
             audio_tower_output = audio_tower_output.to(inputs_embeds.dtype)
 
@@ -273,17 +273,25 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         return model_input
 
     @classmethod
+    def _create_multi_modal_projector(
+        cls, config: UltravoxConfig
+    ) -> "UltravoxProjector":
+        projector = UltravoxProjector(config)
+        projector.to(config.torch_dtype)
+        return projector
+
+    @classmethod
     def _create_audio_tower(
         cls, config: UltravoxConfig
     ) -> Union[transformers.Wav2Vec2Model, "ModifiedWhisperEncoder"]:
         if config.audio_model_id is not None:
             if "whisper" in config.audio_model_id is not None:
                 audio_tower = ModifiedWhisperEncoder.from_pretrained(
-                    config.audio_model_id
+                    config.audio_model_id, torch_dtype=config.torch_dtype
                 )
             else:
                 audio_tower = transformers.AutoModel.from_pretrained(
-                    config.audio_model_id
+                    config.audio_model_id, torch_dtype=config.torch_dtype
                 )
         else:
             if "whisper" in config.audio_config._name_or_path:
@@ -314,14 +322,18 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
     ) -> transformers.LlamaForCausalLM:
         if config.text_model_id is not None:
             language_model = transformers.AutoModelForCausalLM.from_pretrained(
-                config.text_model_id, attn_implementation=config._attn_implementation
+                config.text_model_id,
+                attn_implementation=config._attn_implementation,
+                torch_dtype=config.torch_dtype,
             )
         else:
             with transformers.modeling_utils.no_init_weights():
                 # we only ever use from_config if the weights are retrained, hence initializing is not
                 # required. This makes the model quite creation faster since init on CPU is quite slow.
                 language_model = transformers.AutoModelForCausalLM.from_config(
-                    config.text_config, attn_implementation=config._attn_implementation
+                    config.text_config,
+                    attn_implementation=config._attn_implementation,
+                    torch_dtype=config.torch_dtype,
                 )
 
         language_model = apply_lora(language_model, config.text_model_lora_config)

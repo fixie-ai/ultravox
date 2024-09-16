@@ -123,6 +123,8 @@ def train(args: config_base.TrainConfig):
         text_model_id=args.text_model,
         text_model_lora_config=args.text_model_lora_config,
         audio_model_lora_config=args.audio_model_lora_config,
+        torch_dtype=args.data_type,
+        pad_token_id=text_tokenizer.eos_token_id,
     )
 
     logging.info("Instantiating model...")
@@ -178,13 +180,10 @@ def train(args: config_base.TrainConfig):
 
     model.print_trainable_parameters()
 
-    # Move the model to GPU and enable bfloat16
-    dtype = getattr(torch, args.data_type)
-    device = torch.device(args.device, index=local_rank)
-    logging.info(
-        f"Using dtype and device (world_size): {dtype}, {device} ({world_size})"
-    )
-    model.to(device=device, dtype=dtype)
+    if not args.use_fsdp:
+        # Moving to device in FSDP is handled by the Trainer
+        model.to(device=torch.device(args.device, index=local_rank))
+        logging.info(f"Using device (world_size): {model.device} ({world_size})")
 
     # Prepare dataset, subsetting if needed
     train_dataset: data.IterableDataset
@@ -270,9 +269,9 @@ def train(args: config_base.TrainConfig):
             optim=args.optimizer,
             num_train_epochs=args.num_epochs,
             max_steps=args.max_steps,
-            evaluation_strategy="steps",
+            eval_strategy="steps" if args.val_steps else "no",
             eval_steps=args.val_steps,
-            save_strategy="steps",
+            save_strategy="steps" if args.save_steps else "no",
             save_steps=args.save_steps,
             logging_first_step=True,
             logging_dir=args.logs_dir,
@@ -289,14 +288,19 @@ def train(args: config_base.TrainConfig):
             lr_scheduler_type=args.lr_scheduler,
             warmup_steps=args.lr_warmup_steps,
             weight_decay=args.weight_decay,
-            fp16=dtype == torch.float16,
-            bf16=dtype == torch.bfloat16,
+            # fp16=dtype == torch.float16,
+            # bf16=dtype == torch.bfloat16,
             use_cpu=args.device == "cpu",
             seed=args.seed + local_rank,
             report_to=args.report_logs_to,
             # torch_compile=True,
-            # fsdp="full_shard auto_wrap",
-            # fsdp_transformer_layer_cls_to_wrap='LlamaDecoderLayer',
+            fsdp="full_shard auto_wrap" if args.use_fsdp else "",
+            fsdp_config={
+                "backward_prefetch": "backward_pre",
+                "auto_wrap_policy": "TRANSFORMER_BASED_WRAP",
+                "state_dict_type": "SHARDED_STATE_DICT",
+                "sync_module_states": "true",
+            },
         ),
     )
 
@@ -305,12 +309,24 @@ def train(args: config_base.TrainConfig):
         logging.info("Starting training...")
         t_start = datetime.now()
         logging.info(f"train start time: {t_start}")
+
         if args.val_steps:
-            trainer.evaluate()
+            if args.use_fsdp:
+                logging.warning(
+                    "FSDP is enabled: Skipping initial validation since model is not initialized."
+                )
+            else:
+                trainer.evaluate()
+
         trainer.train()
         t_end = datetime.now()
         logging.info(f"train end time: {t_end}")
         logging.info(f"elapsed: {t_end - t_start}")
+
+    if args.use_fsdp:
+        # For training checkpoints, we want to use SHARDED_STATE_DICT which should be faster,
+        # but for the final save we want FULL_STATE_DICT so it can be serialized properly.
+        trainer.accelerator.state.fsdp_plugin.set_state_dict_type("FULL_STATE_DICT")
 
     # We use both pipeline.save_pretrained and trainer.save_model to save everything.
     # This is because pipeline.save_pretrained knows how to save the pipeline (code and config),

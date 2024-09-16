@@ -59,6 +59,9 @@ class TrainConfig:
 
     device: str = "cuda"
     data_type: str = "bfloat16"
+    # Whether to use FSDP (Fully Sharded Data Parallelism) for training
+    # needed for large model training (e.g. 70B+)
+    use_fsdp: bool = False
     # Path to load the model from. Can be local path, HF hub model_id, or W&B artifact
     model_load_dir: Optional[str] = None
     text_model_lora_config: Optional[ultravox_config.LoraConfigSimplified] = None
@@ -72,7 +75,9 @@ class TrainConfig:
     optimizer: str = "adamw_torch"
     num_epochs: int = 1
     max_steps: int = 0
-    val_steps: Optional[int] = None
+    # Run an evaluation every X steps. If smaller than 1, will be interpreted as ratio of total training steps.
+    val_steps: Optional[float] = None
+    # Save checkpoint every X steps. If smaller than 1, will be interpreted as ratio of total training steps.
     save_steps: float = 0
     logging_steps: int = 1
     grad_accum_steps: int = 1
@@ -136,6 +141,18 @@ class TrainConfig:
                 "LayerDrop cannot be used in DDP when encoder is not frozen. Disabling LayerDrop."
             )
             self.disable_layerdrop = True
+
+        if self.use_fsdp and self.save_steps:
+            logging.warning(
+                "FSDP is enabled: Saving checkpoints is going to be extremely slow and results in a full save."
+                " Consider setting save_steps=0."
+            )
+
+        if self.use_fsdp and self.do_eval:
+            logging.warning(
+                "FSDP is enabled: Evaluation is not supported with FSDP. Disabling evaluation."
+            )
+            self.do_eval = False
 
 
 def fix_hyphens(arg: str):
