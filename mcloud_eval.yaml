@@ -15,8 +15,8 @@ command: >-
   cd ultravox &&
   poetry install --no-dev &&
   poetry run python -m ultravox.training.helpers.prefetch_weights $EVAL_ARGS &&
-  poetry run torchrun --nproc_per_node=8 -m ultravox.tools.eval_tool $EVAL_ARGS --exp_name $UV_BRANCH
+  poetry run torchrun --nproc_per_node=8 -m ultravox.tools.eval_tool $EVAL_ARGS
 env_variables:
   MLFLOW_TRACKING_URI: databricks
-  UV_BRANCH: zhuang/unified_dataset_specification
+  UV_BRANCH: main
   EVAL_ARGS: --config_path ultravox/evaluation/configs/eval_config_2k.yaml

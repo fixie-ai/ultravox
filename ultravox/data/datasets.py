@@ -1105,7 +1105,7 @@ class Range(SizedIterableDataset):
                 raise ValueError(
                     "num_samples must be provided for non-SizedIterableDatasets"
                 )
-            
+
         self._length = active_samples or num_samples
         if self._length > num_samples:
             raise ValueError(

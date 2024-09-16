@@ -1,4 +1,4 @@
-model_path: "fixie-ai/ultravox-v0_4"
+model_load_dir: "fixie-ai/ultravox-v0_4"
 report_logs_to: ["wandb"]
 output_dir: "./output"
 

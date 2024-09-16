@@ -18,10 +18,10 @@ from ultravox.utils import string_helpers
 class TrainConfig:
     """Configuration class for training settings."""
 
-    text_model: str
+    text_model: Optional[str] = None
     """Language model to use; could be a huggingface model id, wandb path, or local path."""
 
-    audio_model: str
+    audio_model: Optional[str] = None
     """Audio encoder model to use; could be a huggingface model id, wandb path, or local path."""
 
     adapter_config: Optional[Dict[str, Any]] = None
