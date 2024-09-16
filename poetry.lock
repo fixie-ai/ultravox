@@ -1610,8 +1610,8 @@ torch = ["torch"]
 [package.source]
 type = "git"
 url = "https://github.com/fixie-ai/evals"
-reference = "HEAD"
-resolved_reference = "908a814c0881d99d4876d7000878ec0760a22311"
+reference = "0c66bf85df7a4b903ecb202b23c2a826b749fd71"
+resolved_reference = "0c66bf85df7a4b903ecb202b23c2a826b749fd71"
 
 [[package]]
 name = "evaluate"
@@ -8883,4 +8883,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10,<4.0"
-content-hash = "70cda1d7eb287a6cd00d2cf8a285c5f2613fcdea125caf03951258ecad79289c"
+content-hash = "798d26eeecb0625e6e6b655f7209286319924de573c9cdd9a30416593a492cb5"
