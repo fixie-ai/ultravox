@@ -106,6 +106,10 @@ def train(args: config_base.TrainConfig):
     text_tokenizer.pad_token = text_tokenizer.eos_token
 
     # Instantiate the model and processor
+    logging.info("Instantiating model...")
+
+    # Since the model downloads the language model and audio encoder weights, we want one process to finish up
+    # downloading before the others start in order to avoid race conditions.
     with ddp_utils.run_on_master_first(is_master):
         config = ultravox_config.UltravoxConfig(
             audio_model_id=args.audio_model,
@@ -114,13 +118,6 @@ def train(args: config_base.TrainConfig):
             audio_model_lora_config=args.audio_model_lora_config,
             adapter_type=args.adapter_type,
             adapter_config=args.adapter_config,
-        )
-
-    logging.info("Instantiating model...")
-
-    # Since the model downloads the language model and audio encoder weights, we want one process to finish up
-    # downloading before the others start in order to avoid race conditions.
-    with ddp_utils.run_on_master_first(is_master):
         model = ultravox_model.UltravoxModel(config)
 
     # loss_config needs to be passed separately just for model training
