@@ -133,8 +133,10 @@ def train(args: config_base.TrainConfig):
     # Whisper's internal config is the one that is important for setting spec augment
     model.audio_tower.config.apply_spec_augment = args.apply_spec_augment
     model.audio_tower.config.mask_feature_prob = args.mask_feature_prob
+    model.audio_tower.config.mask_time_prob = args.mask_time_prob
     setattr(config.audio_config, "apply_spec_augment", args.apply_spec_augment)
     setattr(config.audio_config, "mask_feature_prob", args.mask_feature_prob)
+    setattr(config.audio_config, "mask_time_prob", args.mask_time_prob)
 
     assert model.get_input_embeddings().num_embeddings == len(
         text_tokenizer

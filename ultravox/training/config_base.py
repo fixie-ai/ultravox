@@ -89,6 +89,7 @@ class TrainConfig:
     weight_decay: float = 0.0
     apply_spec_augment: bool = False
     mask_feature_prob: float = 0.0
+    mask_time_prob: float = 0.0
     seed: int = 42
     shuffle_seed: int = 42
     # Experiment logging destinations: tensorboard, wandb, neptune, mlflow, etc
