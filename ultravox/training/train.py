@@ -117,7 +117,8 @@ def train(args: config_base.TrainConfig):
             text_model_lora_config=args.text_model_lora_config,
             audio_model_lora_config=args.audio_model_lora_config,
             adapter_type=args.adapter_type,
-            adapter_config=args.adapter_config,
+            adapter_config=args.adapter_config
+        )
         model = ultravox_model.UltravoxModel(config)
 
     # loss_config needs to be passed separately just for model training
