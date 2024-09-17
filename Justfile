@@ -61,4 +61,6 @@ run *FLAGS:
     poetry run mcli run -f mcloud.yaml --follow {{FLAGS}}
 
 mcloud *FLAGS:
-    poetry run mcli interactive {{FLAGS}} --cluster ${MCLOUD_CLUSTER} --instance ${MCLOUD_INSTANCE}  --name `whoami` --command "bash -c \"$(cat setup.sh)\"" 
+    branch := $(git rev-parse --abbrev-ref HEAD)
+    poetry run mcli interactive {{FLAGS}} --cluster ${MCLOUD_CLUSTER} --instance ${MCLOUD_INSTANCE}  --name `whoami` --command "bash -c \"BRANCH=${branch} $(cat setup.sh)\""
+
