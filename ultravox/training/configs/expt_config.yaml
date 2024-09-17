@@ -1,9 +1,9 @@
 # SLM with ultravox & llama3.1, trained wtih knowledge distillation.
 # Make sure to accept the license agreement on huggingface hub
 text_model: "meta-llama/Meta-Llama-3.1-8B-Instruct"
-audio_model: "openai/whisper-medium"
-model_load_dir: "wandb://fixie/ultravox/model-zhuang.2024-08-12-ultravox.input_kd-1f3:v1"
-resume_from_checkpoint: True
+audio_model: "openai/whisper-small"
+# model_load_dir: "wandb://fixie/ultravox/model-zhuang.2024-08-12-ultravox.input_kd-1f3:v1"
+# resume_from_checkpoint: True
 
 adapter_type: "CFORMER"
 loss_config:
@@ -42,6 +42,7 @@ train_dataset_configs:
     user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
     assistant_template: "{{ continuation }}"
     transcript_template: "{{ text_proc.format_asr_text(sentence) }}"
+    weight: 8
 
 
 val_dataset_args:

@@ -189,6 +189,8 @@ class TrainConfig:
 
         assert self.data_type in ["bfloat16", "float16", "float32"]
         assert self.device in ["cuda", "cpu", "mps"]
+        if self.device == "mps":
+            raise ValueError("MPS is not supported for training due to lack of support for torch.scatter_ that is needed for CFormerAdapter")
         if self.device != "cuda":
             if self.data_type == "bfloat16":
                 self.data_type = "float32"

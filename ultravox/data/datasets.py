@@ -156,7 +156,7 @@ class DatasetConfig(BaseModel):
             raise ValueError("At least one split must be provided")
 
         # Construct the alias if not provided
-        if self.alias is None:
+        if not self.alias:
             alias: List[str] = []
             if self.type != "generic":
                 alias.append(self.type)

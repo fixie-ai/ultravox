@@ -89,6 +89,7 @@ class UltravoxDataproc(datasets.Dataproc):
             # output_token_len = self.processor(text=output_text)["input_ids"].shape[-1]
             # input_token_len = len(input_ids) - output_token_len
             # labels[:input_token_len] = -100
+
             input_text = self.processor.tokenizer.apply_chat_template(
                 sample.messages[:-1], tokenize=False
             )
