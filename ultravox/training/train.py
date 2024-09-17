@@ -106,14 +106,15 @@ def train(args: config_base.TrainConfig):
     text_tokenizer.pad_token = text_tokenizer.eos_token
 
     # Instantiate the model and processor
-    config = ultravox_config.UltravoxConfig(
-        audio_model_id=args.audio_model,
-        text_model_id=args.text_model,
-        text_model_lora_config=args.text_model_lora_config,
-        audio_model_lora_config=args.audio_model_lora_config,
-        adapter_type=args.adapter_type,
-        adapter_config=args.adapter_config,
-    )
+    with ddp_utils.run_on_master_first(is_master):
+        config = ultravox_config.UltravoxConfig(
+            audio_model_id=args.audio_model,
+            text_model_id=args.text_model,
+            text_model_lora_config=args.text_model_lora_config,
+            audio_model_lora_config=args.audio_model_lora_config,
+            adapter_type=args.adapter_type,
+            adapter_config=args.adapter_config,
+        )
 
     logging.info("Instantiating model...")
 
