@@ -523,10 +523,12 @@ class ModifiedWhisperEncoder(whisper.WhisperEncoder):
     2. allow less than 30 second of audio padding to be passed in:
         - relaxed ValueError check for `input_features` length to be less than or equal to `expected_seq_length` instead of strictly equal
         - embed_pos is now sliced to match the length of `inputs_embeds`
+    3. copied over `WhisperModel._mask_input_features` method to apply SpecAugment to the input features
 
     Original: https://github.com/huggingface/transformers/blob/main/src/transformers/models/whisper/modeling_whisper.py
     """
 
+    config: whisper.WhisperConfig
     base_model_prefix = "model.encoder"
     _no_split_modules = ["WhisperEncoderLayer"]
 
@@ -539,6 +541,9 @@ class ModifiedWhisperEncoder(whisper.WhisperEncoder):
         output_hidden_states=None,
         return_dict=None,
     ):
+        # TODO: apply attention_mask to the input_features
+        input_features = self._mask_input_features(input_features)
+
         expected_seq_length = (
             self.config.max_source_positions
             * self.conv1.stride[0]
@@ -633,6 +638,53 @@ class ModifiedWhisperEncoder(whisper.WhisperEncoder):
             hidden_states=encoder_states,
             attentions=all_attentions,
         )
+
+    def _mask_input_features(
+        self,
+        input_features: torch.FloatTensor,
+        attention_mask: Optional[torch.LongTensor] = None,
+    ):
+        """
+        Masks extracted features along time axis and/or along feature axis according to
+        [SpecAugment](https://arxiv.org/abs/1904.08779).
+        """
+
+        # `config.apply_spec_augment` can set masking to False
+        if not getattr(self.config, "apply_spec_augment", True):
+            return input_features
+
+        # generate indices & apply SpecAugment along time axis
+        batch_size, hidden_size, sequence_length = input_features.size()
+
+        if self.config.mask_time_prob > 0 and self.training:
+            # generate indices & apply SpecAugment along time axis
+            mask_time_indices = whisper._compute_mask_indices(
+                (batch_size, sequence_length),
+                mask_prob=self.config.mask_time_prob,
+                mask_length=self.config.mask_time_length,
+                attention_mask=attention_mask,
+                min_masks=self.config.mask_time_min_masks,
+            )
+            mask_time_indices = torch.tensor(
+                mask_time_indices, device=input_features.device, dtype=torch.bool
+            )
+            mask_time_indices = mask_time_indices[:, None].expand(-1, hidden_size, -1)
+            input_features[mask_time_indices] = 0
+
+        if self.config.mask_feature_prob > 0 and self.training:
+            # generate indices & apply SpecAugment along feature axis
+            mask_feature_indices = whisper._compute_mask_indices(
+                (batch_size, hidden_size),
+                mask_prob=self.config.mask_feature_prob,
+                mask_length=self.config.mask_feature_length,
+                min_masks=self.config.mask_feature_min_masks,
+            )
+            mask_feature_indices = torch.tensor(
+                mask_feature_indices, device=input_features.device, dtype=torch.bool
+            )
+            input_features[mask_feature_indices] = 0
+
+        return input_features
 
 
 UltravoxConfig.register_for_auto_class()

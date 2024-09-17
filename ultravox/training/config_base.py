@@ -87,6 +87,7 @@ class TrainConfig:
     lr_scheduler: str = "cosine"
     lr_warmup_steps: int = 0
     weight_decay: float = 0.0
+    apply_spec_augment: bool = False
     seed: int = 42
     shuffle_seed: int = 42
     # Experiment logging destinations: tensorboard, wandb, neptune, mlflow, etc

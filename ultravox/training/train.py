@@ -130,6 +130,10 @@ def train(args: config_base.TrainConfig):
     logging.info("Instantiating model...")
     model = ultravox_model.UltravoxModel(config)
 
+    # Whisper's internal config is the one that is important for setting spec augment
+    model.audio_tower.config.apply_spec_augment = args.apply_spec_augment
+    setattr(config.audio_config, "apply_spec_augment", args.apply_spec_augment)
+
     assert model.get_input_embeddings().num_embeddings == len(
         text_tokenizer
     ), f"Model and tokenizer mismatch: {model.get_input_embeddings().num_embeddings} != {len(text_tokenizer)}"
