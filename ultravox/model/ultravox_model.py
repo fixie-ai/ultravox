@@ -127,9 +127,9 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         self.step_counter += 1
 
         # Log accumulated losses every n steps
-        if self.step_counter % self.loss_config.log_interval == 0:
+        if self.step_counter % self.loss_config.logging_steps == 0:
             avg_losses = {
-                k: v / self.loss_config.log_interval
+                k: v / self.loss_config.logging_steps
                 for k, v in self.accumulated_losses.items()
             }
 
@@ -1173,9 +1173,8 @@ class CFormerAdapter(UltravoxAdapter):
         extended_attention_mask = self.get_extended_attention_mask(
             attention_mask,
             num_audio_tokens.shape,
-            attention_mask.device,
-            attention_mask.dtype,
-        )
+            dtype=attention_mask.dtype,
+        ).to(hidden_states.device)
         for layer in self.post_cif_layers:
             hidden_states = layer(hidden_states, extended_attention_mask, None)[0]
 

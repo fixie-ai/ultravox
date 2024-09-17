@@ -39,7 +39,7 @@ class LossConfig:
         default_factory=lambda: {LossFunction.Response_KL: 1.0}
     )
     kl_temperature: float = 2.0
-    log_interval: int = 100
+    logging_steps: int = 100
 
     def __post_init__(self):
         self.loss_weights = {

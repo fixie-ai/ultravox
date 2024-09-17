@@ -14,6 +14,8 @@ device: "cpu"
 
 max_steps: 2000 # x8x24 = 2,764,800
 
+logging_steps: 1
+
 train_dataset_args:
   shuffle: False
   batch_size: 12

@@ -185,6 +185,7 @@ class DataCollatorForSeq2SeqWithAudio(transformers.DataCollatorForSeq2Seq):
     def __call__(self, features, *args, **kwargs):
         audio_values = [f.pop("audio_values", None) for f in features]
         transcript_ids = [f.pop("transcript_ids", None) for f in features]
+        labels = [f.pop("labels", None) for f in features]
 
         input_ids_lens = torch.LongTensor([f["input_ids"].shape[-1] for f in features])
         batch = super().__call__(features, *args, **kwargs)
@@ -204,6 +205,13 @@ class DataCollatorForSeq2SeqWithAudio(transformers.DataCollatorForSeq2Seq):
             max_len = max([x.shape[-1] for x in transcript_ids])
             batch["transcript_ids"] = torch.stack(
                 [F.pad(x, (0, max_len - x.shape[-1])) for x in transcript_ids]
+            )
+        
+        # Handle padding for labels, the HF implementation relies on a list of numpy.ndarrays, which is extremely slow and causes excessive warnings.
+        if labels and labels[0] is not None:
+            max_len = max([len(x) for x in labels])
+            batch["labels"] = torch.stack(
+                [F.pad(x, (0, max_len - len(x)), value=self.label_pad_token_id) for x in labels]
             )
         return batch
 
