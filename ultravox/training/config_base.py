@@ -93,6 +93,9 @@ class TrainConfig:
     data_type: str = device_helpers.default_dtype_str()
     """Data type to use for training (e.g., 'bfloat16', 'float16', 'float32')."""
 
+    use_fsdp: bool = False
+    """Whether to use FSDP for distributed training."""
+
     model_load_dir: Optional[str] = None
     """
     Path to load pretrained ultravox model from. Can be local path, HF hub model_id, or W&B artifact.
@@ -216,6 +219,18 @@ class TrainConfig:
                 "LayerDrop cannot be used in DDP when encoder is not frozen. Disabling LayerDrop."
             )
             self.disable_layerdrop = True
+
+        if self.use_fsdp and self.save_steps:
+            logging.warning(
+                "FSDP is enabled: Saving checkpoints is going to be extremely slow and results in a full save."
+                " Consider setting save_steps=0."
+            )
+
+        if self.use_fsdp and self.do_eval:
+            logging.warning(
+                "FSDP is enabled: Evaluation is not supported with FSDP. Disabling evaluation."
+            )
+            self.do_eval = False
 
 
 def get_train_args(override_sys_args: Optional[List[str]] = None) -> TrainConfig:

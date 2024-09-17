@@ -34,7 +34,6 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
 
     config_class = UltravoxConfig
     config: UltravoxConfig  # for type hinting
-    _no_split_modules = ["Wav2Vec2Model", "WhisperEncoder", "LlamaDecoderLayer"]
     # We minimize the weights in state_dict in order to reduce the size of the checkpoint
     # The issue is that load_pretrained() uses state_dict() keys to know what keys are expected
     # As such we have to tell is to ignore some keys that are not always in the model
@@ -46,13 +45,21 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
 
     def __init__(self, config: UltravoxConfig):
         super().__init__(config)
+        self._register_load_state_dict_pre_hook(self._pre_load_state_dict_hook)
 
         self.keep_params: Set[str] = set()
         self.vocab_size = config.vocab_size
 
         self.audio_tower = self._create_audio_tower(config)
-        self.multi_modal_projector = UltravoxProjector(config)
+        self.multi_modal_projector = self._create_multi_modal_projector(config)
         self.language_model = self._create_language_model(config)
+
+        # Determine no_split_modules dynamically to use with FSDP auto_wrap policy.
+        # FSDP throws an error if some of the layer types are not found in the model.
+        # This would be something like ["LlamaDecoderLayer", "WhisperEncoderLayer"]
+        self._no_split_modules = (self.language_model._no_split_modules or []) + (
+            self.audio_tower._no_split_modules or []
+        )
 
         self.loss_config = LossConfig()
         self.post_init()
@@ -188,7 +195,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
 
             # B x A/3200 x D
             audio_tower_output = self.audio_tower.forward(
-                audio_values
+                audio_values.to(self.audio_tower.dtype)
             ).last_hidden_state
             audio_tower_output = audio_tower_output.to(inputs_embeds.dtype)
 
@@ -266,17 +273,25 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         return model_input
 
     @classmethod
+    def _create_multi_modal_projector(
+        cls, config: UltravoxConfig
+    ) -> "UltravoxProjector":
+        projector = UltravoxProjector(config)
+        projector.to(config.torch_dtype)
+        return projector
+
+    @classmethod
     def _create_audio_tower(
         cls, config: UltravoxConfig
     ) -> Union[transformers.Wav2Vec2Model, "ModifiedWhisperEncoder"]:
         if config.audio_model_id is not None:
             if "whisper" in config.audio_model_id is not None:
                 audio_tower = ModifiedWhisperEncoder.from_pretrained(
-                    config.audio_model_id
+                    config.audio_model_id, torch_dtype=config.torch_dtype
                 )
             else:
                 audio_tower = transformers.AutoModel.from_pretrained(
-                    config.audio_model_id
+                    config.audio_model_id, torch_dtype=config.torch_dtype
                 )
         else:
             if "whisper" in config.audio_config._name_or_path:
@@ -307,14 +322,18 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
     ) -> transformers.LlamaForCausalLM:
         if config.text_model_id is not None:
             language_model = transformers.AutoModelForCausalLM.from_pretrained(
-                config.text_model_id, attn_implementation=config._attn_implementation
+                config.text_model_id,
+                attn_implementation=config._attn_implementation,
+                torch_dtype=config.torch_dtype,
             )
         else:
             with transformers.modeling_utils.no_init_weights():
                 # we only ever use from_config if the weights are retrained, hence initializing is not
                 # required. This makes the model quite creation faster since init on CPU is quite slow.
                 language_model = transformers.AutoModelForCausalLM.from_config(
-                    config.text_config, attn_implementation=config._attn_implementation
+                    config.text_config,
+                    attn_implementation=config._attn_implementation,
+                    torch_dtype=config.torch_dtype,
                 )
 
         language_model = apply_lora(language_model, config.text_model_lora_config)
@@ -356,9 +375,13 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         self.to(self.language_model.dtype)
         return super().push_to_hub(*args, **kwargs)
 
-    def state_dict(self, *args, **kwargs):
+    def save_pretrained(
+        self, *args, state_dict: Optional[Dict[str, Any]] = None, **kwargs
+    ):
+        if state_dict is None:
+            state_dict = super().state_dict()
+
         named_params = dict(self.named_parameters())
-        state_dict = super().state_dict(*args, **kwargs)
 
         state_dict = {
             k: v
@@ -366,16 +389,11 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             if k in self.keep_params
             or (k in named_params and named_params[k].requires_grad)
         }
-        return state_dict
 
-    def load_state_dict(
-        self,
-        state_dict: Dict[str, Any],
-        *args,
-        **kwargs,
-    ):
+        super().save_pretrained(*args, state_dict=state_dict, **kwargs)
+
+    def _pre_load_state_dict_hook(self, state_dict: Dict[str, Any], *args, **kwargs):
         self.keep_params.update(set(state_dict.keys()))
-        return super().load_state_dict(state_dict, *args, **kwargs)
 
     def print_trainable_parameters(self):
         """
@@ -510,6 +528,7 @@ class ModifiedWhisperEncoder(whisper.WhisperEncoder):
     """
 
     base_model_prefix = "model.encoder"
+    _no_split_modules = ["WhisperEncoderLayer"]
 
     def forward(
         self,
