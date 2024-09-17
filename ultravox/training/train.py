@@ -1,3 +1,4 @@
+import contextlib
 import copy
 import dataclasses
 import gc
@@ -8,6 +9,7 @@ import subprocess
 from datetime import datetime
 from typing import Dict, List, Optional
 
+import accelerate
 import datasets as hf_datasets
 import pandas as pd
 import safetensors.torch
@@ -128,7 +130,17 @@ def train(args: config_base.TrainConfig):
     )
 
     logging.info("Instantiating model...")
-    model = ultravox_model.UltravoxModel(config)
+
+    model_load_context = (
+        accelerate.init_empty_weights()
+        if args.use_fsdp and not is_master
+        else contextlib.nullcontext()
+    )
+    # If we're using FSDP, we can just initialize the model on the main process
+    # and use sync_model_states to distribute the weights to the other processes.
+    # Otherwise we'd be loading the model on every process, which uses too much CPU memory.
+    with model_load_context:
+        model = ultravox_model.UltravoxModel(config)
 
     assert model.get_input_embeddings().num_embeddings == len(
         text_tokenizer
