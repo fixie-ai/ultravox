@@ -10,13 +10,13 @@ integrations:
     git_branch: $UV_BRANCH
     pip_install: poetry==1.7.1
 scheduling:
-  max_duration: 6  # 6 hours max for jobs to avoid hanging jobs
+  max_duration: 2  # 2 hours max for jobs to avoid hanging jobs
 command: >-
   cd ultravox &&
   poetry install --no-dev &&
-  poetry run python -m ultravox.training.helpers.prefetch_weights $TRAIN_ARGS &&
-  poetry run torchrun --nproc_per_node=8 -m ultravox.training.train $TRAIN_ARGS
+  poetry run python -m ultravox.training.helpers.prefetch_weights $EVAL_ARGS &&
+  poetry run torchrun --nproc_per_node=8 -m ultravox.tools.eval_tool $EVAL_ARGS
 env_variables:
   MLFLOW_TRACKING_URI: databricks
   UV_BRANCH: main
-  TRAIN_ARGS: --config_path ultravox/training/configs/release_config.yaml
+  EVAL_ARGS: --config_path ultravox/evaluation/configs/eval_config_2k.yaml

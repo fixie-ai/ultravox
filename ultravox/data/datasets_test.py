@@ -8,17 +8,16 @@ import torch
 from torch.utils import data
 from transformers.feature_extraction_utils import BatchFeature
 
-from ultravox.data import dataset_config
 from ultravox.data import datasets
 
 
 class FakeSizedIterableDataset(datasets.SizedIterableDataset):
     """Fake version of datasets.SizedIterableDataset"""
 
-    def __init__(self, n, start=0, weight=1, estimated_length=0):
+    def __init__(self, n, start=0, weight=1, length=0):
         self.data = range(start, start + n)
         self._weight = weight
-        self._estimated_length = estimated_length
+        self._length = length
 
     @property
     def weight(self) -> float:
@@ -29,7 +28,7 @@ class FakeSizedIterableDataset(datasets.SizedIterableDataset):
             yield sample
 
     def __len__(self):
-        return self._estimated_length
+        return self._length
 
 
 class FakeHuggingFaceIterableDataset(hf_datasets.IterableDataset):
@@ -51,8 +50,16 @@ class FakeHuggingFaceIterableDataset(hf_datasets.IterableDataset):
 class FakeTranscribeDataset(datasets.VoiceDataset):
     """Fake version of our VoiceDataset using a transcribe prompt."""
 
-    def __init__(self, n: int, args: Optional[datasets.VoiceDatasetArgs] = None):
-        super().__init__(args or datasets.VoiceDatasetArgs())
+    def __init__(
+        self,
+        n: int,
+        args: Optional[datasets.VoiceDatasetArgs] = None,
+        config: Optional[datasets.DatasetConfig] = None,
+    ):
+        super().__init__(
+            args or datasets.VoiceDatasetArgs(),
+            config or datasets.DatasetConfig(num_samples=n, splits=["fake"]),
+        )
 
         self._init_dataset(FakeHuggingFaceIterableDataset(n), n)
 
@@ -66,11 +73,11 @@ class FakeGenericDataset(datasets.VoiceDataset):
     def __init__(
         self,
         n: int,
-        config: dataset_config.DataDictConfig,
+        config: datasets.DatasetConfig,
         args: Optional[datasets.VoiceDatasetArgs] = None,
     ):
-        super().__init__(args or datasets.VoiceDatasetArgs())
-        self._init_dataset(FakeHuggingFaceIterableDataset(n), config.total_samples)
+        super().__init__(args or datasets.VoiceDatasetArgs(), config)
+        self._init_dataset(FakeHuggingFaceIterableDataset(n), config.num_samples)
 
     def _get_sample(self, row: BatchFeature) -> Optional[datasets.VoiceSample]:
         return self._get_transcribe_sample(row)
@@ -178,11 +185,13 @@ def test_interleaved_with_multiprocessing():
 
 
 def test_range():
-    ds = FakeSizedIterableDataset(10, estimated_length=10)
+    ds = FakeSizedIterableDataset(10, length=10)
     s = datasets.Range(ds, 5)
     assert len(s) == 5
     assert list(s) == [0, 1, 2, 3, 4]
-    s = datasets.Range(ds, 100)
+    with pytest.raises(ValueError, match="is greater than the number of samples"):
+        s = datasets.Range(ds, 100)
+    s = datasets.Range(ds, 10)
     assert list(s) == [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
     s = datasets.Range(ds)
     assert len(s) == 10
@@ -324,17 +333,21 @@ def test_get_messages():
 
 
 def test_voice_dataset_size():
-    mock_config = dataset_config.DataDictConfig(path="mock_path", total_samples=5)
+    mock_config = datasets.DatasetConfig(
+        path="mock_path", num_samples=5, splits=["fake"]
+    )
     ds = FakeGenericDataset(10, mock_config)
     assert len(ds) == 5
 
-    pattern = r"(has been exceeded|Mismatch between estimated length)"
+    pattern = r"(has been exceeded|Mismatch between presumed length)"
     with pytest.warns(UserWarning, match=pattern):
         list(ds)
 
-    mock_config = dataset_config.DataDictConfig(path="mock_path", total_samples=10)
+    mock_config = datasets.DatasetConfig(
+        path="mock_path", num_samples=10, splits=["fake"]
+    )
     ds = FakeGenericDataset(5, mock_config)
     assert len(ds) == 10
 
-    with pytest.warns(UserWarning, match="Mismatch between estimated length"):
+    with pytest.warns(UserWarning, match="Mismatch between presumed length"):
         list(ds)

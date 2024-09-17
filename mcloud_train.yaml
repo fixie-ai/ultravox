@@ -1,0 +1,22 @@
+# Ultravox training configuration
+name: ultravox
+image: mosaicml/composer:latest
+compute:
+  gpus: 8
+  cluster: r14z3p1
+integrations:
+  - integration_type: git_repo
+    git_repo: fixie-ai/ultravox
+    git_branch: $UV_BRANCH
+    pip_install: poetry==1.7.1
+scheduling:
+  max_duration: 6  # 6 hours max for jobs to avoid hanging jobs
+command: >-
+  cd ultravox &&
+  poetry install --no-dev &&
+  poetry run python -m ultravox.training.helpers.prefetch_weights $TRAIN_ARGS &&
+  poetry run torchrun --nproc_per_node=8 -m ultravox.training.train $TRAIN_ARGS
+env_variables:
+  MLFLOW_TRACKING_URI: databricks
+  UV_BRANCH: main
+  TRAIN_ARGS: --config_path ultravox/training/configs/release_config.yaml

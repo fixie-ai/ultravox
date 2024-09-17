@@ -1,0 +1,102 @@
+# llama3.1-8b + whisper-medium, for development
+
+exp_name: "llama3.1-8b-whisper"
+text_model: "meta-llama/Meta-Llama-3.1-8B-Instruct"
+audio_model: "openai/whisper-medium"
+
+loss_config:
+  loss_function: "KL_Divergence"
+
+max_steps: 20 # x8x24 = 2,764,800
+
+train_dataset_args:
+  shuffle: True
+  batch_size: 4
+train_dataset_configs:
+# continuation
+  - alias: "librispeech-clean"
+    path: "fixie-ai/librispeech_asr"
+    name: "clean"
+    splits:
+      - "train.100" # 28_539 samples
+      - "train.360" # 104_014 samples
+    active_samples: 100
+    num_samples: 132_553
+    user_template: "<|audio|>"
+    assistant_template: ""
+    transcript_template: "{{ text }}"
+    weight: 1
+  - alias: "librispeech-other"
+    path: "fixie-ai/librispeech_asr"
+    name: "other"
+    splits:
+      - "train.500" # 148_688 samples
+    num_samples: 148_688
+    user_template: "<|audio|>"
+    assistant_template: ""
+    transcript_template: "{{ text }}"
+    weight: 1
+ 
+
+val_dataset_args:
+  batch_size: 4
+val_dataset_configs:
+  - alias: "covost2-en_zh-val"
+    path: "fixie-ai/covost2"
+    name: "en_zh-CN"
+    splits:
+      - "validation"
+    active_samples: 20
+    num_samples: 15531
+    user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
+    user_template_args:
+      target: "Chinese"
+    assistant_template: "{{ translation }}"
+    transcript_template: "{{ sentence }}"
+  - alias: "covost2-zh_en-val"
+    path: "fixie-ai/covost2"
+    name: "zh-CN_en"
+    splits:
+      - "validation"
+    active_samples: 20
+    num_samples: 4843
+    user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
+    user_template_args:
+      target: "English"
+    assistant_template: "{{ translation }}"
+    transcript_template: "{{ sentence }}"
+
+eval_dataset_args:
+  batch_size: 4
+  max_tokens: 20
+eval_dataset_configs:
+  - alias: "covost2-en_zh-test"
+    path: "fixie-ai/covost2"
+    name: "en_zh-CN"
+    splits:
+      - "test"
+    user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
+    user_template_args:
+      target: "Chinese"
+    assistant_template: "{{ translation }}"
+    transcript_template: "{{ sentence }}"
+    active_samples: 20
+    num_samples: 15531
+    eval_config:
+      metric: "bleu"
+      args:
+        tokenize: "zh"
+  - alias: "covost2-zh_en-test"
+    path: "fixie-ai/covost2"
+    name: "zh-CN_en"
+    splits:
+      - "test"
+    user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
+    user_template_args:
+      target: "English"
+    assistant_template: "{{ translation }}"
+    transcript_template: "{{ sentence }}"
+    active_samples: 20
+    num_samples: 4898
+    eval_config:
+      metric: "bleu"

@@ -22,8 +22,12 @@ def main(override_sys_args: Optional[List[str]] = None):
     print(f"Weights downloaded in {end - start} seconds")
 
 
-def download_weights(model_ids: List[str], model_load_dir: Optional[str] = None):
+def download_weights(
+    model_ids: List[Optional[str]], model_load_dir: Optional[str] = None
+):
     for model_id in model_ids:
+        if model_id is None:
+            continue
         try:
             # Download all model files that match ALLOW_PATTERNS
             # This is faster than .from_pretrained due to parallel downloads

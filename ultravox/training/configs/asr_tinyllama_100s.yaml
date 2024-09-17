@@ -1,7 +1,0 @@
-# test config for fast experimentation, only 100 steps
-
-text_model: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
-exp_name: "tinyllama_asr_100s"
-
-max_steps: 100
-lr_warmup_steps: 10

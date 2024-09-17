@@ -3,10 +3,10 @@ from typing import Optional
 import transformers
 
 from ultravox.inference import infer
-from ultravox.inference import utils
 from ultravox.model import ultravox_model
 from ultravox.model import ultravox_processing
 from ultravox.model import wandb_utils
+from ultravox.utils import device_helpers
 
 
 class UltravoxInference(infer.LocalInference):
@@ -32,8 +32,12 @@ class UltravoxInference(infer.LocalInference):
             data_type: data type to use for the model
             conversation_mode: if true, keep track of past messages in a conversation
         """
-        device = device or utils.default_device()
-        dtype = utils.get_dtype(data_type) if data_type else utils.default_dtype()
+        device = device or device_helpers.default_device()
+        dtype = (
+            device_helpers.get_dtype(data_type)
+            if data_type
+            else device_helpers.default_dtype()
+        )
         if wandb_utils.is_wandb_url(model_path):
             model_path = wandb_utils.download_model_from_wandb(model_path)
         model = ultravox_model.UltravoxModel.from_pretrained(

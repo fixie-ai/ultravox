@@ -9,14 +9,15 @@ from ultravox.evaluation import gpt_eval_conv
 def test_evaluate_conversation():
     gpt_eval.client = mock.MagicMock()
     sample = eval_types.Sample(
+        index=0,
         history=[
             {"role": "system", "content": "Blah blah blah"},
             {"role": "user", "content": "T1"},
             {"role": "assistant", "content": "T2"},
         ],
         question="T3",
-        generated_answer="T4",
-        expected_answer="EXP",
+        hypothesis="T4",
+        reference="EXP",
     )
     expected_turns = "A: T1\n\nB: T2\n\nA: T3\n\nModel (as B): T4\nCorrect: EXP"
 

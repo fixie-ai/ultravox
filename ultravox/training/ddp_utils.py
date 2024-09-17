@@ -34,7 +34,11 @@ def all_gather_list(data: List[T]) -> List[T]:
         return data
     world_size = torch.distributed.get_world_size()
     data_list = [None] * world_size
-    torch.distributed.all_gather_object(data_list, data)
+    try:
+        torch.distributed.all_gather_object(data_list, data)
+    except Exception as e:
+        print(f"Error in all_gather_object: {e}", flush=True)
+        raise e
     return flatten(data_list)  # type: ignore
 
 
@@ -43,3 +47,18 @@ def sharded_iterator(ds: data.IterableDataset, num_shards: int, shard_index: int
     for i, sample in enumerate(ds):
         if i % num_shards == shard_index:
             yield sample
+
+
+def sharded_batch_iterator(
+    ds: data.IterableDataset, batch_size: int, num_shards: int, shard_index: int
+):
+    batch = []
+    for idx, sample in enumerate(ds):
+        if idx % num_shards == shard_index:
+            batch.append((idx, sample))
+            if len(batch) == batch_size:
+                yield batch
+                batch = []
+    # Yield any remaining samples in the last incomplete batch
+    if batch:
+        yield batch
