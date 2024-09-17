@@ -8,12 +8,12 @@ audio_model: "openai/whisper-small"
 adapter_type: "CFORMER"
 loss_config:
   loss_weights: 
-    Input_KL: 1
+    Response_KL: 1
   logging_steps: 10
 
 max_steps: 14400 # x8x24 
 lr_warmup_steps: 1000
-lr:  1e-3
+lr:  1e-4
 weight_decay: 0.05
 logging_steps: 10
 
