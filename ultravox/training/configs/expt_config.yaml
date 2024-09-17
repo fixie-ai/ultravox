@@ -15,6 +15,7 @@ loss_config:
 max_steps: 7200 # x8x24 
 lr_warmup_steps: 1000
 lr:  1e-3
+weight_decay: 0.05
 logging_steps: 10
 
 train_dataset_args:
