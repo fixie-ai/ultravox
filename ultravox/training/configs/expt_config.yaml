@@ -11,7 +11,9 @@ loss_config:
     Response_KL: 1
     Input_KL: 1
 
-max_steps: 14400 # x8x24 
+max_steps: 7200 # x8x24 
+lr_warmup_steps: 1000
+lr:  2e-3
 
 train_dataset_args:
   shuffle: True
