@@ -7,7 +7,7 @@ import transformers
 from ultravox.model import wandb_utils
 from ultravox.training import config_base
 
-ALLOW_PATTERNS = ["*.safetensors", "*.json"]
+ALLOW_PATTERNS = ["*.safetensors", "*.json", "*.txt"]
 
 
 def main(override_sys_args: Optional[List[str]] = None):
