@@ -108,6 +108,7 @@ def main():
         args.eval_dataset_configs,
         world_size,
         local_rank,
+        output_dir=args.output_dir,
     )
 
     if local_rank == 0:

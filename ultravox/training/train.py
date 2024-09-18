@@ -310,6 +310,7 @@ def train(args: config_base.TrainConfig):
             args.eval_dataset_configs,
             world_size,
             local_rank,
+            output_dir=args.output_dir,
         )
         if is_master:
             trainer.log(metrics)
