@@ -389,6 +389,105 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             losses[LossFunction.Input_KL] = loss
         return losses
 
+    def _process_audio_input(
+        self,
+        inputs_embeds: torch.Tensor,
+        attention_mask: torch.Tensor,
+        audio_values: torch.FloatTensor,
+        audio_len: torch.Tensor,
+        audio_start_idx: torch.Tensor,
+        labels: Optional[torch.Tensor] = None,
+        position_ids: Optional[torch.Tensor] = None,
+        cache_position: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor], Optional[torch.Tensor], torch.Tensor]:
+        # Sanity checks
+        if audio_values is None or audio_len is None or audio_start_idx is None:
+            raise ValueError("audio_values, audio_len, and audio_start_idx must be provided for audio input processing")
+        if not (len(audio_start_idx) == len(audio_len) == len(audio_values)):
+            raise ValueError("audio_start_idx, audio_len, and audio_values must have the same batch size")
+        if inputs_embeds.shape[0] != audio_values.shape[0]:
+            raise ValueError(f"Batch size mismatch: inputs_embeds has shape {inputs_embeds.shape}, but audio_values has shape {audio_values.shape}")
+        if attention_mask.shape != inputs_embeds.shape[:2]:
+            raise ValueError(f"Attention mask shape {attention_mask.shape} does not match inputs_embeds shape {inputs_embeds.shape[:2]}")
+        if labels is not None and labels.shape != inputs_embeds.shape[:2]:
+            raise ValueError(f"Labels shape {labels.shape} does not match inputs_embeds shape {inputs_embeds.shape[:2]}")
+        if position_ids is not None and position_ids.shape != inputs_embeds.shape[:2]:
+            raise ValueError(f"Position IDs shape {position_ids.shape} does not match inputs_embeds shape {inputs_embeds.shape[:2]}")
+        if cache_position is not None and cache_position.shape[0] != inputs_embeds.shape[1]:
+            raise ValueError(f"Cache position shape {cache_position.shape[0]} does not match inputs_embeds sequence length {inputs_embeds.shape[1]}")
+       
+        # Process audio through audio tower
+        audio_tower_output = self.audio_tower(audio_values).last_hidden_state
+        audio_tower_output = audio_tower_output.to(self.language_model.dtype)
+
+        # Get audio feature lengths
+        audio_feature_len = self.audio_tower._get_feat_extract_output_lengths(audio_len)
+
+        # Process through adapter
+        audio_embeds, num_audio_tokens, num_pred_audio_tokens = self.adapter(
+            audio_tower_output, audio_feature_len, None
+        )
+
+        # Insert audio embeddings
+        new_inputs_embeds, new_attention_mask, new_labels, new_position_ids, new_cache_position = self._insert_tokens(
+            inputs_embeds,
+            attention_mask,
+            audio_start_idx,
+            audio_embeds,
+            num_audio_tokens,
+            labels,
+            position_ids,
+            cache_position
+        )
+        return new_inputs_embeds, new_attention_mask, new_labels, new_position_ids, new_cache_position, num_pred_audio_tokens
+
+    def _process_text_input(
+        self,
+        inputs_embeds: torch.Tensor,
+        attention_mask: torch.Tensor,
+        audio_start_idx: torch.Tensor,
+        transcript_ids: torch.Tensor,
+        transcript_len: torch.Tensor,
+        labels: Optional[torch.Tensor] = None,
+        position_ids: Optional[torch.Tensor] = None,
+        cache_position: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor], Optional[torch.Tensor]]:
+        # Sanity checks
+        if transcript_ids is None or transcript_len is None or audio_start_idx is None:
+            raise ValueError("transcript_ids, transcript_len, and audio_start_idx must be provided for text input processing")
+        if not (len(audio_start_idx) == len(transcript_len) == len(transcript_ids)):
+            raise ValueError("audio_start_idx, transcript_len, and transcript_ids must have the same batch size")
+        if inputs_embeds.shape[0] != transcript_ids.shape[0]:
+            raise ValueError(f"Batch size mismatch: inputs_embeds has shape {inputs_embeds.shape}, but transcript_ids has shape {transcript_ids.shape}")
+        if attention_mask.shape != inputs_embeds.shape[:2]:
+            raise ValueError(f"Attention mask shape {attention_mask.shape} does not match inputs_embeds shape {inputs_embeds.shape[:2]}")
+        if labels is not None and labels.shape != inputs_embeds.shape[:2]:
+            raise ValueError(f"Labels shape {labels.shape} does not match inputs_embeds shape {inputs_embeds.shape[:2]}")
+        if position_ids is not None and position_ids.shape != inputs_embeds.shape[:2]:
+            raise ValueError(f"Position IDs shape {position_ids.shape} does not match inputs_embeds shape {inputs_embeds.shape[:2]}")
+        if cache_position is not None and cache_position.shape[0] != inputs_embeds.shape[1]:
+            raise ValueError(f"Cache position shape {cache_position.shape[0]} does not match inputs_embeds sequence length {inputs_embeds.shape[1]}")
+        # Check if transcript_len is less than or equal to the sequence length of transcript_ids
+        if torch.any(transcript_len > transcript_ids.shape[1]):
+            raise ValueError("transcript_len cannot be greater than the sequence length of transcript_ids")
+
+
+        # Get transcript embeddings
+        transcript_embeds = self.get_input_embeddings()(transcript_ids)
+
+        # Insert transcript embeddings
+        new_inputs_embeds, new_attention_mask, new_labels, new_position_ids, new_cache_position = self._insert_tokens(
+            inputs_embeds,
+            attention_mask,
+            audio_start_idx,
+            transcript_embeds,
+            transcript_len,
+            labels,
+            position_ids,
+            cache_position
+        )
+        return new_inputs_embeds, new_attention_mask, new_labels, new_position_ids, new_cache_position
+
     def forward(
         self,
         input_ids: torch.Tensor,
@@ -424,106 +523,65 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             **kwargs: Additional keyword arguments. Passed directly to the language model.
         """
         if inputs_embeds is None:
-            # B x T  ->  B x T x D
-            inputs_embeds = self.get_input_embeddings().forward(input_ids)
+            assert input_ids is not None, "You have to specify either input_ids or inputs_embeds"
+            inputs_embeds = self.get_input_embeddings()(input_ids)
 
-        orig_input_embeds = inputs_embeds
+        orig_inputs_embeds = inputs_embeds
         orig_attention_mask = attention_mask
         orig_labels = labels
         orig_position_ids = kwargs.get("position_ids", None)
         orig_cache_position = kwargs.get("cache_position", None)
 
         if audio_values is not None:
-            assert (
-                audio_start_idx is not None and audio_len is not None
-            ), "audio_start_idx and audio_len must be provided if audio_values are provided."
-            assert (
-                len(audio_start_idx) == len(audio_len) == len(audio_values)
-            ), "audio_start_idx, audio_len, and audio_values must have the same batch size."
-
-            # B x A/3200 x D
-            audio_tower_output = self.audio_tower.forward(
-                audio_values
-            ).last_hidden_state
-            audio_tower_output = audio_tower_output.to(inputs_embeds.dtype)
-
-            audio_feature_len = self.audio_tower._get_feat_extract_output_lengths(
-                audio_len
+            inputs_embeds, attention_mask, labels, position_ids, cache_position, num_audio_tokens = self._process_audio_input(
+                orig_inputs_embeds, orig_attention_mask, audio_values, audio_len, audio_start_idx, orig_labels,
+                orig_position_ids, orig_cache_position
             )
+            kwargs['position_ids'] = position_ids
+            kwargs['cache_position'] = cache_position
+        else:
+            num_audio_tokens = None
 
-            audio_embeds, num_audio_tokens, num_pred_audio_tokens = (
-                self.adapter.forward(
-                    audio_tower_output, audio_feature_len, transcript_len
-                )
-            )
-
-            inputs_embeds, attention_mask, labels, position_ids, cache_position = (
-                self._insert_tokens(
-                    orig_input_embeds,
-                    orig_attention_mask,
-                    audio_start_idx,
-                    audio_embeds,
-                    num_audio_tokens,
-                    orig_labels,
-                    orig_position_ids,
-                    orig_cache_position,
-                )
-            )
-            kwargs["position_ids"] = position_ids
-            kwargs["cache_position"] = cache_position
-
+        # Forward pass through language model
         lm_output = self.language_model.forward(
             inputs_embeds=inputs_embeds,
-            labels=labels,
             attention_mask=attention_mask,
+            labels=labels,
             past_key_values=past_key_values,
             **kwargs,
         )
         if self.training:
             losses: Dict[LossFunction, torch.Tensor] = {}
             if self.loss_config.contains_kl_loss:
-                assert (
-                    audio_start_idx is not None
-                    and transcript_len is not None
-                    and labels is not None
-                ), "audio_start_idx, transcript_len, and labels must be provided for computing KL loss"
-                if transcript_embeds is None:
-                    transcript_embeds = self.get_input_embeddings().forward(
-                        transcript_ids
-                    )
-                (
-                    teacher_inputs_embeds,
-                    teacher_attention_mask,
-                    teacher_labels,
-                    teacher_position_ids,
-                    teacher_cache_position,
-                ) = self._insert_tokens(
-                    orig_input_embeds,
+                # Process text input for teacher model
+                text_inputs_embeds, text_attention_mask, text_labels, text_position_ids, text_cache_position = self._process_text_input(
+                    orig_inputs_embeds,
                     orig_attention_mask,
                     audio_start_idx,
-                    transcript_embeds,
+                    transcript_ids,
                     transcript_len,
                     orig_labels,
                     orig_position_ids,
-                    orig_cache_position,
+                    orig_cache_position
                 )
-                kwargs["position_ids"] = teacher_position_ids
-                kwargs["cache_position"] = teacher_cache_position
+                kwargs["position_ids"] = text_position_ids
+                kwargs["cache_position"] = text_cache_position
 
-                # disable gradient computation for the teacher model
+                # Forward pass through teacher model
                 with torch.no_grad():
                     teacher_lm_output = self.language_model.forward(
-                        inputs_embeds=teacher_inputs_embeds,
-                        labels=teacher_labels,
-                        attention_mask=teacher_attention_mask,
+                        inputs_embeds=text_inputs_embeds,
+                        attention_mask=text_attention_mask,
+                        labels=text_labels,
                         past_key_values=past_key_values,
                         **kwargs,
                     )
+                # Compute KL loss
                 kl_loss = self._compute_kl_loss(
                     student_output=lm_output,
                     teacher_output=teacher_lm_output,
                     student_labels=labels,
-                    teacher_labels=teacher_labels,
+                    teacher_labels=text_labels,
                     student_input_len=num_audio_tokens,
                     teacher_input_len=transcript_len,
                     input_start_idx=audio_start_idx,
@@ -540,7 +598,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
                         transcript_len is not None
                     ), "transcript_len must be provided for computing CIF L1 loss"
                     losses[loss_fn] = F.l1_loss(
-                        num_pred_audio_tokens / transcript_len,
+                        num_audio_tokens / transcript_len,
                         torch.ones_like(transcript_len),
                         reduction="mean",
                     )
@@ -561,6 +619,63 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
 
             lm_output.loss = total_loss
         return lm_output
+
+
+    def generate(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor = None,
+        inputs_embeds: Optional[torch.Tensor] = None,
+        audio_values: Optional[torch.FloatTensor] = None,
+        audio_len: Optional[torch.Tensor] = None,
+        audio_start_idx: Optional[torch.Tensor] = None,
+        **kwargs
+    ) -> Union[transformers.modeling_outputs.CausalLMOutputWithPast, torch.LongTensor]:
+        # Prepare inputs
+        if inputs_embeds is None:
+            assert input_ids is not None, "You have to specify either input_ids or inputs_embeds"
+            inputs_embeds = self.get_input_embeddings()(input_ids)
+
+        # Process audio input if provided
+        if audio_values is not None:
+            assert audio_len is not None and audio_start_idx is not None, \
+                "audio_len and audio_start_idx must be provided if audio_values are provided."
+            
+            inputs_embeds, attention_mask, _, position_ids, cache_position, _ = self._process_audio_input(
+                inputs_embeds,
+                attention_mask,
+                audio_values,
+                audio_len,
+                audio_start_idx,
+                None,  # labels are not needed for generation
+                kwargs.get('position_ids', None),
+                kwargs.get('cache_position', None)
+            )
+            # Update kwargs with processed audio inputs
+            if position_ids is not None:
+                kwargs['position_ids'] = position_ids
+            if cache_position is not None:
+                kwargs['cache_position'] = cache_position
+    
+        # Remove transcript_len and transcript_ids from kwargs
+        kwargs.pop('transcript_len', None)
+        kwargs.pop('transcript_ids', None)
+
+        seq_len = inputs_embeds.size(1)
+        valid_tokens = attention_mask.sum(dim=1)
+        shift = seq_len - valid_tokens
+        
+        # Change the padding to the left
+        for i in range(inputs_embeds.size(0)):
+            inputs_embeds[i] = torch.roll(inputs_embeds[i], shifts=shift[i].item(), dims=0)
+            attention_mask[i] = torch.roll(attention_mask[i], shifts=shift[i].item(), dims=0)
+
+        # Call language model's generate method
+        return self.language_model.generate(
+            inputs_embeds=inputs_embeds,
+            attention_mask=attention_mask,
+            **kwargs
+        )
 
     def prepare_inputs_for_generation(
         self,

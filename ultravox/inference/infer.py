@@ -127,9 +127,8 @@ class LocalInference(base.VoiceInference):
         )
         output_texts = []
         for output in output_batch:
-            output_tokens = output[input_len:]
-            output_text = self.tokenizer.decode(output_tokens, skip_special_tokens=True)
-            output_len = len(output_tokens)
+            output_text = self.tokenizer.decode(output, skip_special_tokens=True)
+            output_len = len(output)
             output_text = base.VoiceOutput(output_text, input_len, output_len)
             output_texts.append(output_text)
         return output_texts

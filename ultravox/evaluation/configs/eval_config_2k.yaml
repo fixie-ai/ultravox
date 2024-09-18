@@ -2,23 +2,24 @@ model: "wandb://fixie/ultravox/model-zhuang.2024-08-12-ultravox.input_kd-1f7:v14
 report_logs_to: ["wandb"]
 output_dir: "./output"
 eval_dataset_args:
-  batch_size: 1
+  batch_size: 40
   max_tokens: 512
+
 eval_dataset_configs:
-  # - alias: "covost2-en_de-test-2k"
-  #   path: "fixie-ai/covost2"
-  #   name: "en_de"
-  #   splits:
-  #     - "test"
-  #   user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
-  #   user_template_args:
-  #     target: "German"
-  #   assistant_template: "{{ translation }}"
-  #   transcript_template: "{{ sentence }}"
-  #   active_samples: 2000
-  #   num_samples: 15531
-  #   eval_config:
-  #     metric: "bleu"
+  - alias: "covost2-en_de-test-2k"
+    path: "fixie-ai/covost2"
+    name: "en_de"
+    splits:
+      - "test"
+    user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
+    user_template_args:
+      target: "German"
+    assistant_template: "{{ translation }}"
+    transcript_template: "{{ sentence }}"
+    active_samples: 2000
+    num_samples: 15531
+    eval_config:
+      metric: "bleu"
   - alias: "covost2-en_zh-test-2k"
     path: "fixie-ai/covost2"
     name: "en_zh-CN"
@@ -35,62 +36,62 @@ eval_dataset_configs:
       metric: "bleu"
       args:
         tokenize: "zh"
-  # - alias: "covost2-en_ar-test-2k"
-  #   path: "fixie-ai/covost2"
-  #   name: "en_ar"
-  #   splits:
-  #     - "test"
-  #   user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
-  #   user_template_args:
-  #     target: "Arabic"
-  #   assistant_template: "{{ translation }}"
-  #   transcript_template: "{{ sentence }}"
-  #   active_samples: 2000
-  #   num_samples: 15531
-  #   eval_config:
-  #     metric: "bleu"
-  # - alias: "covost2-en_ca-test-2k"
-  #   path: "fixie-ai/covost2"
-  #   name: "en_ca"
-  #   splits:
-  #     - "test"
-  #   user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
-  #   user_template_args:
-  #     target: "Catalan"
-  #   assistant_template: "{{ translation }}"
-  #   transcript_template: "{{ sentence }}"
-  #   active_samples: 2000
-  #   num_samples: 15531
-  #   eval_config:
-  #     metric: "bleu"
-  # - alias: "covost2-es_en-test-2k"
-  #   path: "fixie-ai/covost2"
-  #   name: "es_en"
-  #   splits:
-  #     - "test"
-  #   user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
-  #   user_template_args:
-  #     target: "English"
-  #   assistant_template: "{{ translation }}"
-  #   transcript_template: "{{ sentence }}"
-  #   active_samples: 2000
-  #   num_samples: 15531
-  #   eval_config:
-  #     metric: "bleu"
-  # - alias: "covost2-ru_en-test-2k"
-  #   path: "fixie-ai/covost2"
-  #   name: "ru_en"
-  #   splits:
-  #     - "test"
-  #   user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
-  #   user_template_args:
-  #     target: "English"
-  #   assistant_template: "{{ translation }}"
-  #   transcript_template: "{{ sentence }}"
-  #   active_samples: 2000
-  #   num_samples: 15531
-  #   eval_config:
-  #     metric: "bleu"
+  - alias: "covost2-en_ar-test-2k"
+    path: "fixie-ai/covost2"
+    name: "en_ar"
+    splits:
+      - "test"
+    user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
+    user_template_args:
+      target: "Arabic"
+    assistant_template: "{{ translation }}"
+    transcript_template: "{{ sentence }}"
+    active_samples: 2000
+    num_samples: 15531
+    eval_config:
+      metric: "bleu"
+  - alias: "covost2-en_ca-test-2k"
+    path: "fixie-ai/covost2"
+    name: "en_ca"
+    splits:
+      - "test"
+    user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
+    user_template_args:
+      target: "Catalan"
+    assistant_template: "{{ translation }}"
+    transcript_template: "{{ sentence }}"
+    active_samples: 2000
+    num_samples: 15531
+    eval_config:
+      metric: "bleu"
+  - alias: "covost2-es_en-test-2k"
+    path: "fixie-ai/covost2"
+    name: "es_en"
+    splits:
+      - "test"
+    user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
+    user_template_args:
+      target: "English"
+    assistant_template: "{{ translation }}"
+    transcript_template: "{{ sentence }}"
+    active_samples: 2000
+    num_samples: 15531
+    eval_config:
+      metric: "bleu"
+  - alias: "covost2-ru_en-test-2k"
+    path: "fixie-ai/covost2"
+    name: "ru_en"
+    splits:
+      - "test"
+    user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
+    user_template_args:
+      target: "English"
+    assistant_template: "{{ translation }}"
+    transcript_template: "{{ sentence }}"
+    active_samples: 2000
+    num_samples: 15531
+    eval_config:
+      metric: "bleu"
   - alias: "covost2-zh_en-test-2k"
     path: "fixie-ai/covost2"
     name: "zh-CN_en"

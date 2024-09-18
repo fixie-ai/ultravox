@@ -15,6 +15,6 @@ command: >-
   cd ultravox-expts && poetry install --no-dev && poetry run torchrun --nproc_per_node=8 -m ultravox.training.train $TRAIN_ARGS --exp_name $UV_BRANCH
 env_variables:
   MLFLOW_TRACKING_URI: databricks
-  UV_BRANCH: zhuang.2024-08-12-ultravox.input_kd-2b
+  UV_BRANCH: zhuang.2024-08-12-ultravox.batch_infer_1a
   TRAIN_ARGS: --config_path ultravox/training/configs/expt_config.yaml
   HF_HUB_DOWNLOAD_TIMEOUT: "300"  # Set timeout to 300 seconds (5 minutes)

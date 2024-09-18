@@ -17,3 +17,4 @@ env_variables:
   MLFLOW_TRACKING_URI: databricks
   UV_BRANCH: zhuang.2024-08-12-ultravox.batch_infer_1a
   EVAL_ARGS: --config_path ultravox/evaluation/configs/eval_config_2k.yaml
+  
