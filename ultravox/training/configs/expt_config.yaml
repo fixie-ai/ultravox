@@ -9,7 +9,7 @@ loss_config:
     Response_KL: 1
   logging_steps: 10
 
-max_steps: 14400 # x8x24 
+max_steps: 20 # x8x24 
 lr_warmup_steps: 1000
 lr:  5e-4
 weight_decay: 0.05
@@ -94,7 +94,7 @@ val_dataset_configs:
     user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n{{ sentence }}"
     user_template_args:
       target: "Chinese"
-    assistant_template: "{{ translation }}"
+    assistant_template: "{{ tnranslation }}"
     transcript_template: "{{ sentence }}"
     audio_field: null
   - alias: "covost2-zh_en-text-val"

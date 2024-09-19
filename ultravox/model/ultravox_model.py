@@ -123,7 +123,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         """
 
         if (
-            os.environ.get("LOCAL_RANK", 0) != 0
+            int(os.environ.get("LOCAL_RANK", 0)) != 0
             or self.loss_config.logging_steps is None
         ):
             return
@@ -134,7 +134,13 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         self.accumulated_losses["total"] += total_loss
 
         self.step_counter += 1
-
+        loss_info = {
+            (loss_fn.value if isinstance(loss_fn, LossFunction) else loss_fn): value
+            for loss_fn, value in losses.items()
+        }
+        loss_info["total"] = total_loss
+        if wandb.run is not None:
+            wandb.log({f"train_loss_{k}": v for k, v in loss_info.items()})
         # Log accumulated losses every n steps
         if self.step_counter % self.loss_config.logging_steps == 0:
             avg_losses = {
@@ -143,17 +149,15 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             }
 
             loss_info = {
-                (loss_fn.value if isinstance(loss_fn, LossFunction) else loss_fn): value
+                (loss_fn.value if isinstance(loss_fn, LossFunction) else loss_fn): f"{value:.4f}"
                 for loss_fn, value in avg_losses.items()
             }
 
-            if wandb.run is not None:
-                wandb.log({f"train_losses_{k}": v for k, v in loss_info.items()})
             # Add step_counter to loss_info
             loss_info["step"] = self.step_counter
 
             # Print the loss_info dictionary
-            logging.info(loss_info, flush=True)
+            logging.info(loss_info)
 
             # Reset accumulated losses
             self.accumulated_losses.clear()
