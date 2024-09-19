@@ -99,7 +99,6 @@ class UltravoxConfig(transformers.PretrainedConfig):
         audio_model_id: Optional[str] = None,
         text_model_id: Optional[str] = None,
         ignore_index: int = -100,
-        audio_token_index: int = 32000,
         hidden_size: int = 4096,
         stack_factor: int = 8,
         norm_init: float = 0.4,
@@ -112,7 +111,6 @@ class UltravoxConfig(transformers.PretrainedConfig):
 
         self.audio_model_id = audio_model_id
         self.text_model_id = text_model_id
-        self.audio_token_index = audio_token_index
 
         self.hidden_size = hidden_size
         self.stack_factor = stack_factor
@@ -155,3 +153,14 @@ class UltravoxConfig(transformers.PretrainedConfig):
         self.initializer_range = self.text_config.initializer_range
 
         super().__init__(**kwargs)
+
+    def to_diff_dict(self) -> Dict[str, Any]:
+        diff_dict = super().to_diff_dict()
+
+        # remove text_config and audio_config if text_model_id and audio_model_id are present
+        if self.text_model_id is not None:
+            diff_dict.pop("text_config", None)
+        if self.audio_model_id is not None:
+            diff_dict.pop("audio_config", None)
+
+        return diff_dict

@@ -1,19 +1,18 @@
+import contextlib
 import copy
 import dataclasses
 import gc
 import glob
 import logging
 import os
-import re
 import subprocess
-import sys
 from datetime import datetime
 from typing import Dict, List, Optional
 
+import accelerate
 import datasets as hf_datasets
 import pandas as pd
 import safetensors.torch
-import simple_parsing
 import torch
 import torch.distributed
 import transformers
@@ -30,13 +29,10 @@ from ultravox.model import ultravox_processing
 from ultravox.model import wandb_utils
 from ultravox.training import config_base
 from ultravox.training import ddp_utils
+from ultravox.training.helpers import prefetch_weights
 
 INPUT_EXAMPLE = {"text": "Transcribe\n<|audio|>", "audio": b"\x00\x00" * 16000}
 OUTPUT_EXAMPLE = {"text": "Hello, world!"}
-
-
-def fix_hyphens(arg: str):
-    return re.sub(r"^--([^=]+)", lambda m: "--" + m.group(1).replace("-", "_"), arg)
 
 
 def prepare_dataset(
@@ -76,12 +72,7 @@ def main() -> None:
     os.environ["WANDB_LOG_MODEL"] = "checkpoint"
     os.environ["WANDB_PROJECT"] = "ultravox"
 
-    args = simple_parsing.parse(
-        config_class=config_base.TrainConfig,
-        config_path="ultravox/training/configs/meta_config.yaml",  # base config file
-        add_config_path_arg=True,
-        args=[fix_hyphens(arg) for arg in sys.argv[1:]],
-    )
+    args = config_base.get_train_args()
 
     transformers.set_seed(args.seed)
 
@@ -100,15 +91,24 @@ def train(args: config_base.TrainConfig):
     world_size = int(os.environ.get("WORLD_SIZE", 1))
     local_rank = int(os.environ.get("LOCAL_RANK", 0))
     is_master = local_rank == 0
-
-    if world_size > 1:
-        torch.distributed.init_process_group(backend="nccl")
+    is_distributed = world_size > 1
 
     # DDP blows up logging, so this is an attempt to suppress it to only logs from the master process
     logging.basicConfig(level=logging.INFO if is_master else logging.ERROR)
     # os.environ["TORCH_LOGS"] = "ERROR" if is_master else "WARNING"
     transformers.logging.set_verbosity(logging.WARNING if is_master else logging.ERROR)
     hf_datasets.logging.set_verbosity(logging.WARNING if is_master else logging.ERROR)
+
+    if is_distributed:
+        torch.distributed.init_process_group(backend="nccl")
+
+    with ddp_utils.run_on_master_first(is_master):
+        # For larger models, we assume that the weights are already downloaded via prefetch_weights.py
+        # Otherwise the barrier call can timeout.
+        # This call is only here as a backstop in case prefetch_weights.py was not run, for example in a local/test run.
+        prefetch_weights.download_weights(
+            [args.text_model, args.audio_model], args.model_load_dir
+        )
 
     logging.info("Instantiating processor...")
     text_tokenizer: transformers.PreTrainedTokenizerFast = (
@@ -124,13 +124,21 @@ def train(args: config_base.TrainConfig):
         text_model_id=args.text_model,
         text_model_lora_config=args.text_model_lora_config,
         audio_model_lora_config=args.audio_model_lora_config,
+        torch_dtype=args.data_type,
+        pad_token_id=text_tokenizer.eos_token_id,
     )
 
     logging.info("Instantiating model...")
 
-    # Since the model downloads the language model and audio encoder weights, we want one process to finish up
-    # downloading before the others start in order to avoid race conditions.
-    with ddp_utils.run_on_master_first(is_master):
+    model_load_context = (
+        accelerate.init_empty_weights()
+        if args.use_fsdp and not is_master
+        else contextlib.nullcontext()
+    )
+    # If we're using FSDP, we can just initialize the model on the main process
+    # and use sync_model_states to distribute the weights to the other processes.
+    # Otherwise we'd be loading the model on every process, which uses too much CPU memory.
+    with model_load_context:
         model = ultravox_model.UltravoxModel(config)
 
     processor = ultravox_processing.UltravoxProcessor(
@@ -171,9 +179,10 @@ def train(args: config_base.TrainConfig):
         logging.info(f"Loading model state dict from {args.model_load_dir}")
         load_path = args.model_load_dir
         if wandb_utils.is_wandb_url(load_path):
-            # Download the model from W&B. The main process should do the download while the others wait.
-            with ddp_utils.run_on_master_first(is_master):
-                load_path = wandb_utils.download_model_from_wandb(load_path)
+            # We assume that the weights are already downloaded via prefetch_weights.py
+            # and hence this is just resolving the path. If the weights are not downloaded,
+            # we might see a race condition here when using DDP.
+            load_path = wandb_utils.download_model_from_wandb(load_path)
         if os.path.isdir(load_path):
             load_path = os.path.join(load_path, "model*.safetensors")
         paths = glob.glob(load_path)
@@ -188,13 +197,10 @@ def train(args: config_base.TrainConfig):
 
     model.print_trainable_parameters()
 
-    # Move the model to GPU and enable bfloat16
-    dtype = getattr(torch, args.data_type)
-    device = torch.device(args.device, index=local_rank)
-    logging.info(
-        f"Using dtype and device (world_size): {dtype}, {device} ({world_size})"
-    )
-    model.to(device=device, dtype=dtype)
+    if not args.use_fsdp:
+        # Moving to device in FSDP is handled by the Trainer
+        model.to(device=torch.device(args.device, index=local_rank))
+        logging.info(f"Using device (world_size): {model.device} ({world_size})")
 
     # Prepare dataset, subsetting if needed
     train_dataset: data.IterableDataset
@@ -280,9 +286,9 @@ def train(args: config_base.TrainConfig):
             optim=args.optimizer,
             num_train_epochs=args.num_epochs,
             max_steps=args.max_steps,
-            evaluation_strategy="steps",
+            eval_strategy="steps" if args.val_steps else "no",
             eval_steps=args.val_steps,
-            save_strategy="steps",
+            save_strategy="steps" if args.save_steps else "no",
             save_steps=args.save_steps,
             logging_first_step=True,
             logging_dir=args.logs_dir,
@@ -299,14 +305,19 @@ def train(args: config_base.TrainConfig):
             lr_scheduler_type=args.lr_scheduler,
             warmup_steps=args.lr_warmup_steps,
             weight_decay=args.weight_decay,
-            fp16=dtype == torch.float16,
-            bf16=dtype == torch.bfloat16,
+            # fp16=dtype == torch.float16,
+            # bf16=dtype == torch.bfloat16,
             use_cpu=args.device == "cpu",
             seed=args.seed + local_rank,
             report_to=args.report_logs_to,
             # torch_compile=True,
-            # fsdp="full_shard auto_wrap",
-            # fsdp_transformer_layer_cls_to_wrap='LlamaDecoderLayer',
+            fsdp="full_shard auto_wrap" if args.use_fsdp else "",
+            fsdp_config={
+                "backward_prefetch": "backward_pre",
+                "auto_wrap_policy": "TRANSFORMER_BASED_WRAP",
+                "state_dict_type": "SHARDED_STATE_DICT",
+                "sync_module_states": "true",
+            },
         ),
     )
 
@@ -315,19 +326,41 @@ def train(args: config_base.TrainConfig):
         logging.info("Starting training...")
         t_start = datetime.now()
         logging.info(f"train start time: {t_start}")
+
         if args.val_steps:
-            trainer.evaluate()
+            if args.use_fsdp:
+                logging.warning(
+                    "FSDP is enabled: Skipping initial validation since model is not initialized."
+                )
+            else:
+                trainer.evaluate()
+
         trainer.train()
         t_end = datetime.now()
         logging.info(f"train end time: {t_end}")
         logging.info(f"elapsed: {t_end - t_start}")
 
-    if is_master:
-        # Saving the model using pipeline to ensure its code is saved
-        pipeline = ultravox_pipeline.UltravoxPipeline(
-            model, tokenizer=text_tokenizer, device=device
-        )
-        pipeline.save_pretrained(args.output_dir)
+    if args.use_fsdp:
+        # For training checkpoints, we want to use SHARDED_STATE_DICT which should be faster,
+        # but for the final save we want FULL_STATE_DICT so it can be serialized properly.
+        trainer.accelerator.state.fsdp_plugin.set_state_dict_type("FULL_STATE_DICT")
+
+    # We use both pipeline.save_pretrained and trainer.save_model to save everything.
+    # This is because pipeline.save_pretrained knows how to save the pipeline (code and config),
+    # but it doesn't know how to save FSDP models correctly (the final tensors could be flattened).
+    # on the other hand, trainer.save_model knows how to save FSDP models correctly, but it won't save the pipeline.
+    # Saving FSDP models is already quite slow though, so we don't want to save the model twice.
+    pipeline = ultravox_pipeline.UltravoxPipeline(
+        model, tokenizer=text_tokenizer, device=model.device
+    )
+    old_save_pretrained = model.save_pretrained
+    model.save_pretrained = lambda *_, **__: None  # type: ignore[method-assign]
+    # saves the pipeline code and populates the config
+    pipeline.save_pretrained(args.output_dir)
+    model.save_pretrained = old_save_pretrained  # type: ignore[method-assign]
+
+    # saves the model weights correctly (FSDP or otherwise)
+    trainer.save_model(args.output_dir)
 
 
 def evaluate(args: config_base.TrainConfig):
