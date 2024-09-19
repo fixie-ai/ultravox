@@ -94,7 +94,7 @@ val_dataset_configs:
     user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n{{ sentence }}"
     user_template_args:
       target: "Chinese"
-    assistant_template: "{{ tnranslation }}"
+    assistant_template: "{{ translation }}"
     transcript_template: "{{ sentence }}"
     audio_field: null
   - alias: "covost2-zh_en-text-val"
