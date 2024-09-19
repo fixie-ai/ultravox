@@ -152,7 +152,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         attention_mask: Optional[torch.Tensor] = None,
         audio_token_start_idx: Optional[torch.Tensor] = None,
         audio_token_len: Optional[torch.Tensor] = None,
-        batch_size: Optional[torch.Tensor] = None,
+        audio_batch_size: Optional[torch.Tensor] = None,
         past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
         # the alt_* fields are needed for KL divergence loss
         alt_input_ids: Optional[torch.Tensor] = None,
@@ -188,11 +188,13 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             assert (
                 audio_token_start_idx is not None
                 and audio_token_len is not None
-                and batch_size is not None
-            ), "audio_token_start_idx and audio_token_len and batch_size must be provided if audio_values are provided."
+                and audio_batch_size is not None
+            ), "audio_token_start_idx and audio_token_len and audio_batch_size must be provided if audio_values are provided."
             assert (
-                len(audio_token_start_idx) == len(audio_token_len) == len(batch_size)
-            ), "audio_token_start_idx and audio_token_len and batch_size must have the same batch size."
+                len(audio_token_start_idx)
+                == len(audio_token_len)
+                == len(audio_batch_size)
+            ), "audio_token_start_idx and audio_token_len and audio_batch_size must have the same batch size."
 
             audio_tower_output = self.audio_tower.forward(
                 audio_values
@@ -202,19 +204,16 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
 
             # combine audio and text embeddings
             audio_ind = 0
-            for i, (start, length, audio_batch_size) in enumerate(
-                zip(audio_token_start_idx, audio_token_len, batch_size)
+            for i, (start, length, batch_size) in enumerate(
+                zip(audio_token_start_idx, audio_token_len, audio_batch_size)
             ):
                 audio = torch.cat(
-                    [
-                        audio_embeds[k]
-                        for k in range(audio_ind, audio_ind + audio_batch_size)
-                    ],
+                    [audio_embeds[k] for k in range(audio_ind, audio_ind + batch_size)],
                     dim=0,
                 )
                 length = min(length, audio.shape[0])
                 inputs_embeds[i, start : start + length] = audio[:length]
-                audio_ind += audio_batch_size
+                audio_ind += batch_size
 
         lm_output = self.language_model.forward(
             inputs_embeds=inputs_embeds,
@@ -249,7 +248,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         audio_values: Optional[torch.FloatTensor] = None,
         audio_token_start_idx: Optional[torch.Tensor] = None,
         audio_token_len: Optional[torch.Tensor] = None,
-        batch_size: Optional[torch.Tensor] = None,
+        audio_batch_size: Optional[torch.Tensor] = None,
         past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
         attention_mask: Optional[torch.Tensor] = None,
         inputs_embeds: Optional[torch.Tensor] = None,
@@ -278,7 +277,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
                 audio_token_start_idx - prefill_start_idx
             )
             model_input["audio_token_len"] = audio_token_len
-            model_input["batch_size"] = batch_size
+            model_input["audio_batch_size"] = audio_batch_size
 
         return model_input
 

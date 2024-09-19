@@ -193,7 +193,7 @@ class UltravoxProcessor(transformers.ProcessorMixin):
             data["audio_values"] = torch.cat(audio_values_chunks)
             num_audio_chunks = data["audio_values"].shape[0]
 
-            data["batch_size"] = [num_audio_chunks]
+            data["audio_batch_size"] = [num_audio_chunks]
 
         if text is not None:
             assert isinstance(

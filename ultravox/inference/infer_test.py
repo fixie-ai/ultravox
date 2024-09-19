@@ -1,3 +1,4 @@
+from typing import Optional
 from unittest import mock
 
 import numpy as np
@@ -30,16 +31,23 @@ def audio_processor():
     )
 
 
+@pytest.fixture(scope="module")
+def audio_processor_whisper():
+    return transformers.AutoProcessor.from_pretrained("openai/whisper-tiny")
+
+
 class FakeInference(infer.LocalInference):
     def __init__(
         self,
         tokenizer: transformers.PreTrainedTokenizer,
         audio_processor: transformers.ProcessorMixin,
+        audio_context_size: Optional[int] = None,
     ):
         def fake_generate(**kwargs):
             input = kwargs.get("input_ids")
+            input_len = input.shape[1] if input is not None else 0
             output = transformers.generation.utils.GenerateDecoderOnlyOutput(
-                sequences=[range(25)]
+                sequences=[range(input_len + 5)]  # Always output 5 tokens
             )
             streamer = kwargs.get("streamer", None)
             if streamer:
@@ -49,7 +57,7 @@ class FakeInference(infer.LocalInference):
             return output
 
         processor = ultravox_processing.UltravoxProcessor(
-            audio_processor, tokenizer=tokenizer, audio_context_size=None
+            audio_processor, tokenizer=tokenizer, audio_context_size=audio_context_size
         )
         super().__init__(
             mock.MagicMock(),
@@ -64,6 +72,26 @@ class FakeInference(infer.LocalInference):
 
 EXPECTED_TOKEN_IDS_START = [128000, 128006, 882, 128007]
 EXPECTED_TOKEN_IDS_END = [128009, 128006, 78191, 128007, 271]
+
+
+def test_long_audio_context(tokenizer, audio_processor_whisper):
+    """Ensure we handle long audio context properly."""
+    inference = FakeInference(
+        tokenizer, audio_processor_whisper, audio_context_size=3000
+    )
+    array = np.ones(960000, dtype=np.float32)
+    sample = datasets.VoiceSample.from_prompt_and_raw(
+        "Transcribe\n<|audio|>", array, 16000
+    )
+    output = inference.infer(sample)
+    assert output.input_tokens == 388
+    assert output.output_tokens == 5
+    assert output.text == "ers on conapub"
+    generate_args = inference.model.generate.call_args[1]
+    assert generate_args["audio_values"].shape == (2, 80, 3000)
+    assert generate_args["audio_token_len"].item() == torch.tensor(375)
+    assert generate_args["audio_token_start_idx"] == torch.tensor(8)
+    assert generate_args["audio_batch_size"] == torch.tensor(2)
 
 
 def test_infer_16kHz(tokenizer, audio_processor):
@@ -148,8 +176,8 @@ def test_infer_text_only(tokenizer, audio_processor):
     sample = datasets.VoiceSample.from_prompt("Hello?")
     output = inference.infer(sample)
     assert output.input_tokens == 12
-    assert output.output_tokens == 13
-    assert output.text == "-./0123456789"
+    assert output.output_tokens == 5
+    assert output.text == "-./01"
     generate_args = inference.model.generate.call_args[1]
     assert generate_args.get("audio_values") is None
     call_input_ids = generate_args["input_ids"]
