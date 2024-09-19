@@ -1,5 +1,5 @@
 # Ultravox training configuration
-name: <EXP_NAME>
+name: <RUN_NAME>
 image: mosaicml/composer:latest
 compute:
   gpus: 8
