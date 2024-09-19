@@ -18,8 +18,8 @@ def tokenizer():
     tokenizer = transformers.AutoTokenizer.from_pretrained(
         "./assets/hf/Meta-Llama-3-8B-Instruct", local_files_only=True
     )
-    # Set padding_side to "left" to support batch inference.
-    tokenizer.padding_side = "left"
+    # Change back to right padding as shifting from right padding to left padding is handled in the ultravox generate method.
+    tokenizer.padding_side = "right"
     return tokenizer
 
 

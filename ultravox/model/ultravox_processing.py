@@ -80,7 +80,9 @@ class UltravoxProcessor(transformers.ProcessorMixin):
         tokenizer = transformers.AutoTokenizer.from_pretrained(
             pretrained_model_name_or_path, **kwargs
         )
-        tokenizer.padding_side = "left"
+        # Padding side must be right is it is used in both training and inference.
+        # For inference, we change it to left padding in the ultravox generate method.
+        tokenizer.padding_side = "right"
         tokenizer.pad_token = tokenizer.eos_token
 
         return cls(

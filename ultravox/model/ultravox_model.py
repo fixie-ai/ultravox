@@ -396,6 +396,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         audio_values: torch.FloatTensor,
         audio_len: torch.Tensor,
         audio_start_idx: torch.Tensor,
+        transcript_len: torch.Tensor,
         labels: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.Tensor] = None,
         cache_position: Optional[torch.Tensor] = None,
@@ -425,21 +426,21 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
 
         # Process through adapter
         audio_embeds, num_audio_tokens, num_pred_audio_tokens = self.adapter(
-            audio_tower_output, audio_feature_len, None
+            audio_tower_output, audio_feature_len, transcript_len
         )
 
         # Insert audio embeddings
         new_inputs_embeds, new_attention_mask, new_labels, new_position_ids, new_cache_position = self._insert_tokens(
-            inputs_embeds,
-            attention_mask,
-            audio_start_idx,
-            audio_embeds,
-            num_audio_tokens,
-            labels,
-            position_ids,
-            cache_position
+            inputs_embeds=inputs_embeds,
+            attention_mask=attention_mask,
+            insert_idx=audio_start_idx,
+            insert_embeds=audio_embeds,
+            insert_len=num_audio_tokens,
+            labels=labels,
+            position_ids=position_ids,
+            cache_position=cache_position
         )
-        return new_inputs_embeds, new_attention_mask, new_labels, new_position_ids, new_cache_position, num_pred_audio_tokens
+        return new_inputs_embeds, new_attention_mask, new_labels, new_position_ids, new_cache_position, num_audio_tokens, num_pred_audio_tokens
 
     def _process_text_input(
         self,
@@ -477,14 +478,14 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
 
         # Insert transcript embeddings
         new_inputs_embeds, new_attention_mask, new_labels, new_position_ids, new_cache_position = self._insert_tokens(
-            inputs_embeds,
-            attention_mask,
-            audio_start_idx,
-            transcript_embeds,
-            transcript_len,
-            labels,
-            position_ids,
-            cache_position
+            inputs_embeds=inputs_embeds,
+            attention_mask=attention_mask,
+            insert_idx=audio_start_idx,
+            insert_embeds=transcript_embeds,
+            insert_len=transcript_len,
+            labels=labels,
+            position_ids=position_ids,
+            cache_position=cache_position
         )
         return new_inputs_embeds, new_attention_mask, new_labels, new_position_ids, new_cache_position
 
@@ -498,7 +499,6 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         audio_len: Optional[torch.Tensor] = None,
         audio_start_idx: Optional[torch.Tensor] = None,
         transcript_ids: Optional[torch.Tensor] = None,
-        transcript_embeds: Optional[torch.FloatTensor] = None,
         transcript_len: Optional[torch.Tensor] = None,
         past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
         **kwargs,
@@ -533,9 +533,16 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         orig_cache_position = kwargs.get("cache_position", None)
 
         if audio_values is not None:
-            inputs_embeds, attention_mask, labels, position_ids, cache_position, num_audio_tokens = self._process_audio_input(
-                orig_inputs_embeds, orig_attention_mask, audio_values, audio_len, audio_start_idx, orig_labels,
-                orig_position_ids, orig_cache_position
+            inputs_embeds, attention_mask, labels, position_ids, cache_position, num_audio_tokens, num_pred_audio_tokens = self._process_audio_input(
+                inputs_embeds=orig_inputs_embeds,
+                attention_mask=orig_attention_mask,
+                audio_values=audio_values,
+                audio_len=audio_len,
+                audio_start_idx=audio_start_idx,
+                transcript_len=transcript_len,
+                labels=orig_labels,
+                position_ids=orig_position_ids,
+                cache_position=orig_cache_position
             )
             kwargs['position_ids'] = position_ids
             kwargs['cache_position'] = cache_position
@@ -555,21 +562,21 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             if self.loss_config.contains_kl_loss:
                 # Process text input for teacher model
                 text_inputs_embeds, text_attention_mask, text_labels, text_position_ids, text_cache_position = self._process_text_input(
-                    orig_inputs_embeds,
-                    orig_attention_mask,
-                    audio_start_idx,
-                    transcript_ids,
-                    transcript_len,
-                    orig_labels,
-                    orig_position_ids,
-                    orig_cache_position
+                    inputs_embeds=orig_inputs_embeds,
+                    attention_mask=orig_attention_mask,
+                    audio_start_idx=audio_start_idx,
+                    transcript_ids=transcript_ids,
+                    transcript_len=transcript_len,
+                    labels=orig_labels,
+                    position_ids=orig_position_ids,
+                    cache_position=orig_cache_position
                 )
                 kwargs["position_ids"] = text_position_ids
                 kwargs["cache_position"] = text_cache_position
 
                 # Forward pass through teacher model
                 with torch.no_grad():
-                    teacher_lm_output = self.language_model.forward(
+                    text_lm_output = self.language_model.forward(
                         inputs_embeds=text_inputs_embeds,
                         attention_mask=text_attention_mask,
                         labels=text_labels,
@@ -579,7 +586,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
                 # Compute KL loss
                 kl_loss = self._compute_kl_loss(
                     student_output=lm_output,
-                    teacher_output=teacher_lm_output,
+                    teacher_output=text_lm_output,
                     student_labels=labels,
                     teacher_labels=text_labels,
                     student_input_len=num_audio_tokens,
@@ -598,7 +605,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
                         transcript_len is not None
                     ), "transcript_len must be provided for computing CIF L1 loss"
                     losses[loss_fn] = F.l1_loss(
-                        num_audio_tokens / transcript_len,
+                        num_pred_audio_tokens / transcript_len,
                         torch.ones_like(transcript_len),
                         reduction="mean",
                     )
@@ -641,7 +648,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             assert audio_len is not None and audio_start_idx is not None, \
                 "audio_len and audio_start_idx must be provided if audio_values are provided."
             
-            inputs_embeds, attention_mask, _, position_ids, cache_position, _ = self._process_audio_input(
+            inputs_embeds, attention_mask, _, position_ids, cache_position, _, _ = self._process_audio_input(
                 inputs_embeds,
                 attention_mask,
                 audio_values,

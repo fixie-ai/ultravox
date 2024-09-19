@@ -196,11 +196,6 @@ class DataCollatorForSeq2SeqWithAudio(transformers.DataCollatorForSeq2Seq):
             batch["audio_values"] = torch.stack(
                 [F.pad(x, (0, max_len - x.shape[-1])) for x in audio_values]
             )
-            if self.tokenizer.padding_side == "left":
-                displacement = batch["input_ids"].shape[-1] - input_ids_lens
-                batch["audio_start_idx"] += displacement.to(
-                    batch["audio_start_idx"].device
-                )
         if transcript_ids and transcript_ids[0] is not None:
             max_len = max([x.shape[-1] for x in transcript_ids])
             batch["transcript_ids"] = torch.stack(

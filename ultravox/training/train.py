@@ -294,8 +294,6 @@ def train(args: config_base.TrainConfig):
         # Merge LoRA weights for better inference performance.
         # Note: this is irreversible and changes model saving format
         model.merge_and_unload()
-        # changing padding side to left for inference
-        text_tokenizer.padding_side = "left"
         inference = infer.LocalInference(
             model=model,
             processor=processor,

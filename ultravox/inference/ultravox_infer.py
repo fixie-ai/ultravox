@@ -49,7 +49,8 @@ class UltravoxInference(infer.LocalInference):
         tokenizer_id = tokenizer_id or model_path
         tokenizer = transformers.AutoTokenizer.from_pretrained(tokenizer_id)
 
-        tokenizer.padding_side = "left"
+        # Padding side must be right, as we change it to left padding in the ultravox generate method.
+        tokenizer.padding_side = "right"
         tokenizer.pad_token = tokenizer.eos_token
 
         # tincans-ai models don't set audio_model_id, instead audio_config._name_or_path has the

@@ -40,7 +40,8 @@ class LocalInference(base.VoiceInference):
             tokenizer=self.tokenizer,
         )
 
-        assert self.tokenizer.padding_side == "left"
+        # padding side must be right, as we change it to left padding in the generate method.
+        assert self.tokenizer.padding_side == "right"
 
     def update_conversation(
         self,

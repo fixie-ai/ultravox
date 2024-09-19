@@ -1,14 +1,13 @@
 exp_name: "llama3.1-8b-whisper"
 text_model: "meta-llama/Meta-Llama-3.1-8B-Instruct"
 audio_model: "openai/whisper-medium"
-model_load_dir: "wandb://fixie/ultravox/model-zhuang.2024-08-12-ultravox.input_kd-1f2:v8"
 
 adapter_type: "CFORMER"
 loss_config:
   loss_weights: 
     Response_KL: 1
     Input_KL: 1
-  log_interval: 1
+  logging_steps: 1
 
 device: "cpu"
 
