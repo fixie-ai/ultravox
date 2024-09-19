@@ -9,7 +9,7 @@ loss_config:
     Response_KL: 1
   logging_steps: 10
 
-max_steps: 20 # x8x24 
+max_steps: 14400 # x8x24 
 lr_warmup_steps: 1000
 lr:  5e-4
 weight_decay: 0.05
