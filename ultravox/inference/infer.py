@@ -199,7 +199,6 @@ class LocalInference(base.VoiceInference):
             text=text_input,
             return_tensors="pt",
             sampling_rate=SAMPLE_RATE,
-            audio_context_size=self.model.audio_tower_context_length,
         )
         inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
         if "audio_values" in inputs:

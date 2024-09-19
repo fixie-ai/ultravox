@@ -39,6 +39,9 @@ class UltravoxProcessor(transformers.ProcessorMixin):
         encoder_ds_factor: int = 320,
         stack_factor: int = 8,
         audio_placeholder: str = "<|audio|>",
+        audio_context_size: Optional[
+            int
+        ] = 3000,  # Defaults to whisper encoder context size
     ):
         """
         Args:
@@ -54,6 +57,7 @@ class UltravoxProcessor(transformers.ProcessorMixin):
         self.stack_factor = stack_factor
         self.audio_placeholder = audio_placeholder
         self.audio_token_replacement = tokenizer.eos_token
+        self.audio_context_size = audio_context_size
         assert (
             self.audio_token_replacement is not None
         ), "The tokenizer has no EOS token. Cannot recover."
@@ -90,7 +94,6 @@ class UltravoxProcessor(transformers.ProcessorMixin):
         text: Optional[str] = None,
         audio: Optional[Union[np.ndarray, torch.Tensor]] = None,
         sampling_rate: Optional[int] = None,
-        audio_context_size: Optional[int] = None,
         return_tensors: Optional[
             Union[str, transformers.TensorType]
         ] = transformers.TensorType.PYTORCH,
@@ -165,17 +168,20 @@ class UltravoxProcessor(transformers.ProcessorMixin):
                 audio_values = x.input_values
 
             audio_values = torch.tensor(audio_values)
-            if audio_context_size and audio_values.shape[-1] > audio_context_size:
+            if (
+                self.audio_context_size
+                and audio_values.shape[-1] > self.audio_context_size
+            ):
                 audio_values_chunks = list(
                     torch.split(
                         audio_values,
-                        audio_context_size,
+                        self.audio_context_size,
                         dim=len(audio_values.shape) - 1,
                     )
                 )
                 # Pad the last chunk to match audio_context_size
                 last_chunk = audio_values_chunks[-1]
-                pad_size = audio_context_size - last_chunk.shape[-1]
+                pad_size = self.audio_context_size - last_chunk.shape[-1]
                 if pad_size > 0:
                     # Pad only the last dimension (T) in B,D,T format
                     audio_values_chunks[-1] = F.pad(

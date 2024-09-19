@@ -58,7 +58,10 @@ class UltravoxInference(infer.LocalInference):
         )
 
         processor = ultravox_processing.UltravoxProcessor(
-            audio_processor, tokenizer=tokenizer, stack_factor=model.config.stack_factor
+            audio_processor,
+            tokenizer=tokenizer,
+            stack_factor=model.config.stack_factor,
+            audio_context_size=model.audio_tower_context_length,
         )
 
         super().__init__(

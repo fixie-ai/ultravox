@@ -49,7 +49,7 @@ class FakeInference(infer.LocalInference):
             return output
 
         processor = ultravox_processing.UltravoxProcessor(
-            audio_processor, tokenizer=tokenizer
+            audio_processor, tokenizer=tokenizer, audio_context_size=None
         )
         super().__init__(
             mock.MagicMock(),
@@ -60,7 +60,6 @@ class FakeInference(infer.LocalInference):
         )
         self.model.device = "cpu"
         self.model.generate = mock.MagicMock(side_effect=fake_generate)
-        self.model.audio_tower_context_length = None
 
 
 EXPECTED_TOKEN_IDS_START = [128000, 128006, 882, 128007]
