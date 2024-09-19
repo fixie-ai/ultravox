@@ -138,7 +138,7 @@ class DatasetConfig(BaseModel):
     """Template for the assistant's message"""
     transcript_template: str = "{{text}}"
     """Template for the transcript"""
-    audio_field: str = "audio"
+    audio_field: Optional[str] = "audio"
     """Field in the dataset that contains the audio, use None if the dataset does not contain audio"""
     eval_config: Optional[EvalConfig] = None
     """Evaluation configuration: metric and arguments"""
@@ -509,8 +509,8 @@ class VoiceDataset(SizedIterableDataset):
         return _get_messages(prompt, text)
 
     def _get_audio(
-        self, row: transformers.BatchFeature, column_name: str = "audio"
-    ) -> np.ndarray:
+        self, row: transformers.BatchFeature, column_name: Optional[str] = "audio"
+    ) -> Optional[np.ndarray]:
         if column_name is None:
             return None
         if column_name not in self._base_audio_columns:
