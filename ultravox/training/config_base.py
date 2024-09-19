@@ -190,7 +190,9 @@ class TrainConfig:
         assert self.data_type in ["bfloat16", "float16", "float32"]
         assert self.device in ["cuda", "cpu", "mps"]
         if self.device == "mps":
-            raise ValueError("MPS is not supported for training due to lack of support for torch.scatter_ that is needed for CFormerAdapter")
+            raise ValueError(
+                "MPS is not supported for training due to lack of support for torch.scatter_ that is needed for CFormerAdapter"
+            )
         if self.device != "cuda":
             if self.data_type == "bfloat16":
                 self.data_type = "float32"
@@ -231,6 +233,12 @@ class TrainConfig:
 
         if self.loss_config is None:
             self.loss_config = ultravox_config.LossConfig()
+        if self.loss_config.logging_steps is None:
+            self.loss_config.logging_steps = self.logging_steps
+        elif self.loss_config.logging_steps != self.logging_steps:
+            logging.warning(
+                f"loss_config.logging_steps ({self.loss_config.logging_steps}) != logging_steps ({self.logging_steps}). This will cause inconsistent logging frequency on wandb."
+            )
         self.loss_config.add_adapter_losses(self.adapter_type)
 
         if self.resume_from_checkpoint and self.model_load_dir is None:

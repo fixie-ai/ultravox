@@ -138,7 +138,7 @@ class DatasetConfig(BaseModel):
     """Template for the assistant's message"""
     transcript_template: str = "{{text}}"
     """Template for the transcript"""
-    audio_field: Optional[str] = "audio"
+    audio_field: str = "audio"
     """Field in the dataset that contains the audio, use None if the dataset does not contain audio"""
     eval_config: Optional[EvalConfig] = None
     """Evaluation configuration: metric and arguments"""
@@ -201,12 +201,15 @@ class DataCollatorForSeq2SeqWithAudio(transformers.DataCollatorForSeq2Seq):
             batch["transcript_ids"] = torch.stack(
                 [F.pad(x, (0, max_len - x.shape[-1])) for x in transcript_ids]
             )
-        
+
         # Handle padding for labels, the HF implementation relies on a list of numpy.ndarrays, which is extremely slow and causes excessive warnings.
         if labels and labels[0] is not None:
             max_len = max([len(x) for x in labels])
             batch["labels"] = torch.stack(
-                [F.pad(x, (0, max_len - len(x)), value=self.label_pad_token_id) for x in labels]
+                [
+                    F.pad(x, (0, max_len - len(x)), value=self.label_pad_token_id)
+                    for x in labels
+                ]
             )
         return batch
 
@@ -417,8 +420,12 @@ class VoiceDataset(SizedIterableDataset):
             )
         else:
             dataset = datasets.load_dataset(
-                path, name, split=split, trust_remote_code=True, streaming=streaming,
-                download_config=datasets.DownloadConfig(max_retries=100)
+                path,
+                name,
+                split=split,
+                trust_remote_code=True,
+                streaming=streaming,
+                download_config=datasets.DownloadConfig(max_retries=100),
             )
             for column_name in self._base_audio_columns:
                 dataset = dataset.cast_column(

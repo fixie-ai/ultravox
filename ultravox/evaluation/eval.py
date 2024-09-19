@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+from pathlib import Path
 from typing import List, Optional
 
 from tqdm import tqdm
@@ -70,7 +71,7 @@ def run_infer(
     dataset_configs: List[datasets.DatasetConfig],
     world_size: int,
     local_rank: int,
-    output_dir: Optional[str] = None,
+    output_dir: Optional[Path] = None,
 ):
     metrics = {}
     output_files = []

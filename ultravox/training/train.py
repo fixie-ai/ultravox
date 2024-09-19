@@ -4,7 +4,7 @@ import logging
 import os
 import sys
 from datetime import datetime
-from typing import Dict, List
+from typing import Dict, List, Union
 
 import datasets as hf_datasets
 import safetensors.torch
@@ -117,7 +117,7 @@ def train(args: config_base.TrainConfig):
             text_model_lora_config=args.text_model_lora_config,
             audio_model_lora_config=args.audio_model_lora_config,
             adapter_type=args.adapter_type,
-            adapter_config=args.adapter_config
+            adapter_config=args.adapter_config,
         )
         model = ultravox_model.UltravoxModel(config)
 
@@ -154,7 +154,7 @@ def train(args: config_base.TrainConfig):
             save_code=True,
         )
 
-    resume_from_checkpoint = False
+    resume_from_checkpoint: Union[str, bool] = False
     if args.model_load_dir:
         logging.info(f"Loading model state dict from {args.model_load_dir}")
         load_path = args.model_load_dir
