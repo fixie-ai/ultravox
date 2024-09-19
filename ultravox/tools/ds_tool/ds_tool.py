@@ -179,13 +179,13 @@ class TextGenerationTask:
 @dataclasses.dataclass
 class AudioExtensionTask:
     audio_column_name: str = simple_parsing.field(default="audio", alias="-a")
-    asr_column_name: str = simple_parsing.field(default="sentence", alias="-A")
-    translation_column_name: str = simple_parsing.field(
+    text_column_name: str = simple_parsing.field(default="sentence", alias="-A")
+    translation_column_name: Optional[str] = simple_parsing.field(
         default="translation", alias="-T"
     )
     id_column_name: str = simple_parsing.field(default="id", alias="-i")
     extend_type: str = simple_parsing.field(
-        default="repeat", alias="-e", choices=["repeat", "combine"]
+        default="repeat", alias="-o", choices=["repeat", "combine"]
     )
     multiplier: int = simple_parsing.field(default=2, alias="-m")
 
@@ -221,33 +221,32 @@ class AudioExtensionTask:
 
     def _map_sample_repeat(self, sample):
         audio = sample[self.audio_column_name]
-        sentence = sample[self.asr_column_name]
-        translation = sample[self.translation_column_name]
 
-        if not isinstance(audio, dict) or "array" not in audio:
-            raise ValueError(f"Unsupported audio format: {type(audio)}")
-
-        audio_data = audio["array"]
-        repeated_audio = np.tile(audio_data, self.multiplier)
-        repeated_sentence = " ".join([sentence] * self.multiplier)
-        repeated_translation = " ".join([translation] * self.multiplier)
-
-        new_audio = {key: value for key, value in audio.items() if key != "path"}
-        new_audio["array"] = repeated_audio
+        new_audio = {
+            "sampling_rate": audio["sampling_rate"],
+            "array": np.tile(audio["array"], self.multiplier),
+        }
 
         new_sample = {
             self.audio_column_name: new_audio,
-            self.asr_column_name: repeated_sentence,
-            self.translation_column_name: repeated_translation,
+            self.text_column_name: " ".join(
+                [sample[self.text_column_name]] * self.multiplier
+            ),
             self.id_column_name: sample[self.id_column_name],
         }
+
+        if self.translation_column_name is not None:
+            translation = sample.get(self.translation_column_name)
+            if translation is not None:
+                new_sample[self.translation_column_name] = " ".join(
+                    [translation] * self.multiplier
+                )
 
         return new_sample
 
     def _map_batch_combine(self, batch):
         audios = batch[self.audio_column_name]
-        sentences = batch[self.asr_column_name]
-        translations = batch[self.translation_column_name]
+        sentences = batch[self.text_column_name]
         ids = batch[self.id_column_name]
 
         combined_audio = {
@@ -255,15 +254,22 @@ class AudioExtensionTask:
             "array": np.concatenate([audio["array"] for audio in audios]),
         }
         combined_sentences = " ".join(sentences)
-        combined_translations = " ".join(translations)
         combined_ids = "+".join(ids)
 
         new_batch = {
             self.audio_column_name: [combined_audio],
-            self.asr_column_name: [combined_sentences],
-            self.translation_column_name: [combined_translations],
+            self.text_column_name: [combined_sentences],
             self.id_column_name: [combined_ids],
         }
+
+        if self.translation_column_name in batch:
+            translations = batch[self.translation_column_name]
+            if translations is not None and all(
+                translation is not None for translation in translations
+            ):
+                combined_translations = " ".join(translations)
+                new_batch[self.translation_column_name] = [combined_translations]
+
         return new_batch
 
 
