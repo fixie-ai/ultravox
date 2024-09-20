@@ -94,9 +94,6 @@ class TrainConfig:
     loss_config: Optional[ultravox_config.LossConfig] = None
 
     def __post_init__(self):
-        self.interleave_datasets = dataset_config.InterleaveDataConfig(
-            **self.interleave_datasets
-        )
         assert self.data_type in ["bfloat16", "float16", "float32"]
         if self.device == "cuda" and not torch.cuda.is_available():
             self.device = "mps" if torch.backends.mps.is_available() else "cpu"
