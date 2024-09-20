@@ -2,6 +2,8 @@ import dataclasses
 import datetime
 import logging
 import os
+import re
+import sys
 from pathlib import Path
 from typing import List, Optional
 
@@ -53,6 +55,9 @@ class TrainConfig:
 
     device: str = "cuda"
     data_type: str = "bfloat16"
+    # Whether to use FSDP (Fully Sharded Data Parallelism) for training
+    # needed for large model training (e.g. 70B+)
+    use_fsdp: bool = False
     # Path to load the model from. Can be local path, HF hub model_id, or W&B artifact
     model_load_dir: Optional[str] = None
     text_model_lora_config: Optional[ultravox_config.LoraConfigSimplified] = None
@@ -66,7 +71,9 @@ class TrainConfig:
     optimizer: str = "adamw_torch"
     num_epochs: int = 1
     max_steps: int = 0
-    val_steps: Optional[int] = None
+    # Run an evaluation every X steps. If smaller than 1, will be interpreted as ratio of total training steps.
+    val_steps: Optional[float] = None
+    # Save checkpoint every X steps. If smaller than 1, will be interpreted as ratio of total training steps.
     save_steps: float = 0
     logging_steps: int = 1
     grad_accum_steps: int = 1
@@ -106,6 +113,10 @@ class TrainConfig:
             self.exp_name = datetime.datetime.now().strftime("exp--%Y-%m-%d--%H-%M-%S")
         if self.output_dir is None:
             self.output_dir = Path("runs") / self.exp_name
+
+        # HF Pipeline gets tripped up if the path has a "." in it
+        self.output_dir = Path(str(self.output_dir).replace(".", "--"))
+
         if self.logs_dir is None:
             self.logs_dir = self.output_dir / "logs"
 
@@ -119,3 +130,37 @@ class TrainConfig:
                 "LayerDrop cannot be used in DDP when encoder is not frozen. Disabling LayerDrop."
             )
             self.disable_layerdrop = True
+
+        if self.use_fsdp and self.save_steps:
+            logging.warning(
+                "FSDP is enabled: Saving checkpoints is going to be extremely slow and results in a full save."
+                " Consider setting save_steps=0."
+            )
+
+        if self.use_fsdp and self.do_eval:
+            logging.warning(
+                "FSDP is enabled: Evaluation is not supported with FSDP. Disabling evaluation."
+            )
+            self.do_eval = False
+
+
+def fix_hyphens(arg: str):
+    return re.sub(r"^--([^=]+)", lambda m: "--" + m.group(1).replace("-", "_"), arg)
+
+
+def get_train_args(override_sys_args: Optional[List[str]] = None) -> TrainConfig:
+    """
+    Parse the command line arguments and return a TrainConfig object.
+
+    Args:
+        override_sys_args: The command line arguments. If None, sys.argv[1:] is used.
+            This is mainly useful for testing.
+    """
+    args = override_sys_args or sys.argv[1:]
+
+    return simple_parsing.parse(
+        config_class=TrainConfig,
+        config_path=os.path.join(os.path.dirname(__file__), "configs/meta_config.yaml"),
+        add_config_path_arg=True,
+        args=[fix_hyphens(arg) for arg in args],
+    )

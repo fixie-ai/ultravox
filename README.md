@@ -44,7 +44,7 @@ If you're interested in running Ultravox in a real-time capacity, we offer a set
 
 ### Model
 
-You can download the latest weights from the [Ultravox Hugging Face page](https://huggingface.co/fixie-ai/ultravox-v0_2).
+You can download the latest weights from the [Ultravox Hugging Face page](https://huggingface.co/fixie-ai/ultravox-v0_4).
 
 ### Architecture
 
@@ -75,9 +75,9 @@ just install
 
 We're using Poetry to manage the Python virtual environment.
 
-### Mosaic Environment Setup
+### Mosaic Environment Setup (Fixie Internal)
 
-You need to setup a few things to run on the Mosaic Platform.
+If you want to use [Mosaic](https://docs.mosaicml.com/projects/mcli/en/latest/quick_start/getting_started.html) for trainig , you need to setup a few things to run on the Mosaic Platform.
 
 1. Install & login to the Mosaic CLI
 
@@ -106,23 +106,57 @@ mcli create secret gcp
 
 ## Training
 
-We do most of our training on the [MosaicML platform](https://docs.mosaicml.com), although it's not open to the public. However, you can do the same training on your own GPU using the instructions outlined in the Local Training section below.
+Currently, we keep both the LLM and the audio encoder frozen and only train the adapter/projector. Training Ultraox v0.4 took 2-3 hours on 8xH100 GPUs for 14K training steps.
 
-To kick off a MosaicML training job using the default config, just do:
-`just train`
+### Use-Cases for Training Ultravox
+Why would you want to (re-) train Ultravox? Here are a few scenarios:
 
-For DDP training make sure to use:
-`torchrun --nproc_per_node=8 -m ultravox.training.train`
+1. You want to use a different LLM or audio encoder backbone.
 
-### Local Training
+    a. In this case you need to re-train the adapter. You can use `release_config.yaml`, which contains our config for our latest release, and you should be able to simply change the base LLM or encoder by specifying `--text-model <hf-model-id-for-llm>` and/or `--audio-model <hf-model-id-for-encoder>`.
 
-Here's an example command to run a training experiment using an existing config (in this case, using TinyLlama as the LLM backbone):
+2. You want to improve the knowledge of the model --> NO NEED TO TRAIN ULTRAVOX!
 
+    a. We suggest to either use RAG on the fly (no training needed), or fine-tune the LLM backbone instead. You might need to re-train Ultravox if you fine-tune the LLM.
+
+3. You want to use your own audio data, for example to add support for a new language.
+
+    a. First step, prepare your dataset: at bare minimum, the samples should have an `audio` and a text `continuation` field.
+  
+    b. Take a look at [`ds_tool.py`](ultravox/tools/ds_tool/ds_tool.py) and [`continuation.jinja`](ultravox/tools/ds_tool/continuation.jinja) as well as [our variant of Common Voice](https://huggingface.co/datasets/fixie-ai/common_voice_17_0/viewer/fr) that was created using `ds_tool` to add the `continuation` field.
+    
+    c. Add your dataset to the dataset mix in `release_config.yaml` and train.
+
+There's no one-size fits all. If you need help you can find us on our Discord server [here](https://discord.gg/Qw6KHxv8YB).
+
+
+### How to Train
+
+We do most of our training on the [MosaicML platform](https://docs.mosaicml.com) and therefore most of our tooling and docs are Mosaic-related. However, you can do the same training on your own GPU without much difficulty. Here we assume you have the environment set up (run `just install`). You can also take a look at [`setup.sh`](setup.sh)
+
+To kick off a training run you can do:
 ```bash
-python -m ultravox.training.train --config_path ultravox/training/configs/asr_tinyllama.yaml  --data_set 'dummy' --device cpu --batch_size 1  --exp_name <give_your_experiment_a_name>
+poetry run python -m ultravox.training.train --config_path ultravox/training/configs/release_config.yaml
 ```
 
-### MosaicML Training
+For DDP training make sure to add `torchrun`. We also recommend prefetching weights in advance:
+```bash
+TRAIN_ARGS="--config_path ultravox/training/configs/release_config.yaml"
+poetry run python -m ultravox.training.helpers.prefetch_weights $TRAIN_ARGS
+poetry run torchrun --nproc_per_node=8 -m ultravox.training.train $TRAIN_ARGS
+```
+
+For a debug run, you can use smaller models, datasets, or batch size. Here's a config that uses TinyLlama as the LLM backbone:
+```bash
+poetry run python -m ultravox.training.train --config_path ultravox/training/configs/asr_tinyllama_100s.yaml --batch_size 1 --report_logs_to tensorboard
+```
+
+
+We use [SimpleParsing](https://github.com/lebrice/simpleparsing/) for configs. Configs are composable (i.e. you can specify zero or many configs) and `meta_config.yaml` is always used as the default.
+See [`configs_base.py`](ultravox/training/config_base.py) to find the parameters you modify, such as the `--text-model`, `--device`, `--exp-name`, etc.
+
+
+### MosaicML Training (Fixie Internal)
 
 Before running any training jobs, you need to setup your SSH key in the Mosaic Platform: https://docs.mosaicml.com/projects/mcli/en/latest/resources/secrets/ssh.html#page-secrets-ssh
 
@@ -147,12 +181,12 @@ mcli get runs --cluster r7z2
 mcli run -f mcloud.yaml --follow
 ```
 
-For interactive runs, we don't recommend using `--interactive`. Instead set the `command` to be something like
-`sleep 3600` and then connect to it using `mcli connect <job_name> --tmux`.
-This way your environment (code and packages) will be the same as the training environment.
-The value `3600` (1 hour), is used as an example.
+For interactive runs you can use:
+```bash
+just mcloud --image mosaicml/composer:latest --max-duration 1
+```
 
-IMPORTANT: Make sure to stop the machine when you're done with any job, specially interactive ones!
+IMPORTANT: Make sure to monitor your jobs and stop the machine when you're done with any job, specially interactive ones!
 
 ### Running evaluations
 
@@ -161,10 +195,11 @@ IMPORTANT: Make sure to stop the machine when you're done with any job, speciall
 
 ## Misc
 
-Useful commands:
+The [Justfile](Justfile) is a good resource for finding popular commands. Here are a few:
 
 ```bash
 just update    # update dependencies
 just format    # run formatting (black, isort, autoflake)
+just test      # run tests
 just python    # activate venv and run python
 ```

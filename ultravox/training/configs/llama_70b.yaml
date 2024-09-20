@@ -1,0 +1,16 @@
+# Training configuration for Ultravox with Meta-Llama-3.1-70B-Instruct and Whisper-Medium
+# This configuration is used alongside release_config.yaml
+
+# TODO: make sure to increase max_duration in mcloud.yaml to 18 hours instead of 6
+
+exp_name: "ultravox-v0_4-llama3.1-70B-whisper_m"
+
+text_model: "meta-llama/Meta-Llama-3.1-70B-Instruct"
+audio_model: "openai/whisper-medium"
+
+batch_size: 5
+# We increase the number of steps by 2x, but with a lower batch_size, we still won't be training on as many samples as the 8B model
+# We would revisit this later on when 
+max_steps: 28800 # x8x5 = 1,152,000
+
+do_eval: False  # evaluation doesn't support FSDP yet
