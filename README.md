@@ -117,7 +117,7 @@ Why would you want to (re-) train Ultravox? Here are a few scenarios:
 
 2. You want to improve the knowledge of the model --> NO NEED TO TRAIN ULTRAVOX!
 
-    a. We suggest to either use RAG on the fly (no training needed), or fine-tune the LLM backbone instead. If you fine-tune the LLM, you might still need to re-train Ultravox, for example, if the embedding layer has changed in any way.
+    a. We suggest to either use RAG on the fly (no training needed), or fine-tune the LLM backbone instead. You might need to re-train Ultravox if you fine-tune the LLM.
 
 3. You want to use your own audio data, for example to add support for a new language.
 
