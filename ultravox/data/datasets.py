@@ -8,7 +8,6 @@ import logging
 import os
 import tempfile
 import warnings
-from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
 import datasets
@@ -296,16 +295,11 @@ class VoiceDataset(SizedIterableDataset):
         self._args = args
         self._session: Optional[requests.Session] = None
         self._rng = np.random.default_rng(self._args.shuffle_seed)
-        self._multiplier = 1.0
 
     def _init_dataset(self, dataset: data.Dataset, estimated_length: int = 1) -> None:
         self._dataset = dataset
         # Only required when using epochs when training dataset.
         self._estimated_length = estimated_length
-
-    @property
-    def multiplier(self) -> float:
-        return self._multiplier
 
     def _load_audio_dataset(
         self,
@@ -1049,8 +1043,6 @@ class GenericVoiceDataset(VoiceDataset):
         if self._args.shuffle:
             dataset = dataset.shuffle(seed=self._args.shuffle_seed)
 
-        self._multiplier = config.multiplier
-
         self.user_template = config.user_template
         self.assistant_template = config.assistant_template
         self.transcript_template = config.transcript_template
@@ -1089,7 +1081,9 @@ class GenericVoiceDataset(VoiceDataset):
         )
 
 
-def create_dataset(name: str, args: VoiceDatasetArgs) -> SizedIterableDataset:
+def create_dataset(
+    name: str | dataset_config.DataDictConfig, args: VoiceDatasetArgs
+) -> SizedIterableDataset:
     DATASET_MAP: Dict[str, Any] = {
         "anyinstruct": AnyInstructAnswerDataset,
         "anyinstruct_in": AnyInstructInputDataset,
@@ -1115,21 +1109,16 @@ def create_dataset(name: str, args: VoiceDatasetArgs) -> SizedIterableDataset:
         return DATASET_MAP[name](args, *ext)
 
 
-class StopStrategy(str, Enum):
-    FIRST_EXHAUSTED = "first_exhausted"
-    LAST_EXHAUSTED = "last_exhausted"
-    NEVER_STOP = "never_stop"
-
-
 class InterleaveDataset(SizedIterableDataset):
     """Interleaves multiple IterableDataset objects based on multiplier."""
 
     def __init__(
         self,
         datasets: Sequence[SizedIterableDataset],
-        stop_strategy: StopStrategy = StopStrategy.LAST_EXHAUSTED,
+        stop_strategy: dataset_config.StopStrategy = dataset_config.StopStrategy.LAST_EXHAUSTED,
         seed: Optional[int] = 42,
         static: bool = False,
+        multipliers: Optional[List[float]] = None,
     ) -> None:
         """
         Args:
@@ -1143,10 +1132,15 @@ class InterleaveDataset(SizedIterableDataset):
         self._static = static
 
         self._stop_strategy = stop_strategy
-        relative_frequencies = [
-            int(getattr(ds, "multiplier", 1.0) * float(len(ds))) for ds in datasets
-        ]
+        if multipliers is None:
+            self._multipliers = [1.0] * len(datasets)
+        else:
+            self._multipliers = multipliers
 
+        relative_frequencies = [
+            int(float(len(ds)) * multiple)
+            for ds, multiple in zip(datasets, self._multipliers)
+        ]
         total_frequency = sum(relative_frequencies)
         self._normalized_probs = [f / total_frequency for f in relative_frequencies]
 
@@ -1173,9 +1167,13 @@ class InterleaveDataset(SizedIterableDataset):
                 exhausted[iter_index] = True
 
                 # Check if stopping condition is met
-                if self._stop_strategy == StopStrategy.FIRST_EXHAUSTED or (
-                    self._stop_strategy == StopStrategy.LAST_EXHAUSTED
-                    and all(exhausted)
+                if (
+                    self._stop_strategy == dataset_config.StopStrategy.FIRST_EXHAUSTED
+                    or (
+                        self._stop_strategy
+                        == dataset_config.StopStrategy.LAST_EXHAUSTED
+                        and all(exhausted)
+                    )
                 ):
                     break
 
@@ -1186,8 +1184,8 @@ class InterleaveDataset(SizedIterableDataset):
     def __len__(self) -> int:
         # TODO: Implement the length method for different stop strategies
         return sum(
-            int(getattr(ds, "multiplier", 1.0) * float(len(ds)))
-            for ds in self._datasets
+            int(float(len(ds)) * multiple)
+            for ds, multiple in zip(datasets, self._multipliers)
         )
 
 

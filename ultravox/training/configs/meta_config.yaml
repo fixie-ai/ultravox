@@ -1,9 +1,7 @@
 text_model: "meta-llama/Meta-Llama-3-8B-Instruct"
 audio_model: "facebook/wav2vec2-base-960h"
 
-data_sets: [] # Can't use datasets with "multiplier" because it doesn't have a length attribute.
 val_sets: ["heysquad_human", "anyinstruct", "soda", "peoplespeech"]
-stop_strategy: "LAST_EXHAUSTED"
 
 train_on_inputs: False
 shuffle_data: True
