@@ -5,7 +5,6 @@ exp_name: "ultravox-v0_4"
 text_model: "meta-llama/Meta-Llama-3.1-8B-Instruct"
 audio_model: "openai/whisper-medium"
 
-
 loss_config:
   # Choose from ["KL_Divergence", "CrossEntropy"], default is "KL_Divergence"
   loss_function: "KL_Divergence"
@@ -17,7 +16,7 @@ batch_size: 24
 max_steps: 14400 # x8x24 = 2,764,800
 
 interleave_datasets:
-  stop_strategy: "LAST_EXHAUSTED"
+  stop_strategy: "last_exhausted"
   datasets_with_multiplier: 
     # continuation
     - dataset: 
