@@ -5,17 +5,19 @@ import os
 import re
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 import simple_parsing
 import torch
 
 from ultravox.data import dataset_config
+from ultravox.data import datasets
 from ultravox.model import ultravox_config
 
 
 @dataclasses.dataclass
 class TrainConfig:
+    data_sets: List[str]
     val_sets: List[str]
     # language model to use
     text_model: str
@@ -29,11 +31,13 @@ class TrainConfig:
     # we first parse the data_dicts as a list of dictionaries. After parsing,
     # we convert these dictionaries to DataDictConfig objects using Pydantic
     # to enforce type constraints and validation, in the __post_init__ method.
-    interleave_datasets: dataset_config.InterleaveDataConfig
+    data_dicts: Optional[List[Dict[str, Any]]] = None
 
     do_train: bool = True
     do_eval: bool = True
 
+    # In InterleaveDataset, when to stop interleave: choose from last_exhausted (default), first_exhausted, or never_stop
+    stop_strategy: datasets.StopStrategy = datasets.StopStrategy.LAST_EXHAUSTED
     data_dir: Optional[str] = None
     mds: bool = False
     num_samples: Optional[int] = None
@@ -94,6 +98,16 @@ class TrainConfig:
     loss_config: Optional[ultravox_config.LossConfig] = None
 
     def __post_init__(self):
+        if self.data_dicts:
+            self.data_dicts = [
+                dataset_config.DataDictConfig(**data_dict)
+                for data_dict in self.data_dicts
+            ]
+            # For now, self.data_dicts is a hack to allow for the inclusion of new datasets using the
+            # GenericVoiceDataset class, without changing how existing datasets are specified in
+            # self.data_sets. In the future, all datasets will be updated to use the DataDictConfig class.
+            self.data_sets.extend(self.data_dicts)
+
         assert self.data_type in ["bfloat16", "float16", "float32"]
         if self.device == "cuda" and not torch.cuda.is_available():
             self.device = "mps" if torch.backends.mps.is_available() else "cpu"

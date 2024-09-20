@@ -20,7 +20,6 @@ import wandb
 import wandb.sdk
 from torch.utils import data
 
-from ultravox.data import dataset_config
 from ultravox.data import datasets
 from ultravox.model import data_processing
 from ultravox.model import ultravox_config
@@ -38,30 +37,16 @@ OUTPUT_EXAMPLE = {"text": "Hello, world!"}
 
 def prepare_dataset(
     train_args: config_base.TrainConfig,
-    interleave_dataset: dataset_config.InterleaveDataConfig | List[str],
+    dataset_names: List[str],
     data_args: datasets.VoiceDatasetArgs,
     processor: ultravox_processing.UltravoxProcessor,
     train_on_inputs: bool,
+    stop_strategy: datasets.StopStrategy,
     num_samples: Optional[int] = None,
     include_alt_fields: bool = False,  # whether to generate tensors for text-only input (e.g., used for KD training)
     enforce_ds_len_epoch: bool = False,
 ) -> datasets.SizedIterableDataset:
-    if isinstance(interleave_dataset, dataset_config.InterleaveDataConfig):
-        data_sets = [
-            datasets.create_dataset(ds.dataset, data_args)
-            for ds in interleave_dataset.datasets_with_multiplier
-        ]
-        multipliers = [
-            ds.multiplier for ds in interleave_dataset.datasets_with_multiplier
-        ]
-        stop_strategy = interleave_dataset.stop_strategy
-    else:
-        data_sets = [
-            datasets.create_dataset(ds, data_args) for ds in interleave_dataset
-        ]
-        stop_strategy = dataset_config.StopStrategy.LAST_EXHAUSTED
-        multipliers = [1.0] * len(data_sets)
-
+    data_sets = [datasets.create_dataset(ds, data_args) for ds in dataset_names]
     # If we're using epochs to train, validate the dataset length is appropriate.
     using_epochs = train_args.max_steps == 0
     if using_epochs and enforce_ds_len_epoch:
@@ -69,10 +54,10 @@ def prepare_dataset(
             assert (
                 len(ds) > 1
             ), f"Dataset {ds} has length {len(ds)} which is too short for epoch training"
+
     interleave = datasets.InterleaveDataset(
         data_sets,
         stop_strategy=stop_strategy,
-        multipliers=multipliers,
     )
     ds_with_proc = data_processing.UltravoxDataproc(
         interleave,
@@ -230,8 +215,9 @@ def train(args: config_base.TrainConfig):
     )
     train_dataset = prepare_dataset(
         train_args=args,
-        interleave_dataset=args.interleave_datasets,
+        dataset_names=args.data_sets,
         train_on_inputs=args.train_on_inputs,
+        stop_strategy=args.stop_strategy,
         processor=processor,
         num_samples=args.num_samples,
         data_args=datasets.VoiceDatasetArgs(
@@ -261,8 +247,9 @@ def train(args: config_base.TrainConfig):
         val_datasets = {
             k: prepare_dataset(
                 train_args=args,
-                interleave_dataset=val_sets[k],
+                dataset_names=val_sets[k],
                 train_on_inputs=args.train_on_inputs,
+                stop_strategy=args.stop_strategy,
                 processor=processor,
                 num_samples=args.val_num_samples,
                 data_args=val_ds_args_text if k.startswith("text_") else val_ds_args,
@@ -271,7 +258,7 @@ def train(args: config_base.TrainConfig):
             for k in val_sets
         }
         logging.info(
-            f"Loaded {args.interleave_datasets} data sets, sample limit: {args.num_samples} (val sample limit: {args.val_num_samples})"
+            f"Loaded {args.data_sets} data sets, sample limit: {args.num_samples} (val sample limit: {args.val_num_samples})"
         )
     else:
         # When using DDP with split_batches=True, the primary process will distribute the batches to the workers

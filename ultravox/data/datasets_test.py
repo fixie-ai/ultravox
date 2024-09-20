@@ -15,9 +15,14 @@ from ultravox.data import datasets
 class FakeSizedIterableDataset(datasets.SizedIterableDataset):
     """Fake version of datasets.SizedIterableDataset"""
 
-    def __init__(self, n, start=0, estimated_length=1):
+    def __init__(self, n, start=0, multiplier=1, estimated_length=1):
         self.data = range(start, start + n)
+        self._multiplier = multiplier
         self._estimated_length = estimated_length
+
+    @property
+    def multiplier(self) -> float:
+        return self._multiplier
 
     def __iter__(self):
         for sample in self.data:
@@ -93,7 +98,7 @@ def test_interleaved_first_exhausted():
     ds3 = FakeSizedIterableDataset(3)
     s = datasets.InterleaveDataset(
         [ds1, ds2, ds3],
-        stop_strategy=dataset_config.StopStrategy.FIRST_EXHAUSTED,
+        stop_strategy=datasets.StopStrategy.FIRST_EXHAUSTED,
         static=True,
     )
     # static=True disables random sampling of datasets, so the order is deterministic
@@ -108,7 +113,7 @@ def test_interleaved_last_exhausted():
     ds2 = FakeSizedIterableDataset(2, start=10)
     s = datasets.InterleaveDataset(
         [ds1, ds2],
-        stop_strategy=dataset_config.StopStrategy.LAST_EXHAUSTED,
+        stop_strategy=datasets.StopStrategy.LAST_EXHAUSTED,
         static=True,
     )
     # static=True disables random sampling of datasets, so the order is deterministic
@@ -121,7 +126,7 @@ def test_interleaved_never_stop():
     ds2 = FakeSizedIterableDataset(2, start=10)
     s = datasets.InterleaveDataset(
         [ds1, ds2],
-        stop_strategy=dataset_config.StopStrategy.NEVER_STOP,
+        stop_strategy=datasets.StopStrategy.NEVER_STOP,
         static=True,
     )
     # static=True disables random sampling of datasets, so the order is deterministic
@@ -130,9 +135,11 @@ def test_interleaved_never_stop():
 
 
 def test_interleaved_random():
-    ds1 = FakeSizedIterableDataset(4)
-    ds2 = FakeSizedIterableDataset(2, start=10)
-    s = datasets.InterleaveDataset([ds1, ds2], multipliers=[10, 1])
+    ds1 = FakeSizedIterableDataset(4, multiplier=10)
+    ds2 = FakeSizedIterableDataset(2, start=10, multiplier=1)
+    s = datasets.InterleaveDataset(
+        [ds1, ds2],
+    )
     # stop_strategy=last_exhausted will stop interleaving when the last dataset is exhausted (attempted after exhaustion)
     assert list(s) == [
         0,

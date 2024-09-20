@@ -16,250 +16,225 @@ val_sets: ["anyinstruct", "soda", "peoplespeech"]
 batch_size: 24
 max_steps: 14400 # x8x24 = 2,764,800
 
-interleave_datasets:
-  stop_strategy: "LAST_EXHAUSTED"
-  datasets_with_multiplier: 
-    # continuation
-    - dataset: 
-        path: "fixie-ai/librispeech_asr"
-        name: "clean"
-        splits:
-          - "train.100" # 28_539 samples
-          - "train.360" # 104_014 samples
-        user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
-        assistant_template: "{{ continuation }}"
-        transcript_template: "{{ text }}"
-        total_samples: 132553
-      multiplier: 1
-    - dataset:
-        path: "fixie-ai/librispeech_asr"
-        name: "other"
-        splits:
-          - "train.500" # 148_688 samples
-        user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
-        assistant_template: "{{ continuation }}"
-        transcript_template: "{{ text }}"
-        total_samples: 148688
-      multiplier: 1
-    - dataset:
-        path: "fixie-ai/peoples_speech"
-        name: "clean"
-        splits:
-          - "train" # 1_501_271 samples
-        user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
-        assistant_template: "{{ continuation }}"
-        transcript_template: "{{ text_proc.format_asr_text(text) }}"
-        total_samples: 1501271
-      multiplier: 1
-    - dataset:
-        path: "fixie-ai/common_voice_17_0"
-        name: "en"
-        splits:
-          - "train" # 1_101_170 samples
-        user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
-        assistant_template: "{{ continuation }}"
-        transcript_template: "{{ text_proc.format_asr_text(sentence) }}"
-        total_samples: 1101170
-      multiplier: 1
-    - dataset:
-        path: "fixie-ai/common_voice_17_0"
-        name: "ar"
-        splits:
-          - "train" # 28_369 samples
-        user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
-        assistant_template: "{{ continuation }}"
-        transcript_template: "{{ sentence }}"
-        total_samples: 28369
-      multiplier: 1
-    - dataset:
-        path: "fixie-ai/common_voice_17_0"
-        name: "de"
-        splits:
-          - "train" # 589_100 samples
-        user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
-        assistant_template: "{{ continuation }}"
-        transcript_template: "{{ sentence }}"
-        total_samples: 589100
-      multiplier: 1
-    - dataset:
-        path: "fixie-ai/common_voice_17_0"
-        name: "es"
-        splits:
-          - "train" # 336_846 samples
-        user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
-        assistant_template: "{{ continuation }}"
-        transcript_template: "{{ sentence }}"
-        total_samples: 336846
-      multiplier: 1
-    - dataset:
-        path: "fixie-ai/common_voice_17_0"
-        name: "fr"
-        splits:
-          - "train" # 558_054 samples
-        user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
-        assistant_template: "{{ continuation }}"
-        transcript_template: "{{ sentence }}"
-        total_samples: 558054
-      multiplier: 1
-    - dataset:
-        path: "fixie-ai/common_voice_17_0"
-        name: "it"
-        splits:
-          - "train" # 169_771 samples
-        user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
-        assistant_template: "{{ continuation }}"
-        transcript_template: "{{ sentence }}"
-        total_samples: 169771
-      multiplier: 1
-    - dataset:
-        path: "fixie-ai/common_voice_17_0"
-        name: "ja"
-        splits:
-          - "train" # 10_039 samples
-        user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
-        assistant_template: "{{ continuation }}"
-        transcript_template: "{{ sentence }}"
-        total_samples: 10039
-      multiplier: 1
-    - dataset:
-        path: "fixie-ai/common_voice_17_0"
-        name: "pt"
-        splits:
-          - "train" # 21_968 samples
-        user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
-        assistant_template: "{{ continuation }}"
-        transcript_template: "{{ sentence }}"
-        total_samples: 21968
-      multiplier: 1
-    - dataset:
-        path: "fixie-ai/common_voice_17_0"
-        name: "ru"
-        splits:
-          - "train" # 26_377 samples
-        user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
-        assistant_template: "{{ continuation }}"
-        transcript_template: "{{ sentence }}"
-        total_samples: 2637
-      multiplier: 1
-  # ASR task
-    - dataset:
-        path: "fixie-ai/librispeech_asr"
-        name: "clean"
-        splits:
-          - "train.100" # 28_539 samples
-          - "train.360" # 104_014 samples
-        user_template: "{{ dataset._get_transcribe_prompt() }}"
-        assistant_template: "{{ text }}"
-        transcript_template: "{{ text }}"
-        total_samples: 132553
-      multiplier: 1
-    - dataset:
-        path: "fixie-ai/librispeech_asr"
-        name: "other"
-        splits:
-          - "train.500" # 148_688 samples
-        user_template: "{{ dataset._get_transcribe_prompt() }}"
-        assistant_template: "{{ text }}"
-        transcript_template: "{{ text }}"
-        total_samples: 148688
-      multiplier: 1
-    - dataset:
-        path: "fixie-ai/peoples_speech"
-        name: "clean"
-        splits:
-          - "train" # 1_501_271 samples
-        user_template: "{{ dataset._get_transcribe_prompt() }}"
-        assistant_template: "{{ text_proc.format_asr_text(text) }}"
-        transcript_template: "{{ text_proc.format_asr_text(text) }}"
-        total_samples: 1501271
-      multiplier: 1
-    - dataset:
-        path: "fixie-ai/common_voice_17_0"
-        name: "en"
-        splits:
-          - "train" # 1_101_170 samples
-        user_template: "{{ dataset._get_transcribe_prompt() }}"
-        assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
-        transcript_template: "{{ text_proc.format_asr_text(sentence) }}"
-        total_samples: 1101170
-      multiplier: 1
-    - dataset:
-        path: "fixie-ai/common_voice_17_0"
-        name: "ar"
-        splits:
-          - "train" # 28_369 samples
-        user_template: "{{ dataset._get_transcribe_prompt() }}"
-        assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
-        transcript_template: "{{ sentence }}"
-        total_samples: 28369
-      multiplier: 1
-    - dataset:
-        path: "fixie-ai/common_voice_17_0"
-        name: "de"
-        splits:
-          - "train" # 589_100 samples
-        user_template: "{{ dataset._get_transcribe_prompt() }}"
-        assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
-        transcript_template: "{{ sentence }}"
-        total_samples: 589100
-      multiplier: 1
-    - dataset:
-        path: "fixie-ai/common_voice_17_0"
-        name: "es"
-        splits:
-          - "train" # 336_846 samples
-        user_template: "{{ dataset._get_transcribe_prompt() }}"
-        assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
-        transcript_template: "{{ sentence }}"
-        total_samples: 336846
-      multiplier: 1
-    - dataset:
-        path: "fixie-ai/common_voice_17_0"
-        name: "fr"
-        splits:
-          - "train" # 558_054 samples
-        user_template: "{{ dataset._get_transcribe_prompt() }}"
-        assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
-        transcript_template: "{{ sentence }}"
-        total_samples: 558054
-      multiplier: 1
-    - dataset:
-        path: "fixie-ai/common_voice_17_0"
-        name: "it"
-        splits:
-          - "train" # 169_771 samples
-        user_template: "{{ dataset._get_transcribe_prompt() }}"
-        assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
-        transcript_template: "{{ sentence }}"
-        total_samples: 169771
-      multiplier: 1
-    - dataset:
-        path: "fixie-ai/common_voice_17_0"
-        name: "ja"
-        splits:
-          - "train" # 10_039 samples
-        user_template: "{{ dataset._get_transcribe_prompt() }}"
-        assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
-        transcript_template: "{{ sentence }}"
-        total_samples: 10039
-      multiplier: 1
-    - dataset:
-        path: "fixie-ai/common_voice_17_0"
-        name: "pt"
-        splits:
-          - "train" # 21_968 samples
-        user_template: "{{ dataset._get_transcribe_prompt() }}"
-        assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
-        transcript_template: "{{ sentence }}"
-        total_samples: 21968
-      multiplier: 1
-    - dataset:
-        path: "fixie-ai/common_voice_17_0"
-        name: "ru"
-        splits:
-          - "train" # 26_377 samples
-        user_template: "{{ dataset._get_transcribe_prompt() }}"
-        assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
-        transcript_template: "{{ sentence }}"
-        total_samples: 26377
-      multiplier: 1
+data_sets: [] # Can't use datasets with "multiplier" because it doesn't have a length attribute.
+data_dicts:
+# continuation
+  - path: "fixie-ai/librispeech_asr"
+    name: "clean"
+    splits:
+      - "train.100" # 28_539 samples
+      - "train.360" # 104_014 samples
+    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
+    assistant_template: "{{ continuation }}"
+    transcript_template: "{{ text }}"
+    multiplier: 1
+    total_samples: 132553
+  - path: "fixie-ai/librispeech_asr"
+    name: "other"
+    splits:
+      - "train.500" # 148_688 samples
+    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
+    assistant_template: "{{ continuation }}"
+    transcript_template: "{{ text }}"
+    multiplier: 1
+    total_samples: 148688
+  - path: "fixie-ai/peoples_speech"
+    name: "clean"
+    splits:
+      - "train" # 1_501_271 samples
+    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
+    assistant_template: "{{ continuation }}"
+    transcript_template: "{{ text_proc.format_asr_text(text) }}"
+    multiplier: 1
+    total_samples: 1501271
+  - path: "fixie-ai/common_voice_17_0"
+    name: "en"
+    splits:
+      - "train" # 1_101_170 samples
+    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
+    assistant_template: "{{ continuation }}"
+    transcript_template: "{{ text_proc.format_asr_text(sentence) }}"
+    multiplier: 1
+    total_samples: 1101170
+  - path: "fixie-ai/common_voice_17_0"
+    name: "ar"
+    splits:
+      - "train" # 28_369 samples
+    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
+    assistant_template: "{{ continuation }}"
+    transcript_template: "{{ sentence }}"
+    multiplier: 1
+    total_samples: 28369
+  - path: "fixie-ai/common_voice_17_0"
+    name: "de"
+    splits:
+      - "train" # 589_100 samples
+    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
+    assistant_template: "{{ continuation }}"
+    transcript_template: "{{ sentence }}"
+    multiplier: 1
+    total_samples: 589100
+  - path: "fixie-ai/common_voice_17_0"
+    name: "es"
+    splits:
+      - "train" # 336_846 samples
+    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
+    assistant_template: "{{ continuation }}"
+    transcript_template: "{{ sentence }}"
+    multiplier: 1
+    total_samples: 336846
+  - path: "fixie-ai/common_voice_17_0"
+    name: "fr"
+    splits:
+      - "train" # 558_054 samples
+    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
+    assistant_template: "{{ continuation }}"
+    transcript_template: "{{ sentence }}"
+    multiplier: 1
+    total_samples: 558054
+  - path: "fixie-ai/common_voice_17_0"
+    name: "it"
+    splits:
+      - "train" # 169_771 samples
+    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
+    assistant_template: "{{ continuation }}"
+    transcript_template: "{{ sentence }}"
+    multiplier: 1
+    total_samples: 169771
+  - path: "fixie-ai/common_voice_17_0"
+    name: "ja"
+    splits:
+      - "train" # 10_039 samples
+    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
+    assistant_template: "{{ continuation }}"
+    transcript_template: "{{ sentence }}"
+    multiplier: 1
+    total_samples: 10039
+  - path: "fixie-ai/common_voice_17_0"
+    name: "pt"
+    splits:
+      - "train" # 21_968 samples
+    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
+    assistant_template: "{{ continuation }}"
+    transcript_template: "{{ sentence }}"
+    multiplier: 1
+    total_samples: 21968
+  - path: "fixie-ai/common_voice_17_0"
+    name: "ru"
+    splits:
+      - "train" # 26_377 samples
+    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
+    assistant_template: "{{ continuation }}"
+    transcript_template: "{{ sentence }}"
+    multiplier: 1
+    total_samples: 26377
+# ASR task
+  - path: "fixie-ai/librispeech_asr"
+    name: "clean"
+    splits:
+      - "train.100" # 28_539 samples
+      - "train.360" # 104_014 samples
+    user_template: "{{ dataset._get_transcribe_prompt() }}"
+    assistant_template: "{{ text }}"
+    transcript_template: "{{ text }}"
+    multiplier: 1
+    total_samples: 132553
+  - path: "fixie-ai/librispeech_asr"
+    name: "other"
+    splits:
+      - "train.500" # 148_688 samples
+    user_template: "{{ dataset._get_transcribe_prompt() }}"
+    assistant_template: "{{ text }}"
+    transcript_template: "{{ text }}"
+    multiplier: 1
+    total_samples: 148688
+  - path: "fixie-ai/peoples_speech"
+    name: "clean"
+    splits:
+      - "train" # 1_501_271 samples
+    user_template: "{{ dataset._get_transcribe_prompt() }}"
+    assistant_template: "{{ text_proc.format_asr_text(text) }}"
+    transcript_template: "{{ text_proc.format_asr_text(text) }}"
+    multiplier: 1
+    total_samples: 1501271
+  - path: "fixie-ai/common_voice_17_0"
+    name: "en"
+    splits:
+      - "train" # 1_101_170 samples
+    user_template: "{{ dataset._get_transcribe_prompt() }}"
+    assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
+    transcript_template: "{{ text_proc.format_asr_text(sentence) }}"
+    multiplier: 1
+    total_samples: 1101170
+  - path: "fixie-ai/common_voice_17_0"
+    name: "ar"
+    splits:
+      - "train" # 28_369 samples
+    user_template: "{{ dataset._get_transcribe_prompt() }}"
+    assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
+    transcript_template: "{{ sentence }}"
+    multiplier: 1
+    total_samples: 28369
+  - path: "fixie-ai/common_voice_17_0"
+    name: "de"
+    splits:
+      - "train" # 589_100 samples
+    user_template: "{{ dataset._get_transcribe_prompt() }}"
+    assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
+    transcript_template: "{{ sentence }}"
+    multiplier: 1
+    total_samples: 589100
+  - path: "fixie-ai/common_voice_17_0"
+    name: "es"
+    splits:
+      - "train" # 336_846 samples
+    user_template: "{{ dataset._get_transcribe_prompt() }}"
+    assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
+    transcript_template: "{{ sentence }}"
+    multiplier: 1
+    total_samples: 336846
+  - path: "fixie-ai/common_voice_17_0"
+    name: "fr"
+    splits:
+      - "train" # 558_054 samples
+    user_template: "{{ dataset._get_transcribe_prompt() }}"
+    assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
+    transcript_template: "{{ sentence }}"
+    multiplier: 1
+    total_samples: 558054
+  - path: "fixie-ai/common_voice_17_0"
+    name: "it"
+    splits:
+      - "train" # 169_771 samples
+    user_template: "{{ dataset._get_transcribe_prompt() }}"
+    assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
+    transcript_template: "{{ sentence }}"
+    multiplier: 1
+    total_samples: 169771
+  - path: "fixie-ai/common_voice_17_0"
+    name: "ja"
+    splits:
+      - "train" # 10_039 samples
+    user_template: "{{ dataset._get_transcribe_prompt() }}"
+    assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
+    transcript_template: "{{ sentence }}"
+    multiplier: 1
+    total_samples: 10039
+  - path: "fixie-ai/common_voice_17_0"
+    name: "pt"
+    splits:
+      - "train" # 21_968 samples
+    user_template: "{{ dataset._get_transcribe_prompt() }}"
+    assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
+    transcript_template: "{{ sentence }}"
+    multiplier: 1
+    total_samples: 21968
+  - path: "fixie-ai/common_voice_17_0"
+    name: "ru"
+    splits:
+      - "train" # 26_377 samples
+    user_template: "{{ dataset._get_transcribe_prompt() }}"
+    assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
+    transcript_template: "{{ sentence }}"
+    multiplier: 1
+    total_samples: 26377
