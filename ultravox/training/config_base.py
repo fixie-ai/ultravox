@@ -167,7 +167,7 @@ def get_train_args(override_sys_args: Optional[List[str]] = None) -> TrainConfig
         override_sys_args: The command line arguments. If None, sys.argv[1:] is used.
             This is mainly useful for testing.
     """
-    args = override_sys_args or sys.argv[1:]
+    args = sys.argv[1:] if override_sys_args is None else override_sys_args
 
     return simple_parsing.parse(
         config_class=TrainConfig,
