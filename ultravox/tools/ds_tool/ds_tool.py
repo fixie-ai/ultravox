@@ -2,12 +2,18 @@ import dataclasses
 import json
 import math
 import os
+import tempfile
+import subprocess
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import datasets
 import jinja2
+import librosa
 import openai
 import simple_parsing
+import soundfile as sf
+from praatio import textgrid
 import yaml
 from tenacity import retry
 from tenacity import stop_after_attempt
@@ -20,6 +26,8 @@ from ultravox.tools.ds_tool import tts
 
 tts_client: caching.CachingTtsWrapper
 chat_client: caching.CachingChatWrapper
+
+MFA_ENV_NAME = "aligner"
 
 
 @dataclasses.dataclass
@@ -86,6 +94,134 @@ class TtsTask:
 
         sample[self.audio_column_name] = tts_client.tts(text_or_texts, self.voice)
         return sample
+
+
+@dataclasses.dataclass
+class TimestampGenerationTask:
+    language: str = simple_parsing.field(default="en", alias="-l")
+    audio_column_name: str = simple_parsing.field(default="audio", alias="-a")
+    template: str = simple_parsing.field(
+        default="{{text_proc.format_asr_text(text)}}", alias="-T"
+    )
+    timestamp_column_name: str = simple_parsing.field(
+        default="timestamps", alias="-tsc"
+    )
+    sample_rate: int = simple_parsing.field(default=16000, alias="-r")
+    temp_dir: Optional[str] = None
+    aligned_ratio_check: float = simple_parsing.field(default=0.95, alias="-ar")
+
+    def __post_init__(self):
+        try:
+            # Make sure the MFA environment is installed
+            subprocess.run(["conda", "run", "-n", MFA_ENV_NAME, "echo"], check=True)
+        except subprocess.CalledProcessError:
+            raise Exception(
+                "Please install the MFA environment using `just install_mfa` first."
+            )
+
+        if self.template.startswith("@"):
+            with open(self.template[1:], "r") as template_file:
+                self.template = template_file.read()
+
+    def map_split(
+        self,
+        ds_split: datasets.Dataset,
+        num_proc: int,
+        writer_batch_size: int,
+        exclude_fields: List[str],
+    ) -> datasets.Dataset:
+        ds_mapped = ds_split.map(
+            self._map_sample, num_proc=num_proc, writer_batch_size=writer_batch_size
+        ).filter(
+            lambda sample: sample[self.timestamp_column_name] is not None,
+            num_proc=num_proc,
+            writer_batch_size=writer_batch_size,
+        )
+        if len(ds_split) * self.aligned_ratio_check > len(ds_mapped):
+            raise Exception(
+                f"Found too many samples without timestamps: {len(ds_mapped)}/{len(ds_split)} aligned."
+            )
+        return ds_mapped
+
+    def _map_sample(self, sample):
+        # find the timestamps for the audio and populate the timestamps column
+        sample_id = self.get_id(sample)
+        text_path = os.path.join(self.temp_dir, f"{sample_id}.TextGrid")
+        if not os.path.exists(text_path):
+            sample[self.timestamp_column_name] = None
+            return sample
+
+        tg = textgrid.openTextgrid(text_path, False)
+        timestamps = tg.getTier("words").entries
+        sample[self.timestamp_column_name] = [
+            {"start": entry.start, "end": entry.end, "text": entry.label}
+            for entry in timestamps
+        ]
+        return sample
+
+    @staticmethod
+    def get_id(sample):
+        for key in ["id", "segment_id"]:
+            if key in sample and isinstance(sample[key], str):
+                return str(sample[key])
+        for key in ["file", "path", "audio_file"]:
+            if key in sample and isinstance(sample[key], str):
+                return Path(sample[key]).stem
+        raise ValueError("Could not find an ID in the sample")
+
+    def preprocess(self, ds_split: datasets.Dataset) -> datasets.Dataset:
+        if self.temp_dir is None:
+            if hasattr(self, "_temp_dir"):
+                self._temp_dir.cleanup()
+            self._temp_dir = tempfile.TemporaryDirectory()
+            self.temp_dir = self._temp_dir.name
+
+        os.makedirs(self.temp_dir, exist_ok=True)
+
+        # 1. copy all audio-text pairs into a temp directory
+        for sample in ds_split:
+            sample_id = self.get_id(sample)
+            audio_path = os.path.join(self.temp_dir, f"{sample_id}.wav")
+            with open(audio_path, "wb") as f:
+                audio = sample[self.audio_column_name]
+                if audio["sampling_rate"] != self.sample_rate:
+                    audio["array"] = librosa.resample(
+                        audio["array"],
+                        orig_sr=audio["sampling_rate"],
+                        target_sr=self.sample_rate,
+                    )
+                sf.write(f, audio["array"], 16000, format="WAV", subtype="PCM_16")
+
+            text_path = os.path.join(self.temp_dir, f"{sample_id}.txt")
+            with open(text_path, "w") as f:
+                # TODO: exclude_fields
+                text = jinja2.Template(
+                    self.template, undefined=jinja2.StrictUndefined
+                ).render(**sample, json_dump=json.dumps, text_proc=text_proc)
+                f.write(text)
+
+        # 2. run forced alignment on the temp directory
+        subprocess.run(
+            [
+                "conda",
+                "run",
+                "--no-capture-output",
+                "-n",
+                MFA_ENV_NAME,
+                "mfa",
+                "align",
+                "--clean",
+                self.temp_dir,
+                "english_mfa",
+                "english_mfa",
+                self.temp_dir,
+            ],
+            check=True,
+        )
+
+    def __del__(self):
+        if hasattr(self, "_temp_dir"):
+            self._temp_dir.cleanup()
 
 
 @dataclasses.dataclass
@@ -218,10 +354,12 @@ class DatasetToolArgs:
         default_factory=lambda: ["audio"]
     )
 
-    task: Union[TtsTask, TextGenerationTask] = simple_parsing.subgroups(
-        {"tts": TtsTask, "textgen": TextGenerationTask},  # type: ignore
-        default_factory=TtsTask,
-        positional=True,
+    task: Union[TtsTask, TextGenerationTask, TimestampGenerationTask] = (
+        simple_parsing.subgroups(
+            {"tts": TtsTask, "textgen": TextGenerationTask, "ts": TimestampGenerationTask},  # type: ignore
+            default_factory=TtsTask,
+            positional=True,
+        )
     )
 
     def __post_init__(self):
@@ -300,7 +438,10 @@ class DatasetChunkProcessor:
                 # If the error is unsupported operand type(s) for -=: 'NoneType' and 'float',
                 # then the huggingface README needs to be updated to have the
                 # download_size, and dataset_size fields present under dataset_info (could be initalized to 0)
+                import traceback
+
                 print(f"Failed to upload chunk {ds_chunk_name}: {e}. Retrying later.")
+                print(traceback.format_exc())
                 if total_chunks == 1:
                     print(
                         f"Finished processing and uploading 0/1 chunks for range [{start_index}, {end_index})"
@@ -389,6 +530,9 @@ def main(args: DatasetToolArgs):
             ds_split = ds_split.shuffle(seed=args.shuffle_seed)
         if args.num_samples:
             ds_split = ds_split.select(range(args.num_samples))
+
+        if hasattr(args.task, "preprocess"):
+            args.task.preprocess(ds_split)
 
         ds_chunk_proc.process_and_upload_split_rescursive(
             split_name, ds_split, 0, len(ds_split)
