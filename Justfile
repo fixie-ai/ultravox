@@ -68,10 +68,10 @@ mcloud *FLAGS:
     if ! command -v conda &> /dev/null; then  \
         echo "Conda is not installed.";  \
         mkdir -p ~/miniconda3;  \
-        if [[ "$OSTYPE" == "darwin"* ]]; then  \
+        if [ "$(uname)" = "Darwin" ]; then  \
             echo "Downloading MacOS Miniconda.";  \
             curl https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-arm64.sh -o ~/miniconda3/miniconda.sh;  \
-        elif [[ "$OSTYPE" == "linux-gnu"* ]]; then  \
+        elif [ "$(uname)" = "Linux" ]; then  \
             echo "Downloading Linux Miniconda.";  \
             wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda3/miniconda.sh  \
         else  \
@@ -90,7 +90,6 @@ mcloud *FLAGS:
         echo "Creating environment '$MFA_ENV_NAME'.";  \
         conda create --name "$MFA_ENV_NAME" python=3.8 -y;  \
         conda create -n "$MFA_ENV_NAME" -c conda-forge montreal-forced-aligner;  \
-        conda activate "$MFA_ENV_NAME";  \
-        mfa model download acoustic english_mfa;  \
-        mfa model download dictionary english_mfa;  \
+        conda run -n "$MFA_ENV_NAME" mfa model download acoustic english_mfa;  \
+        conda run -n "$MFA_ENV_NAME" mfa model download dictionary english_mfa;  \
     fi
