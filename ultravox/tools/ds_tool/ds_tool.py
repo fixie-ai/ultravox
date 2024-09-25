@@ -111,6 +111,8 @@ class TimestampGenerationTask:
     aligned_ratio_check: float = simple_parsing.field(default=0.95, alias="-ar")
 
     def __post_init__(self):
+        self._temp_dir: Optional[tempfile.TemporaryDirectory] = None
+
         try:
             # Make sure the MFA environment is installed
             subprocess.run(["conda", "run", "-n", MFA_ENV_NAME, "echo"], check=True)
@@ -130,6 +132,9 @@ class TimestampGenerationTask:
         writer_batch_size: int,
         exclude_fields: List[str],
     ) -> datasets.Dataset:
+        # Main task: generate timestamps for the audio samples
+        self._preprocess(ds_split)
+
         ds_mapped = ds_split.map(
             self._map_sample, num_proc=num_proc, writer_batch_size=writer_batch_size
         ).filter(
@@ -169,9 +174,9 @@ class TimestampGenerationTask:
                 return Path(sample[key]).stem
         raise ValueError("Could not find an ID in the sample")
 
-    def preprocess(self, ds_split: datasets.Dataset) -> datasets.Dataset:
+    def _preprocess(self, ds_split: datasets.Dataset) -> datasets.Dataset:
         if self.temp_dir is None:
-            if hasattr(self, "_temp_dir"):
+            if self._temp_dir is not None:
                 self._temp_dir.cleanup()
             self._temp_dir = tempfile.TemporaryDirectory()
             self.temp_dir = self._temp_dir.name
@@ -220,8 +225,9 @@ class TimestampGenerationTask:
         )
 
     def __del__(self):
-        if hasattr(self, "_temp_dir"):
+        if self._temp_dir is not None:
             self._temp_dir.cleanup()
+            self._temp_dir = None
 
 
 @dataclasses.dataclass
@@ -531,8 +537,8 @@ def main(args: DatasetToolArgs):
         if args.num_samples:
             ds_split = ds_split.select(range(args.num_samples))
 
-        if hasattr(args.task, "preprocess"):
-            args.task.preprocess(ds_split)
+        # if hasattr(args.task, "preprocess"):
+        #     args.task.preprocess(ds_split)
 
         ds_chunk_proc.process_and_upload_split_rescursive(
             split_name, ds_split, 0, len(ds_split)
