@@ -2,8 +2,8 @@ import dataclasses
 import json
 import math
 import os
-import tempfile
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -13,8 +13,8 @@ import librosa
 import openai
 import simple_parsing
 import soundfile as sf
-from praatio import textgrid
 import yaml
+from praatio import textgrid
 from tenacity import retry
 from tenacity import stop_after_attempt
 from tenacity import wait_fixed
