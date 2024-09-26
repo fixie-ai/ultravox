@@ -5,7 +5,7 @@ import os
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import datasets
 import jinja2
@@ -137,23 +137,41 @@ class TimestampGenerationTask:
         writer_batch_size: int,
         exclude_fields: List[str],
     ) -> datasets.Dataset:
-        # Main task: generate timestamps for the audio samples
-        self._preprocess(ds_split)
+        exclude_fields = set(exclude_fields)
+        self._get_new_temp_dir()
 
+        # 1. copy all audio-text pairs into a temp directory
+        ds_split.map(
+            self._store_sample_as_files,
+            num_proc=num_proc,
+            fn_kwargs={"exclude_fields": exclude_fields},
+        )
+
+        # 2. run the alignment
+        self._run_alignment(self.temp_dir)
+
+        # 3. retrieve the timestamps
         ds_mapped = ds_split.map(
-            self._map_sample, num_proc=num_proc, writer_batch_size=writer_batch_size
-        ).filter(
+            self._retrieve_timestamps,
+            num_proc=num_proc,
+            writer_batch_size=writer_batch_size,
+        )
+
+        # 4. filter out samples without timestamps (should be a small number)
+        ds_mapped = ds_mapped.filter(
             lambda sample: sample[self.timestamp_column_name] is not None,
             num_proc=num_proc,
             writer_batch_size=writer_batch_size,
         )
+
+        # 5. make sure most samples have timestamps
         if len(ds_split) * self.aligned_ratio_check > len(ds_mapped):
             raise Exception(
                 f"Found too many samples without timestamps: {len(ds_mapped)}/{len(ds_split)} aligned."
             )
         return ds_mapped
 
-    def _map_sample(self, sample):
+    def _retrieve_timestamps(self, sample):
         # find the timestamps for the audio and populate the timestamps column
         sample_id = self.get_id(sample)
         text_path = os.path.join(self.temp_dir, f"{sample_id}.TextGrid")
@@ -179,32 +197,32 @@ class TimestampGenerationTask:
                 return Path(sample[key]).stem
         raise ValueError("Could not find an ID in the sample")
 
-    def _preprocess(self, ds_split: datasets.Dataset) -> datasets.Dataset:
-        self._get_new_temp_dir()
+    def _store_sample_as_files(self, sample, exclude_fields: Set[str]):
+        sample_id = self.get_id(sample)
+        audio_path = os.path.join(self.temp_dir, f"{sample_id}.wav")
+        with open(audio_path, "wb") as f:
+            audio = sample[self.audio_column_name]
+            if audio["sampling_rate"] != self.sample_rate:
+                audio["array"] = librosa.resample(
+                    audio["array"],
+                    orig_sr=audio["sampling_rate"],
+                    target_sr=self.sample_rate,
+                )
+            sf.write(f, audio["array"], 16000, format="WAV", subtype="PCM_16")
 
-        # 1. copy all audio-text pairs into a temp directory
-        for sample in ds_split:
-            sample_id = self.get_id(sample)
-            audio_path = os.path.join(self.temp_dir, f"{sample_id}.wav")
-            with open(audio_path, "wb") as f:
-                audio = sample[self.audio_column_name]
-                if audio["sampling_rate"] != self.sample_rate:
-                    audio["array"] = librosa.resample(
-                        audio["array"],
-                        orig_sr=audio["sampling_rate"],
-                        target_sr=self.sample_rate,
-                    )
-                sf.write(f, audio["array"], 16000, format="WAV", subtype="PCM_16")
+        text_path = os.path.join(self.temp_dir, f"{sample_id}.txt")
+        with open(text_path, "w") as f:
+            filtered_sample = {
+                k: sample[k] for k in sample.keys() if k not in exclude_fields
+            }
+            text = jinja2.Template(
+                self.template, undefined=jinja2.StrictUndefined
+            ).render(**filtered_sample, json_dump=json.dumps, text_proc=text_proc)
+            f.write(text)
 
-            text_path = os.path.join(self.temp_dir, f"{sample_id}.txt")
-            with open(text_path, "w") as f:
-                # TODO: exclude_fields
-                text = jinja2.Template(
-                    self.template, undefined=jinja2.StrictUndefined
-                ).render(**sample, json_dump=json.dumps, text_proc=text_proc)
-                f.write(text)
+        return None
 
-        # 2. run forced alignment on the temp directory
+    def _run_alignment(self, temp_dir: str) -> None:
         subprocess.run(
             [
                 "conda",
@@ -215,10 +233,12 @@ class TimestampGenerationTask:
                 "mfa",
                 "align",
                 "--clean",
-                self.temp_dir,
+                "--use_mp",
+                "--single_speaker",
+                temp_dir,
                 "english_mfa",
                 "english_mfa",
-                self.temp_dir,
+                temp_dir,
             ],
             check=True,
         )
