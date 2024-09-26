@@ -234,7 +234,6 @@ class TimestampGenerationTask:
                 "align",
                 "--clean",
                 "--use_mp",
-                "--single_speaker",
                 temp_dir,
                 "english_mfa",
                 "english_mfa",
