@@ -148,7 +148,7 @@ class TimestampGenerationTask:
         )
 
         # 2. run the alignment
-        self._run_alignment(self.temp_dir)
+        self._run_alignment(self.temp_dir, num_proc=num_proc)
 
         # 3. retrieve the timestamps
         ds_mapped = ds_split.map(
@@ -222,7 +222,7 @@ class TimestampGenerationTask:
 
         return None
 
-    def _run_alignment(self, temp_dir: str) -> None:
+    def _run_alignment(self, temp_dir: str, num_proc: int = 16) -> None:
         subprocess.run(
             [
                 "conda",
@@ -234,6 +234,8 @@ class TimestampGenerationTask:
                 "align",
                 "--clean",
                 "--use_mp",
+                "-j",
+                str(num_proc),
                 temp_dir,
                 "english_mfa",
                 "english_mfa",
