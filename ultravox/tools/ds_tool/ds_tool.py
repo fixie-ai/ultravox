@@ -209,16 +209,23 @@ class TimestampGenerationTask:
 
     # Jinja template for the text transcription that needs to be aligned
     template: str = simple_parsing.field(alias="-T")
+    # The accoustic model to use for MFA alignment.
+    # Make sure the dictionary and acoustic model are installed. See just install_mfa for an example (English).
+    # Model index: https://mfa-models.readthedocs.io/en/latest/acoustic/index.html
+    # For many languages there exists a {language}_mfa model that you can use, e.g. "english_mfa"
+    mfa_acoustic_model: str = simple_parsing.field(alias="-m")
+    # The dictionary to use for MFA alignment. Defaults to the same name as the acoustic model.
+    mfa_dictionary: str = simple_parsing.field(default=None, alias="-d")
     audio_column_name: str = simple_parsing.field(default="audio", alias="-a")
     sample_rate: int = simple_parsing.field(default=16000, alias="-r")
     # The column name to store the timestamps in
     timestamp_column_name: str = simple_parsing.field(default="timestamps", alias="-ts")
-    # The language to use for the MFA alignment. Make sure the dictionary and acoustic model are installed.
-    # See just install_mfa as it downloads the English models.
-    language: str = simple_parsing.field(default="english", alias="-l")
     aligned_ratio_check: float = simple_parsing.field(default=0.95, alias="-ar")
 
     def __post_init__(self):
+        if self.mfa_dictionary is None:
+            self.mfa_dictionary = self.mfa_acoustic_model
+
         try:
             # Make sure the MFA environment is installed
             subprocess.run(["conda", "run", "-n", MFA_ENV_NAME, "echo"], check=True)
@@ -343,8 +350,8 @@ class TimestampGenerationTask:
                 "-j",
                 str(num_proc),
                 temp_dir,
-                f"{self.language}_mfa",
-                f"{self.language}_mfa",
+                self.mfa_acoustic_model,
+                self.mfa_dictionary,
                 temp_dir,
             ],
             check=True,
@@ -359,6 +366,8 @@ class TimestampGenerationTask:
 #        --shuffle --upload_name fixie-ai/librispeech_asr --private --base_url https://api.fireworks.ai/inference/v1 \
 #        --api_key $FIREWORKS_API_KEY --token $HF_TOKEN --language_model accounts/fireworks/models/llama-v3-8b-instruct \
 #        --template @ultravox/tools/ds_tool/continuation.jinja --max_tokens 64 --num_workers 30 --writer_batch_size 30
+#   just ds_tool timestamp -d fixie-ai/common_voice_17_0 -S en --upload_name fixie-ai/cv_ts  \
+#        -m english_mfa -T "\"{{text_proc.format_asr_text(sentence)}}\""
 @dataclasses.dataclass
 class DatasetToolArgs:
     # HF source dataset parameters
