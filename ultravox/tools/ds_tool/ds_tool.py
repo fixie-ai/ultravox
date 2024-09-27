@@ -419,6 +419,11 @@ class DatasetToolArgs:
         if self.dataset_split and not self.upload_split:
             self.upload_split = self.dataset_split
 
+        if self.upload_name == self.dataset_name:
+            raise ValueError(
+                "Updating datasets in-place is not well-supported and hence frowned upon."
+            )
+
 
 class DatasetChunkProcessor:
     args: DatasetToolArgs
