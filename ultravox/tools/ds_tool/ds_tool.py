@@ -396,7 +396,7 @@ class DatasetToolArgs:
 
     task: Union[TtsTask, TextGenerationTask, TimestampGenerationTask] = (
         simple_parsing.subgroups(
-            {"tts": TtsTask, "textgen": TextGenerationTask, "ts": TimestampGenerationTask},  # type: ignore
+            {"tts": TtsTask, "textgen": TextGenerationTask, "timestamp": TimestampGenerationTask},  # type: ignore
             default_factory=TtsTask,
             positional=True,
         )
