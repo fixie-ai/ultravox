@@ -1,4 +1,5 @@
 import dataclasses
+import glob
 import json
 import math
 import os
@@ -28,6 +29,39 @@ tts_client: caching.CachingTtsWrapper
 chat_client: caching.CachingChatWrapper
 
 MFA_ENV_NAME = "aligner"
+
+
+def apply_jinja_template(
+    template: str, sample: Dict[str, Any], exclude_fields: Optional[Set[str]] = None
+):
+    """
+    Apply a Jinja template to a sample, rendering it into text.
+    Jinja template allows for added flexibility as template can include variables and functions.
+
+    Args:
+        template: The Jinja template to apply. It can include variables, functions, and control structures.
+            Example:
+                {{ text }}
+                {{ text_proc.format_asr_text(text) }}
+        sample: The sample to apply the template to.
+        exclude_fields: Fields to exclude from the sample before rendering the template, to avoid loading large fields into memory.
+    """
+    if exclude_fields:
+        # Filter out big fields like audio before the sample is passed into the jinja template
+        # otherwise it can lead to unnecessary memory usage.
+        sample = {k: sample[k] for k in sample.keys() if k not in exclude_fields}
+
+    try:
+        return jinja2.Template(template, undefined=jinja2.StrictUndefined).render(
+            **sample, json_dump=json.dumps, text_proc=text_proc
+        )
+    except jinja2.TemplateError as e:
+        print(f"Error rendering template: {e}")
+        print(f"template: {template}")
+        print(f"sample keys: {list(sample.keys())}")
+        raise ValueError(
+            f"Template rendering failed. Make sure all keys in the template exist in the sample."
+        ) from e
 
 
 @dataclasses.dataclass
@@ -63,7 +97,10 @@ class TtsTask:
     ) -> datasets.Dataset:
         print(f'TTS mapping "{self.template}" to "{self.audio_column_name}"...')
         ds_split = ds_split.map(
-            self._map_sample, num_proc=num_proc, writer_batch_size=writer_batch_size
+            self._map_sample,
+            num_proc=num_proc,
+            writer_batch_size=writer_batch_size,
+            fn_kwargs={"exclude_fields": exclude_fields},
         )
         column_type = datasets.Audio(sampling_rate=self.sample_rate)
         if self.json_mode and isinstance(
@@ -72,20 +109,10 @@ class TtsTask:
             column_type = datasets.Sequence(column_type)
         return ds_split.cast_column(self.audio_column_name, column_type)
 
-    def _map_sample(self, sample):
+    def _map_sample(self, sample, exclude_fields: Set[str]):
         # using a Jinja template for some added flexibility, template can include variables and functions
         # e.g., {{ text }} or {{ text_proc.format_asr_text(text) }}
-        try:
-            text_or_texts = jinja2.Template(
-                self.template, undefined=jinja2.StrictUndefined
-            ).render(**sample, json_dump=json.dumps, text_proc=text_proc)
-        except jinja2.TemplateError as e:
-            print(f"Error rendering template: {e}")
-            print(f"template: {self.template}")
-            print(f"sample keys: {list(sample.keys())}")
-            raise ValueError(
-                f"Template rendering failed. Make sure column_name exists in the sample."
-            ) from e
+        text_or_texts = apply_jinja_template(self.template, sample, exclude_fields)
 
         if self.json_mode:
             text_or_texts = yaml.safe_load(text_or_texts)
@@ -94,160 +121,6 @@ class TtsTask:
 
         sample[self.audio_column_name] = tts_client.tts(text_or_texts, self.voice)
         return sample
-
-
-@dataclasses.dataclass
-class TimestampGenerationTask:
-    language: str = simple_parsing.field(default="en", alias="-l")
-    audio_column_name: str = simple_parsing.field(default="audio", alias="-a")
-    template: str = simple_parsing.field(
-        default="{{text_proc.format_asr_text(text)}}", alias="-T"
-    )
-    timestamp_column_name: str = simple_parsing.field(
-        default="timestamps", alias="-tsc"
-    )
-    sample_rate: int = simple_parsing.field(default=16000, alias="-r")
-    aligned_ratio_check: float = simple_parsing.field(default=0.95, alias="-ar")
-
-    def _get_new_temp_dir(self) -> str:
-        if self._temp_dir is not None:
-            self._temp_dir.cleanup()
-        self._temp_dir = tempfile.TemporaryDirectory()
-        self.temp_dir = self._temp_dir.name
-
-    def __post_init__(self):
-        self._temp_dir: Optional[tempfile.TemporaryDirectory] = None
-
-        try:
-            # Make sure the MFA environment is installed
-            subprocess.run(["conda", "run", "-n", MFA_ENV_NAME, "echo"], check=True)
-        except subprocess.CalledProcessError:
-            raise Exception(
-                "Please install the MFA environment using `just install_mfa` first."
-            )
-
-        if self.template.startswith("@"):
-            with open(self.template[1:], "r") as template_file:
-                self.template = template_file.read()
-
-    def map_split(
-        self,
-        ds_split: datasets.Dataset,
-        num_proc: int,
-        writer_batch_size: int,
-        exclude_fields: List[str],
-    ) -> datasets.Dataset:
-        exclude_fields = set(exclude_fields)
-        self._get_new_temp_dir()
-
-        # 1. copy all audio-text pairs into a temp directory
-        ds_split.map(
-            self._store_sample_as_files,
-            num_proc=num_proc,
-            fn_kwargs={"exclude_fields": exclude_fields},
-        )
-
-        # 2. run the alignment
-        self._run_alignment(self.temp_dir, num_proc=num_proc)
-
-        # 3. retrieve the timestamps
-        ds_mapped = ds_split.map(
-            self._retrieve_timestamps,
-            num_proc=num_proc,
-            writer_batch_size=writer_batch_size,
-        )
-
-        # 4. filter out samples without timestamps (should be a small number)
-        ds_mapped = ds_mapped.filter(
-            lambda sample: sample[self.timestamp_column_name] is not None,
-            num_proc=num_proc,
-            writer_batch_size=writer_batch_size,
-        )
-
-        # 5. make sure most samples have timestamps
-        if len(ds_split) * self.aligned_ratio_check > len(ds_mapped):
-            raise Exception(
-                f"Found too many samples without timestamps: {len(ds_mapped)}/{len(ds_split)} aligned."
-            )
-        return ds_mapped
-
-    def _retrieve_timestamps(self, sample):
-        # find the timestamps for the audio and populate the timestamps column
-        sample_id = self.get_id(sample)
-        text_path = os.path.join(self.temp_dir, f"{sample_id}.TextGrid")
-        if not os.path.exists(text_path):
-            sample[self.timestamp_column_name] = None
-            return sample
-
-        tg = textgrid.openTextgrid(text_path, False)
-        timestamps = tg.getTier("words").entries
-        sample[self.timestamp_column_name] = [
-            {"start": entry.start, "end": entry.end, "text": entry.label}
-            for entry in timestamps
-        ]
-        return sample
-
-    @staticmethod
-    def get_id(sample):
-        for key in ["id", "segment_id"]:
-            if key in sample and isinstance(sample[key], str):
-                return str(sample[key])
-        for key in ["file", "path", "audio_file"]:
-            if key in sample and isinstance(sample[key], str):
-                return Path(sample[key]).stem
-        raise ValueError("Could not find an ID in the sample")
-
-    def _store_sample_as_files(self, sample, exclude_fields: Set[str]):
-        sample_id = self.get_id(sample)
-        audio_path = os.path.join(self.temp_dir, f"{sample_id}.wav")
-        with open(audio_path, "wb") as f:
-            audio = sample[self.audio_column_name]
-            if audio["sampling_rate"] != self.sample_rate:
-                audio["array"] = librosa.resample(
-                    audio["array"],
-                    orig_sr=audio["sampling_rate"],
-                    target_sr=self.sample_rate,
-                )
-            sf.write(f, audio["array"], 16000, format="WAV", subtype="PCM_16")
-
-        text_path = os.path.join(self.temp_dir, f"{sample_id}.txt")
-        with open(text_path, "w") as f:
-            filtered_sample = {
-                k: sample[k] for k in sample.keys() if k not in exclude_fields
-            }
-            text = jinja2.Template(
-                self.template, undefined=jinja2.StrictUndefined
-            ).render(**filtered_sample, json_dump=json.dumps, text_proc=text_proc)
-            f.write(text)
-
-        return None
-
-    def _run_alignment(self, temp_dir: str, num_proc: int = 16) -> None:
-        subprocess.run(
-            [
-                "conda",
-                "run",
-                "--no-capture-output",
-                "-n",
-                MFA_ENV_NAME,
-                "mfa",
-                "align",
-                "--clean",
-                "--use_mp",
-                "-j",
-                str(num_proc),
-                temp_dir,
-                "english_mfa",
-                "english_mfa",
-                temp_dir,
-            ],
-            check=True,
-        )
-
-    def __del__(self):
-        if self._temp_dir is not None:
-            self._temp_dir.cleanup()
-            self._temp_dir = None
 
 
 @dataclasses.dataclass
@@ -299,24 +172,11 @@ class TextGenerationTask:
         # using a Jinja template for some added flexibility, template can include variables and functions
         # e.g., {{ text }} or {{ text_proc.format_asr_text(text) }}
         try:
-            # Filter out the audio before the sample is passed into the jinja template, or it will get loaded into memory.
-            filtered_sample = {
-                k: sample[k] for k in sample.keys() if k not in exclude_fields
-            }
-            rendered = jinja2.Template(
-                self.template, undefined=jinja2.StrictUndefined
-            ).render(**filtered_sample, json_dump=json.dumps, text_proc=text_proc)
+            rendered = apply_jinja_template(self.template, sample, exclude_fields)
         except text_proc.FormatASRError as e:
             print(f"Format ASR Error {e}. Filtering out sample.")
             sample[self.new_column_name] = None
             return sample
-        except jinja2.TemplateError as e:
-            print(f"Error rendering template: {e}")
-            print(f"template: {self.template}")
-            print(f"sample keys: {list(filtered_sample.keys())}")
-            raise ValueError(
-                f"Template rendering failed. Make sure all keys in the template exist in the sample."
-            ) from e
 
         if self.json_mode:
             turns = yaml.safe_load(rendered)
@@ -335,6 +195,159 @@ class TextGenerationTask:
         )
 
         return sample
+
+
+@dataclasses.dataclass
+class TimestampGenerationTask:
+    """
+    This task is used to generate timestamps for the text transcription.
+    It uses the Montreal Forced Aligner (MFA) to align the text with the audio. The result is a
+    list of timestamps for each word in the text transcription. The timestamps are stored in a new
+    column, in a dictionary format: {"start": float in seconds, "end": float in seconds, "text": word str}.
+    """
+
+    # Jinja template for the text transcription that needs to be aligned
+    template: str = simple_parsing.field(alias="-T")
+    audio_column_name: str = simple_parsing.field(default="audio", alias="-a")
+    sample_rate: int = simple_parsing.field(default=16000, alias="-r")
+    # The column name to store the timestamps in
+    timestamp_column_name: str = simple_parsing.field(default="timestamps", alias="-ts")
+    # The language to use for the MFA alignment. Make sure the dictionary and acoustic model are installed.
+    # See just install_mfa as it downloads the English models.
+    language: str = simple_parsing.field(default="english", alias="-l")
+    aligned_ratio_check: float = simple_parsing.field(default=0.95, alias="-ar")
+
+    def __post_init__(self):
+        try:
+            # Make sure the MFA environment is installed
+            subprocess.run(["conda", "run", "-n", MFA_ENV_NAME, "echo"], check=True)
+        except subprocess.CalledProcessError:
+            raise Exception(
+                "Please install the MFA environment using `just install_mfa` first."
+            )
+
+        if self.template.startswith("@"):
+            with open(self.template[1:], "r") as template_file:
+                self.template = template_file.read()
+
+    def map_split(
+        self,
+        ds_split: datasets.Dataset,
+        num_proc: int,
+        writer_batch_size: int,
+        exclude_fields: List[str],
+    ) -> datasets.Dataset:
+        # 0. create a temp directory to store the audio and text files
+        _temp_dir = tempfile.TemporaryDirectory()
+        self.temp_dir = _temp_dir.name
+        os.makedirs(self.temp_dir, exist_ok=True)
+
+        # 1. copy all audio-text pairs into the temp directory
+        ds_split.map(
+            self._store_sample_as_files,
+            num_proc=num_proc,
+            fn_kwargs={"exclude_fields": set(exclude_fields)},
+        )
+
+        count_wavs = len(glob.glob(os.path.join(self.temp_dir, "*.wav")))
+        assert count_wavs >= len(
+            ds_split
+        ), "Not all samples were stored as files. The id is likely not unique."
+
+        # 2. run the alignment
+        self._run_alignment(self.temp_dir, num_proc=num_proc)
+
+        # 3. retrieve the timestamps
+        ds_mapped = ds_split.map(
+            self._retrieve_timestamps,
+            num_proc=num_proc,
+            writer_batch_size=writer_batch_size,
+        )
+
+        # 4. filter out samples without timestamps (should be a small number)
+        ds_mapped = ds_mapped.filter(
+            lambda sample: sample[self.timestamp_column_name] is not None,
+            num_proc=num_proc,
+            writer_batch_size=writer_batch_size,
+        )
+
+        # 5. make sure most samples have timestamps
+        if len(ds_split) * self.aligned_ratio_check > len(ds_mapped):
+            raise Exception(
+                f"Found too many samples without timestamps: {len(ds_mapped)}/{len(ds_split)} aligned."
+            )
+
+        # 6. cleanup
+        _temp_dir.cleanup()
+
+        return ds_mapped
+
+    def _retrieve_timestamps(self, sample):
+        # find the timestamps for the audio and populate the timestamps column
+        sample_id = self.get_id(sample)
+        text_path = os.path.join(self.temp_dir, f"{sample_id}.TextGrid")
+        if not os.path.exists(text_path):
+            sample[self.timestamp_column_name] = None
+            return sample
+
+        tg = textgrid.openTextgrid(text_path, False)
+        timestamps = tg.getTier("words").entries
+        sample[self.timestamp_column_name] = [
+            {"start": entry.start, "end": entry.end, "text": entry.label}
+            for entry in timestamps
+        ]
+        return sample
+
+    @staticmethod
+    def get_id(sample):
+        for key in ["id", "segment_id"]:
+            if key in sample and isinstance(sample[key], str):
+                return str(sample[key])
+        for key in ["file", "path", "audio_file"]:
+            if key in sample and isinstance(sample[key], str):
+                return Path(sample[key]).stem
+        raise ValueError("Could not find an ID in the sample")
+
+    def _store_sample_as_files(self, sample, exclude_fields: Set[str]):
+        sample_id = self.get_id(sample)
+        audio_path = os.path.join(self.temp_dir, f"{sample_id}.wav")
+        with open(audio_path, "wb") as f:
+            audio = sample[self.audio_column_name]
+            if audio["sampling_rate"] != self.sample_rate:
+                audio["array"] = librosa.resample(
+                    audio["array"],
+                    orig_sr=audio["sampling_rate"],
+                    target_sr=self.sample_rate,
+                )
+            sf.write(f, audio["array"], 16000, format="WAV", subtype="PCM_16")
+
+        text_path = os.path.join(self.temp_dir, f"{sample_id}.txt")
+        text = apply_jinja_template(self.template, sample, exclude_fields)
+        with open(text_path, "w") as f:
+            f.write(text)
+
+    def _run_alignment(self, temp_dir: str, num_proc: int = 16) -> None:
+        subprocess.run(
+            [
+                "conda",
+                "run",
+                "--no-capture-output",
+                "-n",
+                MFA_ENV_NAME,
+                "mfa",
+                "align",
+                "--clean",
+                "--single_speaker",
+                "--use_mp",
+                "-j",
+                str(num_proc),
+                temp_dir,
+                f"{self.language}_mfa",
+                f"{self.language}_mfa",
+                temp_dir,
+            ],
+            check=True,
+        )
 
 
 # This script is used to either generate audio samples from text using a TTS model, or to generate text samples using a text generation model.
