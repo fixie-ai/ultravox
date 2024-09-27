@@ -5,6 +5,7 @@ import math
 import os
 import subprocess
 import tempfile
+import traceback
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
@@ -477,8 +478,6 @@ class DatasetChunkProcessor:
                 # If the error is unsupported operand type(s) for -=: 'NoneType' and 'float',
                 # then the huggingface README needs to be updated to have the
                 # download_size, and dataset_size fields present under dataset_info (could be initalized to 0)
-                import traceback
-
                 print(f"Failed to upload chunk {ds_chunk_name}: {e}. Retrying later.")
                 print(traceback.format_exc())
                 if total_chunks == 1:
