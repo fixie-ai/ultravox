@@ -216,7 +216,7 @@ class TimestampGenerationTask:
     # For many languages there exists a {language}_mfa model that you can use, e.g. "english_mfa"
     mfa_acoustic_model: str = simple_parsing.field(alias="-m")
     # The dictionary to use for MFA alignment. Defaults to the same name as the acoustic model.
-    mfa_dictionary: str = simple_parsing.field(default=None, alias="-d")
+    mfa_dictionary: Optional[str] = simple_parsing.field(default=None, alias="-d")
     audio_column_name: str = simple_parsing.field(default="audio", alias="-a")
     sample_rate: int = simple_parsing.field(default=16000, alias="-r")
     # The column name to store the timestamps in
@@ -352,7 +352,7 @@ class TimestampGenerationTask:
                 str(num_proc),
                 temp_dir,
                 self.mfa_acoustic_model,
-                self.mfa_dictionary,
+                str(self.mfa_dictionary),
                 temp_dir,
             ],
             check=True,
