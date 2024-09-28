@@ -204,7 +204,8 @@ class TimestampGenerationTask:
     This task is used to generate timestamps for the text transcription.
     It uses the Montreal Forced Aligner (MFA) to align the text with the audio. The result is a
     list of timestamps for each word in the text transcription. The timestamps are stored in a new
-    column, in a dictionary format: {"start": float in seconds, "end": float in seconds, "text": word str}.
+    column, in a list of dict format:
+        [ {"start": float in seconds, "end": float in seconds, "text": first word str}, ... ]
     """
 
     # Jinja template for the text transcription that needs to be aligned
