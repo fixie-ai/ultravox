@@ -976,7 +976,7 @@ class PeopleSpeechDataset(VoiceDataset):
     def __init__(self, args: VoiceDatasetArgs) -> None:
         super().__init__(args)
         dataset = self._load_audio_dataset(
-            "MLCommons/peoples_speech", "clean", split=args.split.value
+            "fixie-ai/peoples_speech", "clean", split=args.split.value
         )
         self._init_dataset(dataset)
 
