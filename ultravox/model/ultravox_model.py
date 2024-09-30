@@ -320,8 +320,11 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
     def _create_language_model(
         cls, config: UltravoxConfig
     ) -> transformers.LlamaForCausalLM:
+        base_cls = transformers.AutoModelForCausalLM
         if config.text_model_id is not None:
-            language_model = transformers.AutoModelForCausalLM.from_pretrained(
+            if "Llama3.2" in config.text_model_id:
+                base_cls = transformers.MllamaForConditionalGeneration
+            language_model = base_cls.from_pretrained(
                 config.text_model_id,
                 attn_implementation=config._attn_implementation,
                 torch_dtype=config.torch_dtype,
@@ -330,7 +333,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             with transformers.modeling_utils.no_init_weights():
                 # we only ever use from_config if the weights are retrained, hence initializing is not
                 # required. This makes the model quite creation faster since init on CPU is quite slow.
-                language_model = transformers.AutoModelForCausalLM.from_config(
+                language_model = base_cls.from_config(
                     config.text_config,
                     attn_implementation=config._attn_implementation,
                     torch_dtype=config.torch_dtype,

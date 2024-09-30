@@ -9,31 +9,35 @@ from .ultravox_config import UltravoxConfig
 
 class UltravoxProcessor(transformers.ProcessorMixin):
     """
-    Constructs an Ultravox processor which wraps an audio processor and a tokenizer into a single processor.
+    Constructs an Ultravox processor which wraps an audio processor and a text_processor into a single processor.
 
     Args:
         audio_processor: The audio processor for the audio encoder.
-        tokenizer: The tokenizer for the language model.
+        text_processor: The processor for the language model.
     """
 
-    attributes = ["audio_processor", "tokenizer"]
+    attributes = ["audio_processor", "text_processor"]
     audio_processor_class = (
         "Wav2Vec2Processor",
         "SeamlessM4TFeatureExtractor",
         "WhisperProcessor",
     )
-    tokenizer_class = (
+    text_processor_class = (
         "PreTrainedTokenizer",
         "PreTrainedTokenizerFast",
+        "MllamaProcessor",
     )
 
     tokenizer: transformers.PreTrainedTokenizerBase
+    text_processor: Union[
+        transformers.ProcessorMixin, transformers.PreTrainedTokenizerBase
+    ]
     audio_processor: transformers.ProcessorMixin
 
     def __init__(
         self,
         audio_processor=None,
-        tokenizer=None,
+        text_processor=None,
         audio_padding: str = "longest",
         encoder_ds_factor: int = 320,
         stack_factor: int = 8,
@@ -42,7 +46,7 @@ class UltravoxProcessor(transformers.ProcessorMixin):
         """
         Args:
             audio_processor: The audio processor for the audio encoder.
-            tokenizer: The tokenizer for the language model.
+            text_processor: The processor for the language model.
             audio_padding: The padding strategy for the audio encoder.
             encoder_ds_factor: The downsample factor of the audio encoder.
             stack_factor: The factor by which the audio encoder output is stacked in the multimodal projector.
@@ -52,14 +56,22 @@ class UltravoxProcessor(transformers.ProcessorMixin):
         self.encoder_ds_factor = encoder_ds_factor
         self.stack_factor = stack_factor
         self.audio_placeholder = audio_placeholder
-        self.audio_token_replacement = tokenizer.eos_token
+
+        if isinstance(text_processor, transformers.MllamaProcessor):
+            self.tokenizer: transformers.PreTrainedTokenizerFast = (
+                text_processor.tokenizer
+            )
+        else:
+            self.tokenizer = text_processor
+
+        super().__init__(audio_processor=audio_processor, text_processor=text_processor)
+
+        self.audio_token_replacement = self.tokenizer.bos_token
         assert (
             self.audio_token_replacement is not None
         ), "The tokenizer has no EOS token. Cannot recover."
-        if tokenizer.pad_token_id is None:
-            tokenizer.pad_token_id = tokenizer.eos_token_id
-
-        super().__init__(audio_processor=audio_processor, tokenizer=tokenizer)
+        # if tokenizer.pad_token_id is None:
+        #     tokenizer.pad_token_id = tokenizer.eos_token_id
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path, **kwargs):
@@ -72,6 +84,7 @@ class UltravoxProcessor(transformers.ProcessorMixin):
             or "facebook/wav2vec2-base-960h"
         )
 
+        # TODO: how to load MllamaProcessor?
         tokenizer = transformers.AutoTokenizer.from_pretrained(
             pretrained_model_name_or_path, **kwargs
         )
@@ -80,7 +93,7 @@ class UltravoxProcessor(transformers.ProcessorMixin):
 
         return cls(
             audio_processor=audio_processor,
-            tokenizer=tokenizer,
+            text_processor=tokenizer,
             stack_factor=config.stack_factor,
         )
 
@@ -88,6 +101,7 @@ class UltravoxProcessor(transformers.ProcessorMixin):
         self,
         text: Optional[str] = None,
         audio: Optional[Union[np.ndarray, torch.Tensor]] = None,
+        images: Optional[transformers.image_utils.ImageInput] = None,
         sampling_rate: Optional[int] = None,
         return_tensors: Optional[
             Union[str, transformers.TensorType]
@@ -188,7 +202,11 @@ class UltravoxProcessor(transformers.ProcessorMixin):
                 )
 
             # Special tokens like BOS should already have been added by the caller.
-            data.update(self.tokenizer([text], add_special_tokens=False, **kwargs))
+            data.update(
+                self.text_processor(
+                    text=[text], images=images, add_special_tokens=False, **kwargs
+                )
+            )
 
         return transformers.BatchFeature(data=data, tensor_type=return_tensors)
 
@@ -200,9 +218,9 @@ class UltravoxProcessor(transformers.ProcessorMixin):
 
     @property
     def model_input_names(self):
-        tokenizer_input_names = self.tokenizer.model_input_names
+        text_processor_input_names = self.text_processor.model_input_names
         audio_processor_input_names = self.audio_processor.model_input_names
-        return list(set(tokenizer_input_names + audio_processor_input_names))
+        return list(set(text_processor_input_names + audio_processor_input_names))
 
 
 UltravoxProcessor.register_for_auto_class()
