@@ -148,7 +148,10 @@ class UltravoxConfig(transformers.PretrainedConfig):
             else dataclasses.asdict(audio_model_lora_config or LoraConfigSimplified())
         )
 
-        self.vocab_size = self.text_config.vocab_size
+        if hasattr(self.text_config, "vocab_size"):
+            self.vocab_size = self.text_config.vocab_size
+        elif hasattr(self.text_config, "text_config"):
+            self.vocab_size = self.text_config.text_config.vocab_size
 
         self.initializer_range = self.text_config.initializer_range
 
