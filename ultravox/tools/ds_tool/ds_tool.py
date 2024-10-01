@@ -248,30 +248,28 @@ class TimestampGenerationTask:
     ) -> datasets.Dataset:
         # 0. create a temp directory to store the audio and text files
         # The files will be deleted when the with block ends or when an exception is raised
-        with tempfile.TemporaryDirectory() as _temp_dir:
-            self.temp_dir = _temp_dir.name
-            os.makedirs(self.temp_dir, exist_ok=True)
-
+        with tempfile.TemporaryDirectory() as temp_dir:
             # 1. copy all audio-text pairs into the temp directory
             ds_split.map(
                 self._store_sample_as_files,
                 num_proc=num_proc,
-                fn_kwargs={"exclude_fields": set(exclude_fields)},
+                fn_kwargs={"exclude_fields": set(exclude_fields), "temp_dir": temp_dir},
             )
 
-            count_wavs = len(glob.glob(os.path.join(self.temp_dir, "*.wav")))
+            count_wavs = len(glob.glob(os.path.join(temp_dir, "*.wav")))
             assert count_wavs == len(
                 ds_split
             ), "Not all samples were stored as files. The id is likely not unique."
 
             # 2. run the alignment
-            self._run_alignment(self.temp_dir, num_proc=num_proc)
+            self._run_alignment(temp_dir, num_proc=num_proc)
 
             # 3. retrieve the timestamps
             ds_mapped = ds_split.map(
                 self._retrieve_timestamps,
                 num_proc=num_proc,
                 writer_batch_size=writer_batch_size,
+                fn_kwargs={"temp_dir": temp_dir},
             )
 
             # 4. filter out samples without timestamps (should be a small number)
@@ -289,10 +287,10 @@ class TimestampGenerationTask:
 
         return ds_mapped
 
-    def _retrieve_timestamps(self, sample):
+    def _retrieve_timestamps(self, sample, temp_dir: str):
         # find the timestamps for the audio and populate the timestamps column
         sample_id = self.get_id(sample)
-        text_path = os.path.join(self.temp_dir, f"{sample_id}.TextGrid")
+        text_path = os.path.join(temp_dir, f"{sample_id}.TextGrid")
         if not os.path.exists(text_path):
             sample[self.timestamp_column_name] = None
             return sample
@@ -315,9 +313,9 @@ class TimestampGenerationTask:
                 return Path(sample[key]).stem
         raise ValueError("Could not find an ID in the sample")
 
-    def _store_sample_as_files(self, sample, exclude_fields: Set[str]):
+    def _store_sample_as_files(self, sample, temp_dir: str, exclude_fields: Set[str]):
         sample_id = self.get_id(sample)
-        audio_path = os.path.join(self.temp_dir, f"{sample_id}.wav")
+        audio_path = os.path.join(temp_dir, f"{sample_id}.wav")
         with open(audio_path, "wb") as f:
             audio = sample[self.audio_column_name]
             if audio["sampling_rate"] != self.sample_rate:
@@ -328,7 +326,7 @@ class TimestampGenerationTask:
                 )
             sf.write(f, audio["array"], 16000, format="WAV", subtype="PCM_16")
 
-        text_path = os.path.join(self.temp_dir, f"{sample_id}.txt")
+        text_path = os.path.join(temp_dir, f"{sample_id}.txt")
         text = apply_jinja_template(self.template, sample, exclude_fields)
         with open(text_path, "w") as f:
             f.write(text)
