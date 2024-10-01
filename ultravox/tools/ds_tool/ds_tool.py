@@ -247,47 +247,45 @@ class TimestampGenerationTask:
         exclude_fields: List[str],
     ) -> datasets.Dataset:
         # 0. create a temp directory to store the audio and text files
-        _temp_dir = tempfile.TemporaryDirectory()
-        self.temp_dir = _temp_dir.name
-        os.makedirs(self.temp_dir, exist_ok=True)
+        # The files will be deleted when the with block ends or when an exception is raised
+        with tempfile.TemporaryDirectory() as _temp_dir:
+            self.temp_dir = _temp_dir.name
+            os.makedirs(self.temp_dir, exist_ok=True)
 
-        # 1. copy all audio-text pairs into the temp directory
-        ds_split.map(
-            self._store_sample_as_files,
-            num_proc=num_proc,
-            fn_kwargs={"exclude_fields": set(exclude_fields)},
-        )
-
-        count_wavs = len(glob.glob(os.path.join(self.temp_dir, "*.wav")))
-        assert count_wavs == len(
-            ds_split
-        ), "Not all samples were stored as files. The id is likely not unique."
-
-        # 2. run the alignment
-        self._run_alignment(self.temp_dir, num_proc=num_proc)
-
-        # 3. retrieve the timestamps
-        ds_mapped = ds_split.map(
-            self._retrieve_timestamps,
-            num_proc=num_proc,
-            writer_batch_size=writer_batch_size,
-        )
-
-        # 4. filter out samples without timestamps (should be a small number)
-        ds_mapped = ds_mapped.filter(
-            lambda sample: sample[self.timestamp_column_name] is not None,
-            num_proc=num_proc,
-            writer_batch_size=writer_batch_size,
-        )
-
-        # 5. make sure most samples have timestamps
-        if len(ds_split) * self.aligned_ratio_check > len(ds_mapped):
-            raise Exception(
-                f"Found too many samples without timestamps: {len(ds_mapped)}/{len(ds_split)} aligned."
+            # 1. copy all audio-text pairs into the temp directory
+            ds_split.map(
+                self._store_sample_as_files,
+                num_proc=num_proc,
+                fn_kwargs={"exclude_fields": set(exclude_fields)},
             )
 
-        # 6. cleanup
-        _temp_dir.cleanup()
+            count_wavs = len(glob.glob(os.path.join(self.temp_dir, "*.wav")))
+            assert count_wavs == len(
+                ds_split
+            ), "Not all samples were stored as files. The id is likely not unique."
+
+            # 2. run the alignment
+            self._run_alignment(self.temp_dir, num_proc=num_proc)
+
+            # 3. retrieve the timestamps
+            ds_mapped = ds_split.map(
+                self._retrieve_timestamps,
+                num_proc=num_proc,
+                writer_batch_size=writer_batch_size,
+            )
+
+            # 4. filter out samples without timestamps (should be a small number)
+            ds_mapped = ds_mapped.filter(
+                lambda sample: sample[self.timestamp_column_name] is not None,
+                num_proc=num_proc,
+                writer_batch_size=writer_batch_size,
+            )
+
+            # 5. make sure most samples have timestamps
+            if len(ds_split) * self.aligned_ratio_check > len(ds_mapped):
+                raise Exception(
+                    f"Found too many samples without timestamps: {len(ds_mapped)}/{len(ds_split)} aligned."
+                )
 
         return ds_mapped
 
