@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, Optional, Set, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import peft
 import torch
@@ -18,7 +18,7 @@ from .ultravox_config import LossFunction
 from .ultravox_config import UltravoxConfig
 
 
-class UltravoxModel(transformers.LlamaPreTrainedModel):
+class UltravoxModel(transformers.LlamaPreTrainedModel, transformers.GenerationMixin):
     """
     The Ultravox model which consists of an audio encoder and a language model.
 
@@ -146,6 +146,61 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         )
         return {"loss": kl_loss}
 
+    def generate(
+        self,
+        input_ids: torch.Tensor,
+        inputs_embeds: Optional[torch.FloatTensor] = None,
+        audio_values: Optional[torch.FloatTensor] = None,
+        audio_token_start_idx: Optional[torch.Tensor] = None,
+        audio_token_len: Optional[torch.Tensor] = None,
+        **kwargs,
+    ):
+        if inputs_embeds is None:
+            # B x T  ->  B x T x D
+            inputs_embeds = self.get_input_embeddings().forward(input_ids)
+
+        if audio_values is not None:
+            inputs_embeds = self._process_audio_input(
+                inputs_embeds, audio_values, audio_token_start_idx, audio_token_len
+            )
+
+        # We need to pass input_ids, otherwise MllamaForConditionalGeneration won't know
+        # if there was any image_token in the input_ids
+        return self.language_model.generate(
+            inputs_embeds=inputs_embeds, input_ids=input_ids, **kwargs
+        )
+
+    def _process_audio_input(
+        self,
+        inputs_embeds: torch.FloatTensor,
+        audio_values: torch.FloatTensor,
+        audio_token_start_idx: Optional[torch.Tensor],
+        audio_token_len: Optional[torch.Tensor],
+    ):
+        assert (
+            audio_token_start_idx is not None and audio_token_len is not None
+        ), "audio_token_start_idx and audio_token_len must be provided if audio_values are provided."
+        assert (
+            len(audio_token_start_idx) == len(audio_token_len) == len(audio_values)
+        ), "audio_token_start_idx, audio_token_len, and audio_values must have the same batch size."
+
+        # B x A/3200 x D
+        audio_tower_output = self.audio_tower.forward(
+            audio_values.to(self.audio_tower.dtype)
+        ).last_hidden_state
+        audio_tower_output = audio_tower_output.to(inputs_embeds.dtype)
+
+        audio_embeds = self.multi_modal_projector.forward(audio_tower_output)
+
+        # combine audio and text embeddings
+        for i, (audio, start, length) in enumerate(
+            zip(audio_embeds, audio_token_start_idx, audio_token_len)
+        ):
+            length = min(length, audio.shape[0])
+            inputs_embeds[i, start : start + length] = audio[:length]
+
+        return inputs_embeds
+
     def forward(
         self,
         input_ids: torch.Tensor,
@@ -156,6 +211,12 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         audio_token_start_idx: Optional[torch.Tensor] = None,
         audio_token_len: Optional[torch.Tensor] = None,
         past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
+        # Vision model arguments for Mllama. These are not used in text-only Llama. Handled through kwargs.
+        # We need to include them, as the forward signature is used by the Trainer to determine the model inputs.
+        pixel_values: Optional[torch.Tensor] = None,
+        aspect_ratio_ids: Optional[torch.Tensor] = None,
+        aspect_ratio_mask: Optional[torch.Tensor] = None,
+        cross_attention_mask: Optional[torch.Tensor] = None,
         # the alt_* fields are needed for KL divergence loss
         alt_input_ids: Optional[torch.Tensor] = None,
         alt_attention_mask: Optional[torch.Tensor] = None,
@@ -186,27 +247,18 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             inputs_embeds = self.get_input_embeddings().forward(input_ids)
 
         if audio_values is not None:
-            assert (
-                audio_token_start_idx is not None and audio_token_len is not None
-            ), "audio_token_start_idx and audio_token_len must be provided if audio_values are provided."
-            assert (
-                len(audio_token_start_idx) == len(audio_token_len) == len(audio_values)
-            ), "audio_token_start_idx, audio_token_len, and audio_values must have the same batch size."
+            inputs_embeds = self._process_audio_input(
+                inputs_embeds, audio_values, audio_token_start_idx, audio_token_len
+            )
 
-            # B x A/3200 x D
-            audio_tower_output = self.audio_tower.forward(
-                audio_values.to(self.audio_tower.dtype)
-            ).last_hidden_state
-            audio_tower_output = audio_tower_output.to(inputs_embeds.dtype)
-
-            audio_embeds = self.multi_modal_projector.forward(audio_tower_output)
-
-            # combine audio and text embeddings
-            for i, (audio, start, length) in enumerate(
-                zip(audio_embeds, audio_token_start_idx, audio_token_len)
-            ):
-                length = min(length, audio.shape[0])
-                inputs_embeds[i, start : start + length] = audio[:length]
+        for key in [
+            "pixel_values",
+            "aspect_ratio_ids",
+            "aspect_ratio_mask",
+            "cross_attention_mask",
+        ]:
+            if locals()[key] is not None:
+                kwargs[key] = locals()[key]
 
         lm_output = self.language_model.forward(
             inputs_embeds=inputs_embeds,
@@ -234,43 +286,6 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
                 )
         else:
             return lm_output
-
-    def prepare_inputs_for_generation(
-        self,
-        input_ids: torch.Tensor,
-        audio_values: Optional[torch.FloatTensor] = None,
-        audio_token_start_idx: Optional[torch.Tensor] = None,
-        audio_token_len: Optional[torch.Tensor] = None,
-        past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
-        attention_mask: Optional[torch.Tensor] = None,
-        inputs_embeds: Optional[torch.Tensor] = None,
-        cache_position: Optional[torch.Tensor] = None,
-        **kwargs,
-    ) -> Dict[str, Any]:
-        model_input = self.language_model.prepare_inputs_for_generation(
-            input_ids=input_ids,
-            past_key_values=past_key_values,
-            attention_mask=attention_mask,
-            inputs_embeds=inputs_embeds,
-            cache_position=cache_position,
-            **kwargs,
-        )
-
-        # include audio information in model_input only when it is needed during prefilling
-        # audio_token_start_idx should always be relative to the current cache position
-        prefill_start_idx = 0 if cache_position is None else cache_position[0]
-        if (
-            audio_values is not None
-            and audio_token_start_idx is not None
-            and prefill_start_idx <= torch.max(audio_token_start_idx)
-        ):
-            model_input["audio_values"] = audio_values
-            model_input["audio_token_start_idx"] = (
-                audio_token_start_idx - prefill_start_idx
-            )
-            model_input["audio_token_len"] = audio_token_len
-
-        return model_input
 
     @classmethod
     def _create_multi_modal_projector(
@@ -319,25 +334,40 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
     @classmethod
     def _create_language_model(
         cls, config: UltravoxConfig
-    ) -> transformers.LlamaForCausalLM:
-        base_cls = transformers.AutoModelForCausalLM
+    ) -> Union[
+        transformers.LlamaForCausalLM, transformers.MllamaForConditionalGeneration
+    ]:
+        base_classes: List[
+            transformers.models.auto.auto_factory._BaseAutoModelClass
+        ] = [
+            transformers.AutoModelForPreTraining,
+            transformers.AutoModelForCausalLM,
+        ]
         if config.text_model_id is not None:
-            if "Llama3.2" in config.text_model_id:
-                base_cls = transformers.MllamaForConditionalGeneration
-            language_model = base_cls.from_pretrained(
-                config.text_model_id,
-                attn_implementation=config._attn_implementation,
-                torch_dtype=config.torch_dtype,
-            )
+            for base_cls in base_classes:
+                try:
+                    language_model = base_cls.from_pretrained(
+                        config.text_model_id,
+                        attn_implementation=config._attn_implementation,
+                        torch_dtype=config.torch_dtype,
+                    )
+                    break
+                except ValueError:
+                    pass
         else:
+            # we only ever use from_config if the weights are retrained, hence initializing is not
+            # required. This makes the model quite creation faster since init on CPU is quite slow.
             with transformers.modeling_utils.no_init_weights():
-                # we only ever use from_config if the weights are retrained, hence initializing is not
-                # required. This makes the model quite creation faster since init on CPU is quite slow.
-                language_model = base_cls.from_config(
-                    config.text_config,
-                    attn_implementation=config._attn_implementation,
-                    torch_dtype=config.torch_dtype,
-                )
+                for base_cls in base_classes:
+                    try:
+                        language_model = base_cls.from_config(
+                            config.text_config,
+                            attn_implementation=config._attn_implementation,
+                            torch_dtype=config.torch_dtype,
+                        )
+                        break
+                    except ValueError:
+                        pass
 
         language_model = apply_lora(language_model, config.text_model_lora_config)
         return language_model

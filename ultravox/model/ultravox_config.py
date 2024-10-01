@@ -1,6 +1,6 @@
 import dataclasses
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import transformers
 
@@ -118,12 +118,12 @@ class UltravoxConfig(transformers.PretrainedConfig):
         self.projector_act = projector_act
 
         if text_model_id is not None:
-            self.text_config: transformers.LlamaConfig = (
-                transformers.AutoConfig.from_pretrained(text_model_id)
-            )
+            self._text_config: Union[
+                transformers.LlamaConfig, transformers.MllamaConfig
+            ] = transformers.AutoConfig.from_pretrained(text_model_id)
         else:
             text_config = text_config or {}
-            self.text_config = transformers.CONFIG_MAPPING[
+            self._text_config = transformers.CONFIG_MAPPING[
                 text_config.get("model_type", "llama")
             ](**text_config)
 
@@ -148,14 +148,16 @@ class UltravoxConfig(transformers.PretrainedConfig):
             else dataclasses.asdict(audio_model_lora_config or LoraConfigSimplified())
         )
 
-        if hasattr(self.text_config, "vocab_size"):
-            self.vocab_size = self.text_config.vocab_size
-        elif hasattr(self.text_config, "text_config"):
-            self.vocab_size = self.text_config.text_config.vocab_size
-
+        self.vocab_size = self.text_config.vocab_size
         self.initializer_range = self.text_config.initializer_range
 
         super().__init__(**kwargs)
+
+    @property
+    def text_config(self):
+        if isinstance(self._text_config, transformers.MllamaConfig):
+            return self._text_config.text_config
+        return self._text_config
 
     def to_diff_dict(self) -> Dict[str, Any]:
         diff_dict = super().to_diff_dict()
