@@ -259,7 +259,7 @@ class TimestampGenerationTask:
         )
 
         count_wavs = len(glob.glob(os.path.join(self.temp_dir, "*.wav")))
-        assert count_wavs >= len(
+        assert count_wavs == len(
             ds_split
         ), "Not all samples were stored as files. The id is likely not unique."
 
