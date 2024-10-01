@@ -59,7 +59,7 @@ def apply_jinja_template(
     except jinja2.TemplateError as e:
         print(f"Error rendering template: {e}")
         print(f"template: {template}")
-        print(f"sample keys: {list(sample.keys())}")
+        print(f"sample keys: {list(sample.keys())}, excluded keys: {exclude_fields}")
         raise ValueError(
             f"Template rendering failed. Make sure all keys in the template exist in the sample."
         ) from e
