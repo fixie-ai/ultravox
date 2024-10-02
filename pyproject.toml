@@ -30,7 +30,9 @@ wandb = "~0.17.1"
 sacrebleu = "^2.4.2"
 tenacity = "^9.0.0"
 evals = {git = "https://github.com/fixie-ai/evals", rev = "0c66bf85df7a4b903ecb202b23c2a826b749fd71"}
-praatio = "^6.2.0"
+torchaudio = "^2.4.1"
+scipy = "^1.14.1"
+einops = "^0.8.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "~24.4.2"
@@ -71,5 +73,6 @@ extend-exclude = '''
 /(
   | third_party
   | venv
+  | tokenizer
 )/
 '''
