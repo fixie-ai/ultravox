@@ -26,7 +26,6 @@ class UltravoxLSModel(transformers.LlamaPreTrainedModel):
     # Usually we load encoder weights from a pretrained model, so we don't want to load the decoder weights
     # Technically we never hit this issue because these keys are already removed from state_dict() however,
     # but there's no harm in keeping it here for when we change that behavior.
-    _keys_to_ignore_on_load_missing = []
 
     def __init__(self, config: UltravoxLSConfig):
         super().__init__(config)
