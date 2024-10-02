@@ -19,7 +19,7 @@ format:
 check:
     poetry run black {{PROJECT_DIR}} --check --exclude "{{PROJECT_DIR}}/tokenizer"
     poetry run isort {{PROJECT_DIR}} --check --force-single-line-imports --skip "{{PROJECT_DIR}}/tokenizer"
-    poetry run autoflake {{PROJECT_DIR}} --check --quiet --remove-all-unused-imports -r --exclude "third_party|{{PROJECT_DIR}}/tokenizer"
+    poetry run autoflake {{PROJECT_DIR}} --check --quiet --remove-all-unused-imports -r --exclude "{{PROJECT_DIR}}/tokenizer"
     poetry run mypy {{PROJECT_DIR}} --exclude "{{PROJECT_DIR}}/tokenizer"
 
 test *ARGS=".":
