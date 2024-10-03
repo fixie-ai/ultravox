@@ -1,4 +1,3 @@
-import time
 from typing import Optional, Union
 
 import huggingface_hub
@@ -74,10 +73,7 @@ class UltravoxLSProcessor:
         ] = transformers.TensorType.PYTORCH,
         **kwargs,
     ) -> transformers.BatchFeature:
-        print("start tokenizing")
-        start_time = time.time()
         tokenized_audio = self.tokenizer.encode(audio)
-        print(f"tokenizing took {time.time() - start_time} seconds")
         if len(tokenized_audio.shape) == 3:
             tokenized_audio = tokenized_audio.squeeze(1)
 
