@@ -1,7 +1,7 @@
 from typing import Any, Dict
 
 import datasets
-import numpy as np
+import librosa
 from torch.utils import data
 
 from ultravox.data import datasets
@@ -13,6 +13,7 @@ class UltravoxLSDataproc(datasets.Dataproc):
         self,
         dataset: data.IterableDataset,
         processor: ultravoxls_processing.UltravoxLSProcessor,
+        expected_audio_length_seconds: int,
     ) -> None:
         """
         Pre-processing for the UltravoxLS model: applies tokenization the UltravoxLSProcessor
@@ -23,19 +24,47 @@ class UltravoxLSDataproc(datasets.Dataproc):
             processor: The processor.
         """
         super().__init__(dataset)
+        self._dataset = dataset
         self.processor = processor
+        self.expected_audio_length_seconds = expected_audio_length_seconds
+
+    def __iter__(self):
+        for sample in self._dataset:
+            seconds_in_sample = librosa.get_duration(
+                y=sample.audio, sr=sample.sample_rate
+            )
+
+            if seconds_in_sample < self.expected_audio_length_seconds:
+                continue  # Skip samples that are too short
+
+            else:
+                # Calculate the number of samples for each chunk
+                chunk_size_samples = int(
+                    self.expected_audio_length_seconds * sample.sample_rate
+                )
+
+                # Split the entire audio into chunks of the specified length
+                for chunk_start in range(0, len(sample.audio), chunk_size_samples):
+                    chunk_end = chunk_start + chunk_size_samples
+                    chunk = sample.audio[chunk_start:chunk_end]
+
+                    # If the chunk is shorter than the specified length (last chunk), throw it away
+                    if len(chunk) < chunk_size_samples:
+                        continue  # Skip the last chunk
+
+                    yield self._process(
+                        datasets.VoiceSample(
+                            messages=sample.messages,
+                            audio=chunk,
+                            sample_rate=sample.sample_rate,
+                        )
+                    )
 
     def _process(self, sample: datasets.VoiceSample) -> Dict[str, Any]:
         # Process audio using UltravoxLSProcessor.
         # Audio is expanded to be a [C x M] array, although C=1 for mono audio.
-        audio = (
-            np.expand_dims(sample.audio, axis=0) if sample.audio is not None else None
-        )
-        inputs = self.processor(
-            audio=audio,
-            return_tensors="pt",
-            sampling_rate=sample.sample_rate,
-        )
+
+        inputs = self.processor.dataproc(sample)
 
         # Extract input_ids, attention_mask, and audio_values from the processed inputs
         input_ids = inputs["input_ids"].squeeze_(0)

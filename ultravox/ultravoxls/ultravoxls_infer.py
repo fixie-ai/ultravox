@@ -1,11 +1,8 @@
 import os
 from typing import Optional, Tuple, Union
 
-import librosa
-import numpy as np
 import torch
 import transformers
-import ultravoxls_processing
 from huggingface_hub import hf_hub_download
 
 from ultravox.data import datasets
@@ -13,10 +10,10 @@ from ultravox.inference import base
 from ultravox.inference import utils
 from ultravox.model import wandb_utils
 from ultravox.tokenizer.wav_tokenizer import CustomWavTokenizer
+from ultravox.ultravoxls import ultravoxls_processing
 from ultravox.ultravoxls.ultravoxls_config import UltravoxLSConfig
 from ultravox.ultravoxls.ultravoxls_model import UltravoxLSModel
 
-SAMPLE_RATE_LS = 24000
 MAX_NEW_TOKENS = 1024
 
 
@@ -40,43 +37,15 @@ class LocalLSInference(base.VoiceInference):
         max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
     ) -> base.VoiceOutput:
-        inputs = self._dataproc(sample)
+        inputs = self.processor.dataproc(sample)
         input_len = inputs["input_ids"].shape[1]
         output = self._generate(inputs, max_tokens, temperature)
         output_tokens = output.sequences[0][input_len:]
         for i in range(3 - output_tokens.dim()):
             output_tokens = output_tokens.unsqueeze(0)
-        output_audio = self.tokenizer.decode(output_tokens, skip_special_tokens=True)
+        output_audio = self.processor.decode(output_tokens, skip_special_tokens=True)
         output_len = len(output_tokens)
         return base.VoiceOutput(output_audio, input_len, output_len)
-
-    def _dataproc(self, sample: datasets.VoiceSample):
-        if sample.audio is not None:
-            audio = sample.audio
-            sample_rate = sample.sample_rate
-            # Normalize audio to float32.
-            if audio.dtype == np.int16:
-                audio = audio / np.float32(32768.0)
-            if audio.dtype not in [np.float64, np.float32]:
-                raise ValueError("Audio must be float64 or float32 or int16")
-
-            # Convert to tensor, resampling to 24kHz if needed.
-            if sample_rate != SAMPLE_RATE_LS:
-                audio = librosa.resample(
-                    audio, orig_sr=sample_rate, target_sr=SAMPLE_RATE_LS
-                )
-            audio_input = torch.from_numpy(audio)
-            if audio_input.ndim == 1:
-                audio_input = audio_input.unsqueeze(0)
-
-        else:
-            raise ValueError("Audio input is required for ultravoxls inference")
-
-        inputs = self.processor(
-            audio=audio_input, return_tensors="pt", sampling_rate=SAMPLE_RATE_LS
-        )
-        inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
-        return inputs
 
     @torch.inference_mode()
     def _generate(
@@ -142,7 +111,7 @@ class UltravoxLSInference(LocalLSInference):
         model_path = hf_hub_download(repo_id=hf_model_name, filename=checkpoint_file)
         tokenizer = CustomWavTokenizer(config_path, model_path)
 
-        processor = ultravoxls_processing.UltravoxLSProcessor(tokenizer=tokenizer)
+        processor = ultravoxls_processing.UltravoxLSProcessor(tokenizer=tokenizer, model=model)
 
         super().__init__(
             model=model,
