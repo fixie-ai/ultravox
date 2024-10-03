@@ -21,8 +21,8 @@ import wandb.sdk
 from torch.utils import data
 
 from ultravox.data import datasets
-from ultravox.model import ultravox_data_proc
 from ultravox.model import ultravox_config
+from ultravox.model import ultravox_data_proc
 from ultravox.model import ultravox_model
 from ultravox.model import ultravox_pipeline
 from ultravox.model import ultravox_processing

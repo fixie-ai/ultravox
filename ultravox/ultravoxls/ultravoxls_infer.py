@@ -1,9 +1,7 @@
-import os
 from typing import Optional, Tuple, Union
 
 import torch
 import transformers
-from huggingface_hub import hf_hub_download
 
 from ultravox.data import datasets
 from ultravox.inference import base

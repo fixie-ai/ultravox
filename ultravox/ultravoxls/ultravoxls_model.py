@@ -8,8 +8,8 @@ import transformers
 import transformers.activations
 import transformers.modeling_outputs
 import transformers.models
-import ultravox.model.ultravox_model as ultravox_model
 
+import ultravox.model.ultravox_model as ultravox_model
 from ultravox.model.ultravox_config import LossConfig
 from ultravox.model.ultravox_config import LossFunction
 from ultravox.ultravoxls.ultravoxls_config import UltravoxLSConfig
@@ -35,7 +35,9 @@ class UltravoxLSModel(transformers.LlamaPreTrainedModel):
         self.keep_params: Set[str] = set()
         self.vocab_size = config.vocab_size
 
-        self.language_model =  ultravox_model.UltravoxModel._create_language_model(config)
+        self.language_model = ultravox_model.UltravoxModel._create_language_model(
+            config
+        )
 
         self.loss_config = LossConfig()
         self.post_init()
@@ -147,7 +149,6 @@ class UltravoxLSModel(transformers.LlamaPreTrainedModel):
         )
         return model_input
 
-
     def merge_and_unload(self):
         if isinstance(self.language_model, peft.PeftModel):
             self.language_model = self.language_model.merge_and_unload()
@@ -203,4 +204,3 @@ class UltravoxLSModel(transformers.LlamaPreTrainedModel):
             f"trainable params: {trainable_params:,d} || all params: {all_param:,d}"
             f" || trainable%: {100 * trainable_params / all_param:.1f}%"
         )
-

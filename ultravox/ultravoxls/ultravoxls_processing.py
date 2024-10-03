@@ -1,15 +1,14 @@
-import os
 import time
 from typing import Optional, Union
 
+import huggingface_hub
 import librosa
 import numpy as np
 import torch
 import transformers
-import huggingface_hub
-from ultravox.data import datasets
-from third_party.tokenizer import wav_tokenizer
 
+from third_party.tokenizer import wav_tokenizer
+from ultravox.data import datasets
 
 SAMPLE_RATE_LS = 24000
 HF_MODEL_NAME = "novateur/WavTokenizer"
@@ -17,21 +16,22 @@ CHECKPOINT_FILE_NAME = "WavTokenizer_small_600_24k_4096.ckpt"
 CONFIG_FILE_NAME = (
     "wavtokenizer_smalldata_frame40_3s_nq1_code4096_dim512_kmeans200_attn.yaml"
 )
+
+
 class UltravoxLSProcessor:
     tokenizer: transformers.PreTrainedTokenizerBase
+
     def __init__(
         self,
         model_device: str,
     ):
         self.model_device = model_device
-        #Create tokenizer
+        # Create tokenizer
         config_path = "../../third_party/tokenizer/configs/wavtokenizer_smalldata_frame40_3s_nq1_code4096_dim512_kmeans200_attn.yaml"
         model_path = huggingface_hub.hf_hub_download(
             repo_id=HF_MODEL_NAME, filename=CHECKPOINT_FILE_NAME
         )
         self.tokenizer = wav_tokenizer.CustomWavTokenizer(config_path, model_path)
-
-
 
     def dataproc(self, sample: datasets.VoiceSample):
         if sample.audio is not None:
