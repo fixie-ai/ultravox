@@ -26,6 +26,6 @@ class UltravoxLSProcessor:
         if len(tokenized_audio.shape) == 3:
             tokenized_audio = tokenized_audio.squeeze(1)
 
-        attention_mask = (tokenized_audio != 0).astype(np.int64)
+        attention_mask = np.ones_like(tokenized_audio, dtype=np.int64)
         data = {"input_ids": tokenized_audio, "attention_mask": attention_mask}
         return transformers.BatchFeature(data=data, tensor_type=return_tensors)
