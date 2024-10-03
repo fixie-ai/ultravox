@@ -7,16 +7,16 @@ import torchaudio
 import transformers
 import yaml
 
-from ultravox.tokenizer.decoder.discriminator_dac import DACDiscriminator
+from third_party.tokenizer.decoder.discriminator_dac import DACDiscriminator
 
-from ultravox.tokenizer.decoder.discriminators import MultiPeriodDiscriminator, MultiResolutionDiscriminator
-from ultravox.tokenizer.decoder.feature_extractors import FeatureExtractor
-from ultravox.tokenizer.decoder.heads import FourierHead
-from ultravox.tokenizer.decoder.helpers import plot_spectrogram_to_numpy
-from ultravox.tokenizer.decoder.loss import DiscriminatorLoss, GeneratorLoss, FeatureMatchingLoss, MelSpecReconstructionLoss, DACGANLoss
-from ultravox.tokenizer.decoder.models import Backbone
-from ultravox.tokenizer.decoder.modules import safe_log
-from ultravox.tokenizer.decoder.pretrained_model import instantiate_class
+from third_party.tokenizer.decoder.discriminators import MultiPeriodDiscriminator, MultiResolutionDiscriminator
+from third_party.tokenizer.decoder.feature_extractors import FeatureExtractor
+from third_party.tokenizer.decoder.heads import FourierHead
+from third_party.tokenizer.decoder.helpers import plot_spectrogram_to_numpy
+from third_party.tokenizer.decoder.loss import DiscriminatorLoss, GeneratorLoss, FeatureMatchingLoss, MelSpecReconstructionLoss, DACGANLoss
+from third_party.tokenizer.decoder.models import Backbone
+from third_party.tokenizer.decoder.modules import safe_log
+from third_party.tokenizer.decoder.pretrained_model import instantiate_class
 
 
 class VocosExp(pl.LightningModule):

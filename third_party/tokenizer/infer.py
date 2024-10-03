@@ -1,7 +1,7 @@
 import torchaudio
 import torch
-from ultravox.tokenizer.decoder.pretrained import WavTokenizer
-from ultravox.tokenizer.encoder.utils import convert_audio
+from third_party.tokenizer.decoder.pretrained import WavTokenizer
+from third_party.tokenizer.encoder.utils import convert_audio
 from huggingface_hub import hf_hub_download
 
 device=torch.device('cpu')

@@ -1,25 +1,37 @@
+import os
+import time
 from typing import Optional, Union
 
 import librosa
 import numpy as np
 import torch
 import transformers
-
+import huggingface_hub
 from ultravox.data import datasets
+from third_party.tokenizer import wav_tokenizer
+
 
 SAMPLE_RATE_LS = 24000
-
-
+HF_MODEL_NAME = "novateur/WavTokenizer"
+CHECKPOINT_FILE_NAME = "WavTokenizer_small_600_24k_4096.ckpt"
+CONFIG_FILE_NAME = (
+    "wavtokenizer_smalldata_frame40_3s_nq1_code4096_dim512_kmeans200_attn.yaml"
+)
 class UltravoxLSProcessor:
     tokenizer: transformers.PreTrainedTokenizerBase
-
     def __init__(
         self,
-        model: transformers.PreTrainedModel,
-        tokenizer=None,
+        model_device: str,
     ):
-        self.model = model
-        self.tokenizer = tokenizer
+        self.model_device = model_device
+        #Create tokenizer
+        config_path = "../../third_party/tokenizer/configs/wavtokenizer_smalldata_frame40_3s_nq1_code4096_dim512_kmeans200_attn.yaml"
+        model_path = huggingface_hub.hf_hub_download(
+            repo_id=HF_MODEL_NAME, filename=CHECKPOINT_FILE_NAME
+        )
+        self.tokenizer = wav_tokenizer.CustomWavTokenizer(config_path, model_path)
+
+
 
     def dataproc(self, sample: datasets.VoiceSample):
         if sample.audio is not None:
@@ -46,7 +58,7 @@ class UltravoxLSProcessor:
         inputs = self.__call__(
             audio=audio_input, return_tensors="pt", sampling_rate=SAMPLE_RATE_LS
         )
-        inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
+        inputs = {k: v.to(self.model_device) for k, v in inputs.items()}
         return inputs
 
     def decode(self, output_tokens: torch.Tensor, skip_special_tokens: bool = True):
@@ -62,7 +74,10 @@ class UltravoxLSProcessor:
         ] = transformers.TensorType.PYTORCH,
         **kwargs,
     ) -> transformers.BatchFeature:
+        print("start tokenizing")
+        start_time = time.time()
         tokenized_audio = self.tokenizer.encode(audio)
+        print(f"tokenizing took {time.time() - start_time} seconds")
         if len(tokenized_audio.shape) == 3:
             tokenized_audio = tokenized_audio.squeeze(1)
 

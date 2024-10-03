@@ -4,7 +4,7 @@ import torch
 import torchaudio
 from torch import nn
 
-from ultravox.tokenizer.decoder.modules import safe_log
+from third_party.tokenizer.decoder.modules import safe_log
 
 import torch.nn.functional as F
 

@@ -8,6 +8,7 @@ import transformers
 import transformers.activations
 import transformers.modeling_outputs
 import transformers.models
+import ultravox.model.ultravox_model as ultravox_model
 
 from ultravox.model.ultravox_config import LossConfig
 from ultravox.model.ultravox_config import LossFunction
@@ -34,7 +35,7 @@ class UltravoxLSModel(transformers.LlamaPreTrainedModel):
         self.keep_params: Set[str] = set()
         self.vocab_size = config.vocab_size
 
-        self.language_model = self._create_language_model(config)
+        self.language_model =  ultravox_model.UltravoxModel._create_language_model(config)
 
         self.loss_config = LossConfig()
         self.post_init()
@@ -146,28 +147,6 @@ class UltravoxLSModel(transformers.LlamaPreTrainedModel):
         )
         return model_input
 
-    @classmethod
-    def _create_language_model(
-        cls, config: UltravoxLSConfig
-    ) -> transformers.LlamaForCausalLM:
-        if config.text_model_id is not None:
-            language_model = transformers.AutoModelForCausalLM.from_pretrained(
-                config.text_model_id,
-                attn_implementation=config._attn_implementation,
-                torch_dtype=config.torch_dtype,
-            )
-        else:
-            with transformers.modeling_utils.no_init_weights():
-                # we only ever use from_config if the weights are retrained, hence initializing is not
-                # required. This makes the model quite creation faster since init on CPU is quite slow.
-                language_model = transformers.AutoModelForCausalLM.from_config(
-                    config.text_config,
-                    attn_implementation=config._attn_implementation,
-                    torch_dtype=config.torch_dtype,
-                )
-
-        language_model = apply_lora(language_model, config.text_model_lora_config)
-        return language_model
 
     def merge_and_unload(self):
         if isinstance(self.language_model, peft.PeftModel):
@@ -225,37 +204,3 @@ class UltravoxLSModel(transformers.LlamaPreTrainedModel):
             f" || trainable%: {100 * trainable_params / all_param:.1f}%"
         )
 
-        lm_trainable_params, lm_all_params = count_params(self.language_model)
-
-        logging.info(
-            f"Trainable%:   " f" LLM: {100 * lm_trainable_params / lm_all_params:.1f}%"
-        )
-
-
-def is_cache_empty(
-    past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]]
-) -> bool:
-    """
-    Check if the cache is empty.
-    """
-    if past_key_values is None:
-        return True
-    if isinstance(past_key_values, tuple):
-        return all(len(c) == 0 for c in past_key_values)
-    return past_key_values.get_seq_length() == 0
-
-
-def apply_lora(model: torch.nn.Module, lora_config: dict) -> torch.nn.Module:
-    """
-    Applies LoRA finetuning to the model. If the `r` parameter is set to 0, the model is frozen instead.
-    """
-    lora_config = peft.LoraConfig(**lora_config or {})
-
-    if lora_config.r == 0:
-        # freeze the model entirely
-        for param in model.parameters():
-            param.requires_grad = False
-    else:
-        model = peft.get_peft_model(model, lora_config)
-
-    return model

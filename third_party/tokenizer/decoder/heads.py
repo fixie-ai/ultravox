@@ -2,8 +2,8 @@ import torch
 from torch import nn
 from torchaudio.functional.functional import _hz_to_mel, _mel_to_hz
 
-from ultravox.tokenizer.decoder.spectral_ops import IMDCT, ISTFT
-from ultravox.tokenizer.decoder.modules import symexp
+from third_party.tokenizer.decoder.spectral_ops import IMDCT, ISTFT
+from third_party.tokenizer.decoder.modules import symexp
 
 
 class FourierHead(nn.Module):

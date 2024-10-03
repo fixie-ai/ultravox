@@ -9,7 +9,6 @@ from ultravox.data import datasets
 from ultravox.inference import base
 from ultravox.inference import utils
 from ultravox.model import wandb_utils
-from ultravox.tokenizer.wav_tokenizer import CustomWavTokenizer
 from ultravox.ultravoxls import ultravoxls_processing
 from ultravox.ultravoxls.ultravoxls_config import UltravoxLSConfig
 from ultravox.ultravoxls.ultravoxls_model import UltravoxLSModel
@@ -22,12 +21,10 @@ class LocalLSInference(base.VoiceInference):
         self,
         model: transformers.PreTrainedModel,
         processor: ultravoxls_processing.UltravoxLSProcessor,
-        tokenizer: transformers.PreTrainedTokenizer,
         device: str,
         dtype: torch.dtype,
     ):
         self.model = model.to(device).to(dtype).eval()
-        self.tokenizer = tokenizer
         self.processor = processor
         self.dtype = dtype
 
@@ -98,29 +95,15 @@ class UltravoxLSInference(LocalLSInference):
         model = UltravoxLSModel(config)
         model.to(dtype=dtype, device=device)
 
-        # CustomWavTokenizer
-        root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        config_path = os.path.join(
-            root_dir,
-            "tokenizer",
-            "configs",
-            "wavtokenizer_smalldata_frame40_3s_nq1_code4096_dim512_kmeans200_attn.yaml",
-        )
-        hf_model_name = "novateur/WavTokenizer"
-        checkpoint_file = "WavTokenizer_small_600_24k_4096.ckpt"
-        model_path = hf_hub_download(repo_id=hf_model_name, filename=checkpoint_file)
-        tokenizer = CustomWavTokenizer(config_path, model_path)
-
-        processor = ultravoxls_processing.UltravoxLSProcessor(tokenizer=tokenizer, model=model)
+        processor = ultravoxls_processing.UltravoxLSProcessor(model_device=model.device)
 
         super().__init__(
             model=model,
             processor=processor,
-            tokenizer=tokenizer,
             device=device,
             dtype=dtype,
         )
 
         self.data_collator = transformers.DataCollatorForSeq2Seq(
-            tokenizer=self.tokenizer,
+            tokenizer=processor.tokenizer,
         )

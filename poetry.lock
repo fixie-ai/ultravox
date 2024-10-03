@@ -5137,6 +5137,20 @@ redis = ["redis"]
 tests = ["pytest (>=5.4.1)", "pytest-cov (>=2.8.1)", "pytest-mypy (>=0.8.0)", "pytest-timeout (>=2.1.0)", "redis", "sphinx (>=6.0.0)", "types-redis"]
 
 [[package]]
+name = "praatio"
+version = "6.2.0"
+description = "A library for working with praat, textgrids, time aligned audio transcripts, and audio files."
+optional = false
+python-versions = ">3.6.0"
+files = [
+    {file = "praatio-6.2.0-py3-none-any.whl", hash = "sha256:6541018791a3f0b087a8168d1746a165937c3fff1f94c7a6883b3f470e0cf405"},
+    {file = "praatio-6.2.0.tar.gz", hash = "sha256:7d2a7f8135a3e0691743ada0af84308b64e637f07038cea77d814b8aa2fa2e40"},
+]
+
+[package.dependencies]
+typing-extensions = "*"
+
+[[package]]
 name = "preshed"
 version = "3.0.9"
 description = "Cython hash table that trusts the keys are pre-hashed"
@@ -8931,4 +8945,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10,<4.0"
-content-hash = "b886cfdd9c79b9cb042014eccd3e09bf41b6313cfe6bf37a0063bef9ce220b37"
+content-hash = "c4693b73dfa41331ab316421304ca68f344c4c8ce00ca7036b126d1277a79ae2"

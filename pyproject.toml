@@ -33,6 +33,7 @@ evals = {git = "https://github.com/fixie-ai/evals", rev = "0c66bf85df7a4b903ecb2
 torchaudio = "^2.4.1"
 scipy = "^1.14.1"
 einops = "^0.8.0"
+praatio = "^6.2.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "~24.4.2"

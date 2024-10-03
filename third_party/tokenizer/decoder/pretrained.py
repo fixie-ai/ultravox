@@ -5,9 +5,9 @@ import torch
 import yaml
 from huggingface_hub import hf_hub_download
 from torch import nn
-from ultravox.tokenizer.decoder.feature_extractors import FeatureExtractor, EncodecFeatures
-from ultravox.tokenizer.decoder.heads import FourierHead
-from ultravox.tokenizer.decoder.models import Backbone
+from third_party.tokenizer.decoder.feature_extractors import FeatureExtractor, EncodecFeatures
+from third_party.tokenizer.decoder.heads import FourierHead
+from third_party.tokenizer.decoder.models import Backbone
 
 
 def instantiate_class(args: Union[Any, Tuple[Any, ...]], init: Dict[str, Any]) -> Any:

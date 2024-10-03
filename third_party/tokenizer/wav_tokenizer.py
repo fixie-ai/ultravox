@@ -1,6 +1,6 @@
 from transformers import PreTrainedTokenizer
 import torch
-from ultravox.tokenizer.decoder.pretrained import WavTokenizer
+from third_party.tokenizer.decoder.pretrained import WavTokenizer
 import os
 import json
 

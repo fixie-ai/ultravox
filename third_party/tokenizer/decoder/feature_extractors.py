@@ -4,10 +4,10 @@ import torch
 import torchaudio
 from torch import nn
 import math
-from ultravox.tokenizer.decoder.modules import safe_log
-from ultravox.tokenizer.encoder.modules import SEANetEncoder, SEANetDecoder
-from ultravox.tokenizer.encoder import EncodecModel
-from ultravox.tokenizer.encoder.quantization import ResidualVectorQuantizer
+from third_party.tokenizer.decoder.modules import safe_log
+from third_party.tokenizer.encoder.modules import SEANetEncoder, SEANetDecoder
+from third_party.tokenizer.encoder import EncodecModel
+from third_party.tokenizer.encoder.quantization import ResidualVectorQuantizer
 
 
 class FeatureExtractor(nn.Module):
