@@ -74,6 +74,5 @@ extend-exclude = '''
 /(
   | third_party
   | venv
-  | tokenizer
 )/
 '''

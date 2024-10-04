@@ -30,6 +30,7 @@ class UltravoxLSProcessor:
         model_path = huggingface_hub.hf_hub_download(
             repo_id=HF_MODEL_NAME, filename=CHECKPOINT_FILE_NAME
         )
+        # Arbitrary value is selected for the pad token id. The attention mask will be set to 0 for these tokens in the data collator.
         self.tokenizer = wav_tokenizer.CustomWavTokenizer(config_path, model_path)
 
     def dataproc(self, sample: datasets.VoiceSample):

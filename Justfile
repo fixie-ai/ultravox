@@ -12,15 +12,15 @@ install:
     poetry install
 
 format:
-    poetry run autoflake {{PROJECT_DIR}} --remove-all-unused-imports --quiet --in-place -r --exclude "{{PROJECT_DIR}}/tokenizer"
-    poetry run isort {{PROJECT_DIR}} --force-single-line-imports --skip "{{PROJECT_DIR}}/tokenizer"
-    poetry run black {{PROJECT_DIR}} --force-exclude "/tokenizer(/|$)" --verbose
+    poetry run autoflake {{PROJECT_DIR}} --remove-all-unused-imports --quiet --in-place -r 
+    poetry run isort {{PROJECT_DIR}} --force-single-line-imports 
+    poetry run black {{PROJECT_DIR}} 
 
 check:
-    poetry run black {{PROJECT_DIR}} --check --exclude "{{PROJECT_DIR}}/tokenizer"
-    poetry run isort {{PROJECT_DIR}} --check --force-single-line-imports --skip "{{PROJECT_DIR}}/tokenizer"
-    poetry run autoflake {{PROJECT_DIR}} --check --quiet --remove-all-unused-imports -r --exclude "{{PROJECT_DIR}}/tokenizer"
-    poetry run mypy {{PROJECT_DIR}} --exclude "{{PROJECT_DIR}}/tokenizer"
+    poetry run black {{PROJECT_DIR}} --check 
+    poetry run isort {{PROJECT_DIR}} --check --force-single-line-imports
+    poetry run autoflake {{PROJECT_DIR}} --check --quiet --remove-all-unused-imports -r 
+    poetry run mypy {{PROJECT_DIR}} 
 
 test *ARGS=".":
     cd ${PROJECT_DIR} && poetry run pytest --ignore third_party {{ARGS}}

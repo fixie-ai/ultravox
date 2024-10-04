@@ -6,9 +6,9 @@ from huggingface_hub import hf_hub_download
 
 device=torch.device('cpu')
 
-config_path = "../tokenizer/configs/wavtokenizer_smalldata_frame40_3s_nq1_code4096_dim512_kmeans200_attn.yaml"
+config_path = "../tokenizer/configs/wavtokenizer_smalldata_frame75_3s_nq1_code4096_dim512_kmeans200_attn.yaml"
 hf_model_name = "novateur/WavTokenizer"
-checkpoint_file = "WavTokenizer_small_600_24k_4096.ckpt"
+checkpoint_file = "WavTokenizer_small_320_24k_4096.ckpt"
 
 model_path = hf_hub_download(repo_id=hf_model_name, filename=checkpoint_file)
 

@@ -26,6 +26,8 @@ class CustomWavTokenizer(PreTrainedTokenizer):
             truncation_side=truncation_side,
             **kwargs
         )
+        
+        # Arbitrary value for the pad token id. The attention mask will be set to 0 for these tokens in the data collator. 
         self.pad_token_id = 0 
         self.pad_token = "0"
 
