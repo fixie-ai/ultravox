@@ -109,11 +109,8 @@ class UltravoxLSModel(transformers.LlamaPreTrainedModel):
             past_key_values: The past key value cache for the language model attention layers.
             **kwargs: Additional keyword arguments. Passed directly to the language model.
         """
-        if inputs_embeds is None:
-            # B x T  ->  B x T x D
-            inputs_embeds = self.get_input_embeddings().forward(input_ids)
-
         lm_output = self.language_model.forward(
+            input_ids=input_ids,
             inputs_embeds=inputs_embeds,
             labels=labels,
             attention_mask=attention_mask,
