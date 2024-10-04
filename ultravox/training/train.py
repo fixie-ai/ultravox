@@ -21,8 +21,8 @@ import wandb.sdk
 from torch.utils import data
 
 from ultravox.data import datasets
-from ultravox.model import data_processing
 from ultravox.model import ultravox_config
+from ultravox.model import ultravox_data_proc
 from ultravox.model import ultravox_model
 from ultravox.model import ultravox_pipeline
 from ultravox.model import ultravox_processing
@@ -54,7 +54,7 @@ def prepare_dataset(
             ), f"Dataset {ds} has length {len(ds)} which is too short for epoch training"
 
     interleave = datasets.InterleaveDataset(data_sets, stop_strategy=stop_strategy)
-    ds_with_proc = data_processing.UltravoxDataproc(
+    ds_with_proc = ultravox_data_proc.UltravoxDataproc(
         interleave,
         processor=processor,
         train_on_inputs=train_on_inputs,

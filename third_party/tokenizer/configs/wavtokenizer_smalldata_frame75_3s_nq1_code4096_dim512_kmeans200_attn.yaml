@@ -1,0 +1,93 @@
+seed_everything: 3407
+
+data:
+  class_path: third_party.tokenizer.decoder.dataset.VocosDataModule
+  init_args:
+    train_params:
+      filelist_path: ./WavTokenizer/data/train/libritts_train
+      sampling_rate: 24000
+      num_samples: 72000
+      batch_size: 40  # 20
+      num_workers: 8
+
+    val_params:
+      filelist_path: ./WavTokenizer/data/infer/librttts_val
+      sampling_rate: 24000
+      num_samples: 72000
+      batch_size: 5   # 10
+      num_workers: 8
+
+model:
+  class_path: third_party.tokenizer.decoder.experiment.WavTokenizer
+  init_args:
+    sample_rate: 24000
+    initial_learning_rate: 2e-4
+    mel_loss_coeff: 45
+    mrd_loss_coeff: 1.0
+    num_warmup_steps: 0 # Optimizers warmup steps
+    pretrain_mel_steps: 0  # 0 means GAN objective from the first iteration
+
+    # automatic evaluation
+    evaluate_utmos: true
+    evaluate_pesq: true
+    evaluate_periodicty: true
+
+    resume: false
+    resume_config: ./WavTokenizer/configs/wavtokenizer_smalldata_frame75_3s_nq1_code16384_dim512_kmeans800_attn.yaml
+    resume_model: ./WavTokenizer/result/train/wavtokenizer_smalldata_frame75_3s_nq1_code16384_dim512_kmeans800_attn/xxx.ckpt
+
+    feature_extractor:
+      class_path: third_party.tokenizer.decoder.feature_extractors.EncodecFeatures
+      init_args:
+        encodec_model: encodec_24khz
+        bandwidths: [6.6, 6.6, 6.6, 6.6]
+        train_codebooks: true
+        num_quantizers: 1  
+        dowmsamples: [8, 5, 4, 2]
+        vq_bins: 4096
+        vq_kmeans: 200
+
+    backbone:
+      class_path: third_party.tokenizer.decoder.models.VocosBackbone
+      init_args:
+        input_channels: 512
+        dim: 768
+        intermediate_dim: 2304
+        num_layers: 12
+        adanorm_num_embeddings: 4  
+
+    head:
+      class_path: third_party.tokenizer.decoder.heads.ISTFTHead
+      init_args:
+        dim: 768
+        n_fft: 1280 
+        hop_length: 320  
+        padding: same
+
+trainer:
+  logger:
+    class_path: pytorch_lightning.loggers.TensorBoardLogger
+    init_args:
+      save_dir: ./WavTokenizer/result/train/wavtokenizer_smalldata_frame75_3s_nq1_code4096_dim512_kmeans200_attn/
+  callbacks:
+    - class_path: pytorch_lightning.callbacks.LearningRateMonitor
+    - class_path: pytorch_lightning.callbacks.ModelSummary
+      init_args:
+        max_depth: 2
+    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+      init_args:
+        monitor: val_loss
+        filename: wavtokenizer_checkpoint_{epoch}_{step}_{val_loss:.4f}
+        save_top_k: 10
+        save_last: true
+    - class_path: third_party.tokenizer.decoder.helpers.GradNormCallback
+
+  # Lightning calculates max_steps across all optimizer steps (rather than number of batches)
+  # This equals to 1M steps per generator and 1M per discriminator
+  max_steps: 20000000
+  # You might want to limit val batches when evaluating all the metrics, as they are time-consuming
+  limit_val_batches: 100
+  accelerator: gpu
+  strategy: ddp
+  devices: [0,1,2,3,4,5,6,7]
+  log_every_n_steps: 1000

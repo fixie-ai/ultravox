@@ -12,15 +12,15 @@ install:
     poetry install
 
 format:
-    poetry run autoflake ${PROJECT_DIR} --remove-all-unused-imports --quiet --in-place -r --exclude third_party
-    poetry run isort ${PROJECT_DIR} --force-single-line-imports
-    poetry run black ${PROJECT_DIR}
+    poetry run autoflake {{PROJECT_DIR}} --remove-all-unused-imports --quiet --in-place -r 
+    poetry run isort {{PROJECT_DIR}} --force-single-line-imports 
+    poetry run black {{PROJECT_DIR}} 
 
 check:
-    poetry run black ${PROJECT_DIR} --check
-    poetry run isort ${PROJECT_DIR} --check --force-single-line-imports
-    poetry run autoflake  ${PROJECT_DIR} --check --quiet --remove-all-unused-imports -r --exclude third_party
-    poetry run mypy ${PROJECT_DIR}    
+    poetry run black {{PROJECT_DIR}} --check 
+    poetry run isort {{PROJECT_DIR}} --check --force-single-line-imports
+    poetry run autoflake {{PROJECT_DIR}} --check --quiet --remove-all-unused-imports -r 
+    poetry run mypy {{PROJECT_DIR}} 
 
 test *ARGS=".":
     cd ${PROJECT_DIR} && poetry run pytest --ignore third_party {{ARGS}}

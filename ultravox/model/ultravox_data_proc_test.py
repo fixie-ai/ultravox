@@ -5,7 +5,7 @@ import pytest
 import torch
 
 from ultravox.data import datasets
-from ultravox.model import data_processing
+from ultravox.model import ultravox_data_proc
 
 TEST_USER_MESSAGE = {
     "role": "user",
@@ -54,7 +54,7 @@ def fake_dataset():
 
 
 def test_process(mock_processor, fake_dataset):
-    dataproc = data_processing.UltravoxDataproc(fake_dataset, mock_processor)
+    dataproc = ultravox_data_proc.UltravoxDataproc(fake_dataset, mock_processor)
     processed = next(iter(dataproc))
 
     assert processed["input_ids"].shape == torch.Size([10])
@@ -69,7 +69,7 @@ def test_process(mock_processor, fake_dataset):
 
 
 def test_process_inference_mode(mock_processor, fake_dataset):
-    dataproc = data_processing.UltravoxDataproc(
+    dataproc = ultravox_data_proc.UltravoxDataproc(
         fake_dataset, mock_processor, inference_mode=True
     )
     processed = next(iter(dataproc))
