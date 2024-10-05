@@ -77,7 +77,7 @@ We're using Poetry to manage the Python virtual environment.
 
 ### Mosaic Environment Setup (Fixie Internal)
 
-If you want to use [Mosaic](https://docs.mosaicml.com/projects/mcli/en/latest/quick_start/getting_started.html) for trainig , you need to setup a few things to run on the Mosaic Platform.
+If you want to use [Mosaic](https://docs.mosaicml.com/projects/mcli/en/latest/quick_start/getting_started.html) for training, you need to setup a few things to run on the Mosaic Platform.
 
 1. Install & login to the Mosaic CLI
 
