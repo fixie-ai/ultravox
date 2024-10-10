@@ -1,0 +1,37 @@
+exp_name: 'lsm_libritts_960_div6'
+
+model_type: 'lsm'
+text_model: 'meta-llama/Llama-3.2-1B'
+
+val_sets: ['commonvoice']
+data_sets: []
+data_dicts:
+  - path: 'mythicinfinity/libritts'
+    name: 'all'
+    splits:
+      - 'train.clean.100'
+      - 'train.clean.360'
+      - 'train.other.500'
+    user_template: 'Repeat the following verbatim:\n<|audio|>'
+    assistant_template: '{{ text_normalized }}'
+    transcript_template: '{{ text_normalized }}'
+    weight: 1
+
+do_eval: False
+
+batch_size: 16
+
+# This is confusing, but we have two ways filtering samples. The first one was for Ultravox and would filter out the whole
+# sample if its audio is longer than X seconds. We don't want that.
+max_audio_duration_secs: null
+# For LSM we have a different logic that takes samples and can split a single sample into multiple samples if it's too long.
+# This process only filters out the samples that are too small. # TODO: figure out a more sane way to handle this.
+expected_audio_length_seconds: 6
+
+max_steps: 40000
+val_steps: 0.1
+
+lr:  5.e-4
+
+text_model_lora_config:
+  unfreeze_layers: ['.*']

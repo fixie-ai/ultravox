@@ -38,7 +38,7 @@ class WavTokenizer(nn.Module):
     """
 
     def __init__(
-        self, feature_extractor: FeatureExtractor, backbone: Backbone, head: FourierHead,
+        self, feature_extractor: EncodecFeatures, backbone: Backbone, head: FourierHead,
     ):
         super().__init__()
         self.feature_extractor = feature_extractor

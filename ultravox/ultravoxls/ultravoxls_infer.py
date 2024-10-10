@@ -7,9 +7,8 @@ from ultravox.data import datasets
 from ultravox.inference import base
 from ultravox.inference import utils
 from ultravox.model import wandb_utils
+from ultravox.ultravoxls import ultravoxls_model
 from ultravox.ultravoxls import ultravoxls_processing
-from ultravox.ultravoxls.ultravoxls_config import UltravoxLSConfig
-from ultravox.ultravoxls.ultravoxls_model import UltravoxLSModel
 
 MAX_NEW_TOKENS = 1024
 
@@ -17,14 +16,14 @@ MAX_NEW_TOKENS = 1024
 class LocalLSInference(base.VoiceInference):
     def __init__(
         self,
-        model: transformers.PreTrainedModel,
+        model: ultravoxls_model.UltravoxLSModel,
         processor: ultravoxls_processing.UltravoxLSProcessor,
+        collate_fn: ultravoxls_processing.DataCollatorForLSM,
         device: str,
-        dtype: torch.dtype,
     ):
-        self.model = model.to(device).to(dtype).eval()
+        self.model = model.to(device).eval()
         self.processor = processor
-        self.dtype = dtype
+        self.collate_fn = collate_fn
 
     def infer(
         self,
@@ -33,13 +32,10 @@ class LocalLSInference(base.VoiceInference):
         temperature: Optional[float] = None,
     ) -> base.VoiceOutput:
         inputs = self.processor.dataproc(sample)
-        input_len = inputs["input_ids"].shape[1]
-        output = self._generate(inputs, max_tokens, temperature)
-        output_tokens = output.sequences[0][input_len:]
-        for i in range(3 - output_tokens.dim()):
-            output_tokens = output_tokens.unsqueeze(0)
-        output_audio = self.processor.decode(output_tokens, skip_special_tokens=True)
-        output_len = len(output_tokens)
+        inputs = self.collate_fn([inputs])
+        input_len = inputs["num_tokens"][0].item()
+        inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
+        output_audio, output_len = self._generate(inputs, max_tokens, temperature)
         return base.VoiceOutput(output_audio, input_len, output_len)
 
     @torch.inference_mode()
@@ -71,7 +67,6 @@ class UltravoxLSInference(LocalLSInference):
         self,
         model_path: str,
         device: Optional[str] = None,
-        data_type: Optional[str] = None,
     ):
         """
         Args:
@@ -84,24 +79,21 @@ class UltravoxLSInference(LocalLSInference):
             data_type: data type to use for the model
         """
         device = device or utils.default_device()
-        dtype = utils.get_dtype(data_type) if data_type else utils.default_dtype()
         if wandb_utils.is_wandb_url(model_path):
             model_path = wandb_utils.download_model_from_wandb(model_path)
 
-        config = UltravoxLSConfig(text_model_id=model_path)
+        model = ultravoxls_model.UltravoxLSModel.from_pretrained(model_path)
+        model.to(device=device)
 
-        model = UltravoxLSModel(config)
-        model.to(dtype=dtype, device=device)
+        # TODO: fix left padding for this to work right
+        model.config.pad_to_multiple_of = 1
 
-        processor = ultravoxls_processing.UltravoxLSProcessor(model_device=model.device)
+        processor = ultravoxls_processing.UltravoxLSProcessor()
+        collate_fn = ultravoxls_processing.DataCollatorForLSM()
 
         super().__init__(
             model=model,
             processor=processor,
+            collate_fn=collate_fn,
             device=device,
-            dtype=dtype,
-        )
-
-        self.data_collator = transformers.DataCollatorForSeq2Seq(
-            tokenizer=processor.tokenizer,
         )

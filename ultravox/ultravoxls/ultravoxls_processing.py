@@ -1,38 +1,20 @@
+import dataclasses
+import math
 from typing import Optional, Union
 
-import huggingface_hub
 import librosa
 import numpy as np
 import torch
 import transformers
 
-from third_party.tokenizer import wav_tokenizer
 from ultravox.data import datasets
 
 SAMPLE_RATE_LS = 24000
-HF_MODEL_NAME = "novateur/WavTokenizer"
-CHECKPOINT_FILE_NAME = "WavTokenizer_small_600_24k_4096.ckpt"
-CONFIG_FILE_NAME = (
-    "wavtokenizer_smalldata_frame40_3s_nq1_code4096_dim512_kmeans200_attn.yaml"
-)
+TOKEN_FREQ_LS = 40
+HOP_LENGTH_LS = SAMPLE_RATE_LS // TOKEN_FREQ_LS
 
 
 class UltravoxLSProcessor:
-    tokenizer: transformers.PreTrainedTokenizerBase
-
-    def __init__(
-        self,
-        model_device: str,
-    ):
-        self.model_device = model_device
-        # Create tokenizer
-        config_path = "../../third_party/tokenizer/configs/wavtokenizer_smalldata_frame40_3s_nq1_code4096_dim512_kmeans200_attn.yaml"
-        model_path = huggingface_hub.hf_hub_download(
-            repo_id=HF_MODEL_NAME, filename=CHECKPOINT_FILE_NAME
-        )
-        # Arbitrary value is selected for the pad token id. The attention mask will be set to 0 for these tokens in the data collator.
-        self.tokenizer = wav_tokenizer.CustomWavTokenizer(config_path, model_path)
-
     def dataproc(self, sample: datasets.VoiceSample):
         if sample.audio is not None:
             audio = sample.audio
@@ -58,26 +40,41 @@ class UltravoxLSProcessor:
         inputs = self.__call__(
             audio=audio_input, return_tensors="pt", sampling_rate=SAMPLE_RATE_LS
         )
-        inputs = {k: v.to(self.model_device) for k, v in inputs.items()}
         return inputs
-
-    def decode(self, output_tokens: torch.Tensor, skip_special_tokens: bool = True):
-        return self.tokenizer.decode(
-            output_tokens, skip_special_tokens=skip_special_tokens
-        )
 
     def __call__(
         self,
-        audio: Optional[Union[np.ndarray, torch.Tensor]] = None,
+        audio: Union[np.ndarray, torch.Tensor],
         return_tensors: Optional[
             Union[str, transformers.TensorType]
         ] = transformers.TensorType.PYTORCH,
         **kwargs,
     ) -> transformers.BatchFeature:
-        tokenized_audio = self.tokenizer.encode(audio)
-        if len(tokenized_audio.shape) == 3:
-            tokenized_audio = tokenized_audio.squeeze(1)
-
-        attention_mask = np.ones_like(tokenized_audio, dtype=np.int64)
-        data = {"input_ids": tokenized_audio, "attention_mask": attention_mask}
+        num_tokens = int(math.ceil(audio.shape[-1] / HOP_LENGTH_LS))
+        data = {"audio": audio, "num_tokens": num_tokens}
         return transformers.BatchFeature(data=data, tensor_type=return_tensors)
+
+
+@dataclasses.dataclass
+class DataCollatorForLSM:
+    def __call__(self, features, *args, **kwargs):
+        # If a sample is padded, the last token is not gonna be fully valid. Hence we remove it.
+        # Sometimes the last two tokens are affected, but that's less likely.
+        num_tokens = torch.LongTensor([f["num_tokens"] for f in features])
+        not_full_batch = num_tokens != num_tokens.max().item()
+        num_tokens = num_tokens - not_full_batch.long()
+
+        # pad audio on the right
+        audio_len = torch.LongTensor([f["audio"].shape[-1] for f in features])
+        max_audio_len = audio_len.max().item()
+        audio = torch.concat(
+            [
+                torch.nn.functional.pad(
+                    f["audio"], (0, max_audio_len - f["audio"].shape[-1])
+                )
+                for f in features
+            ],
+            dim=0,
+        )
+
+        return {"audio": audio, "num_tokens": num_tokens}

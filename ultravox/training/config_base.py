@@ -25,7 +25,7 @@ class TrainConfig:
     # audio encoder model to use
     audio_model: str
 
-    model_type: str = simple_parsing.choice("ultravox")
+    model_type: str = simple_parsing.choice("ultravox", "lsm")
     expected_audio_length_seconds: float = 10
 
     # The data_dicts field complements data_sets, allowing for the inclusion of

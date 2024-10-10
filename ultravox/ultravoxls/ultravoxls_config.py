@@ -21,6 +21,10 @@ class UltravoxLSConfig(transformers.PretrainedConfig):
             The ignore index for the loss function.
         norm_init (`float`, *optional*, defaults to 0.4):
             The initialization value for the layer normalization.
+        pad_to_multiple_of (`int`, *optional*, defaults to 8):
+            Pads all input_ids to a multiple of the provided value. Some CUDA devices benefit from this.
+            See https://developer.nvidia.com/blog/optimizing-gpu-performance-tensor-cores/ for more information.
+            Usually this is done in the data preprocessing step, but it has been pushed to model since wavtokenizer is part of model.
         text_model_lora_config (`LoraConfigSimplified`, *optional*):
             The LoRA configuration for finetuning the text model.
 
@@ -56,6 +60,7 @@ class UltravoxLSConfig(transformers.PretrainedConfig):
         ignore_index: int = -100,
         hidden_size: int = 4096,
         norm_init: float = 0.4,
+        pad_to_multiple_of: int = 8,
         text_model_lora_config: Optional[LoraConfigSimplified] = None,
         **kwargs,
     ):
@@ -67,6 +72,7 @@ class UltravoxLSConfig(transformers.PretrainedConfig):
 
         self.hidden_size = hidden_size
         self.norm_init = norm_init
+        self.pad_to_multiple_of = pad_to_multiple_of
 
         if text_model_id is not None:
             self.text_config: transformers.LlamaConfig = (

@@ -10,6 +10,11 @@ from ultravox.model import ultravox_model
 from ultravox.model import ultravox_pipeline
 from ultravox.model import ultravox_processing
 from ultravox.training import config_base
+from ultravox.ultravoxls import ultravoxls_config
+from ultravox.ultravoxls import ultravoxls_data_proc
+from ultravox.ultravoxls import ultravoxls_model
+from ultravox.ultravoxls import ultravoxls_pipeline
+from ultravox.ultravoxls import ultravoxls_processing
 
 
 class ModelPack(abc.ABC):
@@ -93,8 +98,40 @@ class UltravoxModelPack(ModelPack):
         )
 
 
+class LSModelPack(ModelPack):
+    def __init__(self, args: config_base.TrainConfig):
+        self.args = args
+        self.processor = ultravoxls_processing.UltravoxLSProcessor()
+
+        # Instantiate the model and processor
+        self.config = ultravoxls_config.UltravoxLSConfig(
+            text_model_id=args.text_model,
+            text_model_lora_config=args.text_model_lora_config,
+            torch_dtype=args.data_type,
+        )
+
+        # Instantiate the model
+        self.model = ultravoxls_model.UltravoxLSModel(self.config)
+
+        # Set up the data loader
+        self.data_collator = ultravoxls_processing.DataCollatorForLSM()
+        self.model.language_model.config.use_cache = False
+
+    def wrap_with_data_proc(self, dataset: datasets.SizedIterableDataset):
+        return ultravoxls_data_proc.UltravoxLSDataproc(
+            dataset,
+            processor=self.processor,
+            expected_audio_length_seconds=self.args.expected_audio_length_seconds,
+        )
+
+    def get_pipeline(self):
+        return ultravoxls_pipeline.UltravoxLSPipeline(self.model)
+
+
 def create_model_pack(args: config_base.TrainConfig) -> ModelPack:
     if args.model_type == "ultravox":
         return UltravoxModelPack(args)
+    if args.model_type == "lsm":
+        return LSModelPack(args)
     else:
         raise ValueError(f"Unknown model type: {args.model_type}")

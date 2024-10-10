@@ -13,7 +13,7 @@ class UltravoxLSDataproc(datasets.Dataproc):
         self,
         dataset: data.IterableDataset,
         processor: ultravoxls_processing.UltravoxLSProcessor,
-        expected_audio_length_seconds: int,
+        expected_audio_length_seconds: float,
     ) -> None:
         """
         Pre-processing for the UltravoxLS model: applies tokenization the UltravoxLSProcessor
@@ -27,6 +27,7 @@ class UltravoxLSDataproc(datasets.Dataproc):
         self._dataset = dataset
         self.processor = processor
         self.expected_audio_length_seconds = expected_audio_length_seconds
+        self.min_audio_length_seconds = expected_audio_length_seconds / 2
 
     def __iter__(self):
         for sample in self._dataset:
@@ -34,7 +35,7 @@ class UltravoxLSDataproc(datasets.Dataproc):
                 y=sample.audio, sr=sample.sample_rate
             )
 
-            if seconds_in_sample < self.expected_audio_length_seconds:
+            if seconds_in_sample < self.min_audio_length_seconds:
                 continue  # Skip samples that are too short
 
             else:
@@ -48,9 +49,10 @@ class UltravoxLSDataproc(datasets.Dataproc):
                     chunk_end = chunk_start + chunk_size_samples
                     chunk = sample.audio[chunk_start:chunk_end]
 
-                    # If the chunk is shorter than the specified length (last chunk), throw it away
+                    # If the chunk is shorter than the specified length (last chunk), overlap it with the previous chunk
                     if len(chunk) < chunk_size_samples:
-                        continue  # Skip the last chunk
+                        chunk = sample.audio[-chunk_size_samples:]
+                        # TODO: in this case space out the chunks more evenly
 
                     yield self._process(
                         datasets.VoiceSample(
@@ -63,19 +65,6 @@ class UltravoxLSDataproc(datasets.Dataproc):
     def _process(self, sample: datasets.VoiceSample) -> Dict[str, Any]:
         # Process audio using UltravoxLSProcessor.
         # Audio is expanded to be a [C x M] array, although C=1 for mono audio.
-
         inputs = self.processor.dataproc(sample)
 
-        # Extract input_ids, attention_mask, and audio_values from the processed inputs
-        input_ids = inputs["input_ids"].squeeze_(0)
-        inputs["attention_mask"].squeeze_(0)
-
-        # No need to shift the labels as the model does it internally
-        labels = input_ids.clone()
-
-        return {
-            # input_ids, attention_mask, audio_values, audio_token_start_idx, audio_token_len
-            # if include_alt_fields is True, also include alt_input_ids, alt_attention_mask, alt_labels
-            **inputs,
-            "labels": labels,
-        }
+        return inputs
