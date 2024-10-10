@@ -19,6 +19,8 @@ class LoraConfigSimplified:
     target_modules: Optional[List[str]] = dataclasses.field(
         default_factory=lambda: ["k_proj", "q_proj", "linear_k", "linear_q"]
     )
+    # A list of module names regex patterns to unfreeze. Only used if r == 0.
+    unfreeze_layers: Optional[List[str]] = None
 
 
 class LossFunction(str, Enum):
@@ -28,7 +30,7 @@ class LossFunction(str, Enum):
 
 @dataclasses.dataclass
 class LossConfig:
-    loss_function: LossFunction = LossFunction.KL_Divergence
+    loss_function: LossFunction = LossFunction.CrossEntropy
     kl_temperature: float = 2.0
 
     @property

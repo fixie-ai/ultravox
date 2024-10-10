@@ -21,14 +21,10 @@ import wandb.sdk
 from torch.utils import data
 
 from ultravox.data import datasets
-from ultravox.model import ultravox_config
-from ultravox.model import ultravox_data_proc
-from ultravox.model import ultravox_model
-from ultravox.model import ultravox_pipeline
-from ultravox.model import ultravox_processing
 from ultravox.model import wandb_utils
 from ultravox.training import config_base
 from ultravox.training import ddp_utils
+from ultravox.training import model_types
 from ultravox.training.helpers import prefetch_weights
 
 INPUT_EXAMPLE = {"text": "Transcribe\n<|audio|>", "audio": b"\x00\x00" * 16000}
@@ -37,13 +33,11 @@ OUTPUT_EXAMPLE = {"text": "Hello, world!"}
 
 def prepare_dataset(
     train_args: config_base.TrainConfig,
+    model_pack: model_types.ModelPack,
     dataset_names: List[str],
     data_args: datasets.VoiceDatasetArgs,
-    processor: ultravox_processing.UltravoxProcessor,
-    train_on_inputs: bool,
     stop_strategy: datasets.StopStrategy,
     num_samples: Optional[int] = None,
-    include_alt_fields: bool = False,  # whether to generate tensors for text-only input (e.g., used for KD training)
 ) -> datasets.SizedIterableDataset:
     data_sets = [datasets.create_dataset(ds, data_args) for ds in dataset_names]
     # If we're using epochs to train, validate the dataset length is appropriate.
@@ -54,12 +48,7 @@ def prepare_dataset(
             ), f"Dataset {ds} has length {len(ds)} which is too short for epoch training"
 
     interleave = datasets.InterleaveDataset(data_sets, stop_strategy=stop_strategy)
-    ds_with_proc = ultravox_data_proc.UltravoxDataproc(
-        interleave,
-        processor=processor,
-        train_on_inputs=train_on_inputs,
-        include_alt_fields=include_alt_fields,
-    )
+    ds_with_proc = model_pack.wrap_with_data_proc(interleave)
     limited_ds = datasets.Range(ds_with_proc, num_samples=num_samples)
     return limited_ds
 
@@ -110,26 +99,7 @@ def train(args: config_base.TrainConfig):
             [args.text_model, args.audio_model], args.model_load_dir
         )
 
-    logging.info("Instantiating processor...")
-    text_tokenizer: transformers.PreTrainedTokenizerFast = (
-        transformers.AutoTokenizer.from_pretrained(args.text_model)
-    )
-    text_tokenizer.padding_side = "right"
-    text_tokenizer.pad_token = text_tokenizer.eos_token
-    audio_processor = transformers.AutoProcessor.from_pretrained(args.audio_model)
-    processor = ultravox_processing.UltravoxProcessor(audio_processor, text_tokenizer)
-
-    # Instantiate the model and processor
-    config = ultravox_config.UltravoxConfig(
-        audio_model_id=args.audio_model,
-        text_model_id=args.text_model,
-        text_model_lora_config=args.text_model_lora_config,
-        audio_model_lora_config=args.audio_model_lora_config,
-        torch_dtype=args.data_type,
-        pad_token_id=text_tokenizer.eos_token_id,
-    )
-
-    logging.info("Instantiating model...")
+    logging.info("Instantiating model and processor...")
 
     model_load_context = (
         accelerate.init_empty_weights()
@@ -140,21 +110,8 @@ def train(args: config_base.TrainConfig):
     # and use sync_model_states to distribute the weights to the other processes.
     # Otherwise we'd be loading the model on every process, which uses too much CPU memory.
     with model_load_context:
-        model = ultravox_model.UltravoxModel(config)
-
-    assert model.get_input_embeddings().num_embeddings == len(
-        text_tokenizer
-    ), f"Model and tokenizer mismatch: {model.get_input_embeddings().num_embeddings} != {len(text_tokenizer)}"
-
-    model.language_model.config.use_cache = False
-    if args.disable_layerdrop and hasattr(model.audio_tower.config, "layerdrop"):
-        # layerdrop causes issues when training with DDP
-        # https://github.com/huggingface/transformers/issues/17116#issuecomment-1121340890
-        model.audio_tower.config.layerdrop = 0.0
-
-    # loss_config needs to be passed separately just for model training
-    if args.loss_config is not None:
-        model.set_loss_config(args.loss_config)
+        model_pack = model_types.create_model_pack(args)
+        model = model_pack.model
 
     logging.info("Model and processor instantiated.")
 
@@ -210,10 +167,9 @@ def train(args: config_base.TrainConfig):
     )
     train_dataset = prepare_dataset(
         train_args=args,
+        model_pack=model_pack,
         dataset_names=args.data_sets,
-        train_on_inputs=args.train_on_inputs,
         stop_strategy=args.stop_strategy,
-        processor=processor,
         num_samples=args.num_samples,
         data_args=datasets.VoiceDatasetArgs(
             num_prompts=args.num_prompts,
@@ -224,7 +180,6 @@ def train(args: config_base.TrainConfig):
             use_mds=args.mds,
             mds_batch_size=args.batch_size,
         ),
-        include_alt_fields=model.loss_config.requires_alt_fields,
     )
     if is_master:
         val_ds_args = datasets.VoiceDatasetArgs(
@@ -241,13 +196,11 @@ def train(args: config_base.TrainConfig):
         val_datasets = {
             k: prepare_dataset(
                 train_args=args,
+                model_pack=model_pack,
                 dataset_names=val_sets[k],
-                train_on_inputs=args.train_on_inputs,
                 stop_strategy=args.stop_strategy,
-                processor=processor,
                 num_samples=args.val_num_samples,
                 data_args=val_ds_args_text if k.startswith("text_") else val_ds_args,
-                include_alt_fields=model.loss_config.requires_alt_fields,
             )
             for k in val_sets
         }
@@ -261,19 +214,13 @@ def train(args: config_base.TrainConfig):
         train_dataset = datasets.EmptyDataset(len(train_dataset))
         val_datasets = {k: datasets.EmptyDataset() for k in val_sets}
 
-    # Set up the data loader
-    data_collator = datasets.DataCollatorForSeq2SeqWithAudio(
-        tokenizer=text_tokenizer,
-        include_alt_fields=model.loss_config.requires_alt_fields,
-    )
-
     logging.info(f"Config Params: {args}")
     trainer = transformers.Seq2SeqTrainer(
         model,
         train_dataset=train_dataset,
         eval_dataset=val_datasets,
-        data_collator=data_collator,
-        tokenizer=text_tokenizer,
+        data_collator=model_pack.data_collator,
+        tokenizer=getattr(model_pack, "text_tokenizer", None),
         args=transformers.Seq2SeqTrainingArguments(
             dataloader_num_workers=args.num_workers if is_master else 0,
             output_dir=args.output_dir,
@@ -345,9 +292,7 @@ def train(args: config_base.TrainConfig):
     # but it doesn't know how to save FSDP models correctly (the final tensors could be flattened).
     # on the other hand, trainer.save_model knows how to save FSDP models correctly, but it won't save the pipeline.
     # Saving FSDP models is already quite slow though, so we don't want to save the model twice.
-    pipeline = ultravox_pipeline.UltravoxPipeline(
-        model, tokenizer=text_tokenizer, device=model.device
-    )
+    pipeline = model_pack.get_pipeline()
     old_save_pretrained = model.save_pretrained
     model.save_pretrained = lambda *_, **__: None  # type: ignore[method-assign]
     # saves the pipeline code and populates the config

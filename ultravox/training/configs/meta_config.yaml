@@ -1,3 +1,4 @@
+model_type: "ultravox"
 text_model: "meta-llama/Meta-Llama-3-8B-Instruct"
 audio_model: "facebook/wav2vec2-base-960h"
 

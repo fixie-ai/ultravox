@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import Any, Dict, Optional, Set, Tuple, Union
 
 import peft
@@ -372,7 +373,6 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
 
     def push_to_hub(self, *args, **kwargs):
         self.merge_and_unload()
-        self.to(self.language_model.dtype)
         return super().push_to_hub(*args, **kwargs)
 
     def save_pretrained(
@@ -424,6 +424,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         )
 
 
+# TODO: refactor common parts to a shared module
 def is_cache_empty(
     past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]]
 ) -> bool:
@@ -441,12 +442,18 @@ def apply_lora(model: torch.nn.Module, lora_config: dict) -> torch.nn.Module:
     """
     Applies LoRA finetuning to the model. If the `r` parameter is set to 0, the model is frozen instead.
     """
+    unfreeze_layers = lora_config.pop("unfreeze_layers", None)
     lora_config = peft.LoraConfig(**lora_config or {})
 
     if lora_config.r == 0:
-        # freeze the model entirely
-        for param in model.parameters():
-            param.requires_grad = False
+        # freeze the model entirely, except for the specified layers
+        for name, param in model.named_parameters():
+            if not unfreeze_layers or not any(
+                re.match(layer, name) for layer in unfreeze_layers
+            ):
+                param.requires_grad = False
+            else:
+                logging.info(f"Unfreezing layer: {name} with #{param.numel()} params")
     else:
         model = peft.get_peft_model(model, lora_config)
 

@@ -19,10 +19,14 @@ from ultravox.model import ultravox_config
 class TrainConfig:
     data_sets: List[str]
     val_sets: List[str]
+
     # language model to use
     text_model: str
     # audio encoder model to use
     audio_model: str
+
+    model_type: str = simple_parsing.choice("ultravox")
+    expected_audio_length_seconds: float = 10
 
     # The data_dicts field complements data_sets, allowing for the inclusion of
     # new datasets in the config.
