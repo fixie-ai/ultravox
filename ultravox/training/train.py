@@ -7,7 +7,7 @@ import logging
 import os
 import subprocess
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 import accelerate
 import datasets as hf_datasets
@@ -141,8 +141,8 @@ def train(args: config_base.TrainConfig):
     with model_load_context:
         model = ultravox_model.UltravoxModel(config)
 
-    assert (
-        model.get_input_embeddings().num_embeddings == len(text_tokenizer)
+    assert model.get_input_embeddings().num_embeddings == len(
+        text_tokenizer
     ), f"Model and tokenizer mismatch: {model.get_input_embeddings().num_embeddings} != {len(text_tokenizer)}"
 
     model.language_model.config.use_cache = False
@@ -207,7 +207,8 @@ def train(args: config_base.TrainConfig):
     # called "matchtrain" that uses the same data as the training set.
     val_sets = dict(
         # [("matchtrain", args.data_sets)]  # FIXME: see issue https://github.com/fixie-ai/ultravox/issues/58
-        [(x, [x]) for x in args.val_sets] + [(f"text_{x}", [x]) for x in args.val_sets]
+        [(x, [x]) for x in args.val_sets]
+        + [(f"text_{x}", [x]) for x in args.val_sets]
     )
     train_dataset = prepare_dataset(
         train_args=args,

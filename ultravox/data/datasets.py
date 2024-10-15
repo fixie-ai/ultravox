@@ -1,21 +1,20 @@
 import abc
 import base64
 import dataclasses
+import enum
 import io
 import itertools
 import logging
 import os
 import tempfile
 import warnings
-from contextlib import closing
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 
 import datasets
 import jinja2
 import librosa
 import numpy as np
-import requests
 import soundfile as sf
 import streaming as mds
 import torch
@@ -23,8 +22,6 @@ import torch.nn.functional as F
 import transformers
 from pydantic import BaseModel
 from torch.utils import data
-
-import enum
 
 from ultravox.data import text_proc
 
