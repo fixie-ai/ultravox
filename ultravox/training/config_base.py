@@ -17,8 +17,12 @@ from ultravox.model import ultravox_config
 
 @dataclasses.dataclass
 class TrainConfig:
-    data_sets: List[str]
-    val_sets: List[str]
+    # data-defined datasets
+    datasets: List[Dict]
+    # training sets and weights
+    train_sets: Dict[str, float]
+    # validation sets and weights
+    val_sets: Dict[str, float]
     # language model to use
     text_model: str
     # audio encoder model to use
