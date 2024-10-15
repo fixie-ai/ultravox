@@ -27,8 +27,6 @@ from torch.utils import data
 import enum
 
 from ultravox.data import text_proc
-from ultravox.evaluation.eval_types import EvalConfig
-from ultravox.utils import device_helpers
 
 SAMPLE_RATE = 16000
 
@@ -52,6 +50,8 @@ class VoiceDatasetArgs:
 
     batch_size: int = 4
     """Batch size for train, eval, or validation."""
+    include_audio: bool = True
+    """Whether to include audio in the samples."""
     shuffle: bool = False
     """Whether to shuffle the dataset."""
     shuffle_seed: int = 42
@@ -416,38 +416,13 @@ class VoiceDataset(SizedIterableDataset):
         assert sampling_rate == SAMPLE_RATE
         return audio
 
-    def _load_audio(
-        self, base_url: Optional[str], data_dir: Optional[str], filename: str
-    ) -> np.ndarray:
-        if base_url is not None:
-            url = f"{base_url}/{filename}"  # hack for GCS bucket naming
-            try:
-                with closing(requests.Session()) as session:
-                    response = session.get(url)
-                    response.raise_for_status()
-                    return audio_from_buf(response.content)
-            except requests.RequestException as e:
-                raise ValueError(
-                    f"Failed to load audio from URL: {url}. Error: {str(e)}"
-                )
-        elif data_dir is not None:
-            audio_path = os.path.join(data_dir, filename)
-            try:
-                return audio_from_file(audio_path)
-            except IOError as e:
-                raise ValueError(
-                    f"Failed to load audio file: {audio_path}. Error: {str(e)}"
-                )
-        else:
-            raise ValueError("Either base_url or data_dir must be provided")
-
     def _make_sample(
         self,
         messages: List[Dict[str, str]],
         audio: np.ndarray,
         audio_transcript: Optional[str] = None,
     ) -> VoiceSample:
-        if self._config.audio_field is None:
+        if not self._args.include_audio:
             return VoiceSample(messages)
         return VoiceSample(messages, audio, audio_transcript=audio_transcript)
 

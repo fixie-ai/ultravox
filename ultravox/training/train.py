@@ -37,7 +37,6 @@ OUTPUT_EXAMPLE = {"text": "Hello, world!"}
 
 def prepare_dataset(
     train_args: config_base.TrainConfig,
-    dataset_names: List[str],
     data_args: datasets.VoiceDatasetArgs,
     processor: ultravox_processing.UltravoxProcessor,
     train_on_inputs: bool,
@@ -212,8 +211,7 @@ def train(args: config_base.TrainConfig):
     )
     train_dataset = prepare_dataset(
         train_args=args,
-        datasets=args.datasets,
-        train_sets=args.train_sets,
+        datasets=args.train_sets,
         train_on_inputs=args.train_on_inputs,
         stop_strategy=args.stop_strategy,
         processor=processor,
