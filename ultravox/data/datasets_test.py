@@ -211,6 +211,55 @@ def test_transcribe_dataset():
     assert sample.audio_transcript == "0"
 
 
+def test_dataset_config():
+    config = datasets.DatasetConfig(
+        path="mock_path",
+        splits=[
+            datasets.DatasetSplitConfig(name="clean", num_samples=5000),
+            datasets.DatasetSplitConfig(name="other", num_samples=10000),
+            datasets.DatasetSplitConfig(name="validation", num_samples=1000),
+            datasets.DatasetSplitConfig(
+                name="another_validation",
+                num_samples=1000,
+                split_type=datasets.DatasetSplit.VALIDATION,
+            ),
+        ],
+    )
+    assert config.path == "mock_path"
+    assert len(config.splits) == 4
+    assert config.splits[0].name == "clean"
+    assert config.splits[0].num_samples == 5000
+    assert config.splits[0].split_type == datasets.DatasetSplit.TRAIN
+    assert config.splits[1].name == "other"
+    assert config.splits[1].num_samples == 10000
+    assert config.splits[1].split_type == datasets.DatasetSplit.TRAIN
+    assert config.splits[2].name == "validation"
+    assert config.splits[2].num_samples == 1000
+    assert config.splits[2].split_type == datasets.DatasetSplit.VALIDATION
+    assert config.splits[3].name == "another_validation"
+    assert config.splits[3].num_samples == 1000
+    assert config.splits[3].split_type == datasets.DatasetSplit.VALIDATION
+
+
+def test_dataset_config_serialization():
+    config = datasets.DatasetConfig(
+        path="mock_path",
+        splits=[
+            datasets.DatasetSplitConfig(name="clean", num_samples=5000),
+            datasets.DatasetSplitConfig(name="other", num_samples=10000),
+        ],
+    )
+    serialized = config.dumps_yaml()
+    deserialized = datasets.DatasetConfig.loads_yaml(serialized)
+    assert isinstance(deserialized, datasets.DatasetConfig)
+    assert deserialized.path == "mock_path"
+    assert len(deserialized.splits) == 2
+    assert deserialized.splits[0].name == "clean"
+    assert deserialized.splits[0].num_samples == 5000
+    assert deserialized.splits[1].name == "other"
+    assert deserialized.splits[1].num_samples == 10000
+
+
 def test_generic_dataset():
     mock_config = datasets.DatasetConfig(
         path="mock_path",

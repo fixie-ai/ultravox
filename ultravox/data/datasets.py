@@ -19,6 +19,7 @@ import streaming as mds
 import torch
 import torch.nn.functional as F
 import transformers
+from simple_parsing import helpers
 from torch.utils import data
 
 from ultravox.data import text_proc
@@ -38,7 +39,6 @@ class DatasetSplit(str, enum.Enum):
     VALIDATION = "validation"
 
 
-# Global arguments for voice datasets.
 @dataclasses.dataclass
 class VoiceDatasetArgs:
     """Global arguments for voice datasets."""
@@ -62,20 +62,22 @@ class VoiceDatasetArgs:
 
 
 @dataclasses.dataclass
-class DatasetSplitConfig:
+class DatasetSplitConfig(helpers.Serializable):
     name: str
     """Name of the split"""
     num_samples: int
     """Number of samples in the split"""
-    is_validation: bool = False
+    split_type: DatasetSplit = DatasetSplit.TRAIN
+    """Type of split, i.e., train or validation."""
 
     def __post_init__(self):
+        """Automatically set is_validation if it's a validation split."""
         if self.name == "validation":
-            self.is_validation = True
+            self.split_type = DatasetSplit.VALIDATION
 
 
 @dataclasses.dataclass
-class DatasetConfig:
+class DatasetConfig(helpers.Serializable):
     base: Optional[str] = None
     """Base dataset config to inherit from."""
     path: str = ""
@@ -427,7 +429,7 @@ class GenericDataset(VoiceDataset):
         dsets = []
         total_samples = 0
         for split in config.splits:
-            if split.is_validation == (self._args.split == DatasetSplit.VALIDATION):
+            if split.split_type == self._args.split:
                 if not config.use_mds:
                     ds = self._load_hf_dataset(
                         config.path,

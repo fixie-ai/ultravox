@@ -16,16 +16,19 @@ from ultravox.model import ultravox_config
 
 @dataclasses.dataclass
 class TrainConfig:
-    # data-defined datasets
-    data_sets: Dict[str, datasets.DatasetConfig]
-    # training sets and weights
-    train_sets: Dict[str, float]
-    # validation sets and weights
-    val_sets: Dict[str, float]
-    # language model to use
+    # Language model to use
     text_model: str
-    # audio encoder model to use
+    # Audio encoder model to use
     audio_model: str
+
+    # data-defined datasets
+    data_sets: Dict[str, datasets.DatasetConfig] = dataclasses.field(
+        default_factory=dict
+    )
+    # training sets and weights
+    train_sets: Dict[str, float] = dataclasses.field(default_factory=dict)
+    # validation sets and weights
+    val_sets: Dict[str, float] = dataclasses.field(default_factory=dict)
 
     do_train: bool = True
     do_eval: bool = True
@@ -92,9 +95,6 @@ class TrainConfig:
     loss_config: Optional[ultravox_config.LossConfig] = None
 
     def __post_init__(self):
-        for name, config in self.data_sets.items():
-            self.data_sets[name] = datasets.DatasetConfig(**config)
-
         assert self.data_type in ["bfloat16", "float16", "float32"]
         if self.device == "cuda" and not torch.cuda.is_available():
             self.device = "mps" if torch.backends.mps.is_available() else "cpu"
