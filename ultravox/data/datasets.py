@@ -8,10 +8,9 @@ import logging
 import os
 import tempfile
 import warnings
-from enum import Enum
 from typing import Any, Dict, List, Optional, Sequence
 
-import datasets
+import datasets as hf_datasets
 import jinja2
 import librosa
 import numpy as np
@@ -20,7 +19,6 @@ import streaming as mds
 import torch
 import torch.nn.functional as F
 import transformers
-from pydantic import BaseModel
 from torch.utils import data
 
 from ultravox.data import text_proc
@@ -63,7 +61,8 @@ class VoiceDatasetArgs:
             self.split = DatasetSplit(self.split.lower())
 
 
-class DatasetSplitConfig(BaseModel):
+@dataclasses.dataclass
+class DatasetSplitConfig:
     name: str
     """Name of the split"""
     num_samples: int
@@ -75,35 +74,30 @@ class DatasetSplitConfig(BaseModel):
             self.is_validation = True
 
 
-class DatasetConfig(BaseModel):
+@dataclasses.dataclass
+class DatasetConfig:
+    base: Optional[str] = None
+    """Base dataset config to inherit from."""
     path: str = ""
     """Directory of the dataset, or huggingface dataset name; must be set for "generic" datasets. If not set, it is automatically inferred for predefined dataset types."""
     subset: Optional[str] = None
-    """Name of the dataset, or huggingface dataset config/subset name"""
-    splits: List[DatasetSplit] = []
-    """List of splits to use, e.g. [{"name": "train", "num_samples": 1000}, {"name": "validation", "num_samples": 100}]"""
+    """Name of the dataset, or huggingface dataset config/subset name."""
+    splits: List[DatasetSplitConfig] = dataclasses.field(default_factory=list)
+    """List of splits to use, e.g. [{"name": "train", "num_samples": 1000}, {"name": "validation", "num_samples": 100}]."""
     user_template: str = "<|audio|>"
-    """Template for the user's message"""
-    user_template_args: Dict[str, str] = {}
-    """Optional arguments (e.g., target language) for the user template"""
+    """Template for the user message."""
+    user_template_args: Dict[str, str] = dataclasses.field(default_factory=dict)
+    """Optional arguments (e.g., target language) for the user template."""
     assistant_template: str = "{{text}}"
-    """Template for the assistant's message"""
+    """Template for the assistant message."""
     transcript_template: str = "{{text}}"
-    """Template for the transcript"""
+    """Template for the transcript."""
     audio_field: Optional[str] = "audio"
-    """Field in the dataset that contains the audio, use None if the dataset does not contain audio"""
+    """Field in the dataset that contains the audio, use None if the dataset does not contain audio."""
     use_mds: bool = False
-    """Set to True to load the dataset from GCP (using MDS) instead of Hugging Face"""
+    """Set to True to load the dataset from GCP (using MDS) instead of Hugging Face."""
     mds_batch_size: int = 32
-    """Batch size for MDS"""
-
-    class Config:
-        extra = "forbid"
-        # do not allow undefined parameters
-
-    def model_post_init(self, __context: Any) -> None:
-        if not self.splits:
-            raise ValueError("At least one split must be provided")
+    """Batch size for the dataset when using MDS."""
 
 
 @dataclasses.dataclass
@@ -291,10 +285,6 @@ class VoiceDataset(SizedIterableDataset):
         super().__init__()
         self._args = args
         self._rng = np.random.default_rng(self._args.shuffle_seed)
-        if True:  # device_helpers.get_local_rank() == 0:
-            logging.info(
-                f"Created VoiceDataset with config:\n{self._config.model_dump_json(indent=2)}"
-            )
 
     def _init_dataset(self, dataset: data.Dataset, num_samples: int) -> None:
         self._dataset = dataset
@@ -303,47 +293,56 @@ class VoiceDataset(SizedIterableDataset):
     def __len__(self):
         return self._length
 
-    def _load_audio_dataset(
+    def _load_hf_dataset(
         self,
         path: str,
         name: Optional[str] = None,
         *,
         split: Optional[str] = None,
-        shuffle: Optional[bool] = None,
         streaming: bool = True,
+        audio_field: Optional[str] = None,
     ) -> data.Dataset:
-        if shuffle is None:
-            shuffle = self._args.shuffle
-        if self._args.use_mds:
-            gcs_path = path.replace("/", "_")
-            if name:
-                gcs_path += f"/{name}"
-            if split:
-                gcs_path += f"/{split}"
-            url = f"gs://fixie-datasets/mds/{gcs_path}"
-            temp_dir = os.path.join(
-                tempfile.gettempdir(), f"mds_{gcs_path.replace('/', '_')}"
+        # HF datasets sometimes fails to download due to network issues, so retry a few times.
+        dataset = hf_datasets.load_dataset(
+            path,
+            name,
+            split=split,
+            trust_remote_code=True,
+            streaming=streaming,
+            download_config=hf_datasets.DownloadConfig(max_retries=10),
+        )
+        if audio_field is not None:
+            dataset = dataset.cast_column(
+                audio_field, hf_datasets.Audio(sampling_rate=SAMPLE_RATE)
             )
-            return mds.StreamingDataset(
-                remote=url,
-                local=temp_dir,
-                batch_size=self._args.mds_batch_size,
-                shuffle=shuffle,
-                shuffle_seed=self._args.shuffle_seed,
-            )
-        else:
-            # HF datasets sometimes fails to download due to network issues, so retry a few times.
-            dataset = datasets.load_dataset(
-                path,
-                name,
-                split=split,
-                trust_remote_code=True,
-                streaming=streaming,
-                download_config=datasets.DownloadConfig(max_retries=10),
-            )
-            if shuffle:
-                dataset = dataset.shuffle(seed=self._args.shuffle_seed)
-            return dataset
+        if self._args.shuffle:
+            dataset = dataset.shuffle(seed=self._args.shuffle_seed)
+        return dataset
+
+    def _load_mds_dataset(
+        self,
+        path: str,
+        name: Optional[str] = None,
+        *,
+        split: Optional[str] = None,
+        batch_size: int = 1,
+    ) -> data.Dataset:
+        gcs_path = path.replace("/", "_")
+        if name:
+            gcs_path += f"/{name}"
+        if split:
+            gcs_path += f"/{split}"
+        url = f"gs://fixie-datasets/mds/{gcs_path}"
+        temp_dir = os.path.join(
+            tempfile.gettempdir(), f"mds_{gcs_path.replace('/', '_')}"
+        )
+        return mds.StreamingDataset(
+            remote=url,
+            local=temp_dir,
+            batch_size=batch_size,
+            shuffle=self._args.shuffle,
+            shuffle_seed=self._args.shuffle_seed,
+        )
 
     def __iter__(self):
         actual_length = 0
@@ -354,23 +353,20 @@ class VoiceDataset(SizedIterableDataset):
                     f"Sample is None in dataset {self._config.alias} for row {row}"
                 )
 
-            if self._config.audio_field is not None:
+            if self._args.include_audio:
                 # If audio_field is set, make sure the sample has audio data.
                 if sample.audio is None:
-                    raise ValueError(
-                        f"Audio field ({self._config.audio_field}) is None in dataset {self._config.alias} for sample {sample}"
-                    )
+                    raise ValueError(f"Audio is None for sample {sample}")
                 if sample.audio.shape[-1] == 0:
-                    raise ValueError(
-                        f"Audio length is 0 in dataset {self._config.alias} for sample {sample}"
-                    )
+                    raise ValueError(f"Audio length is 0 for sample {sample}")
                 if (
                     self._args.max_audio_duration_secs is not None
                     and sample.audio.shape[-1] / SAMPLE_RATE
                     > self._args.max_audio_duration_secs
                 ):
+                    duration = sample.audio.shape[-1] / SAMPLE_RATE
                     warnings.warn(
-                        f"Audio length ({sample.audio.shape[-1] / SAMPLE_RATE}s) exceeds max audio duration ({self._args.max_audio_duration_secs}s) in dataset {self._config.alias}, skipping sample."
+                        f"Audio length ({duration}s) exceeds max audio duration ({self._args.max_audio_duration_secs}s), skipping sample."
                     )
                     continue
 
@@ -378,11 +374,11 @@ class VoiceDataset(SizedIterableDataset):
             actual_length += 1
             if actual_length == len(self) + 1:
                 warnings.warn(
-                    f"The presumed length {self._length} has been exceeded for dataset {self._config.alias}. Make sure to update."
+                    f"The presumed length {self._length} has been exceeded for split {self._dataset.split}. Make sure to update."
                 )
         if actual_length != len(self):
             warnings.warn(
-                f"Mismatch between presumed length ({self._length}) and actual length ({actual_length}) for dataset {self._config.alias}. Make sure to update."
+                f"Mismatch between presumed length ({self._length}) and actual length ({actual_length}) for split {self._dataset.split}. Make sure to update."
             )
 
     @abc.abstractmethod
@@ -395,11 +391,6 @@ class VoiceDataset(SizedIterableDataset):
     def _get_audio(
         self, row: transformers.BatchFeature, column_name: Optional[str] = "audio"
     ) -> np.ndarray:
-        if column_name not in self._config.base_audio_columns:
-            raise ValueError(
-                f"Unknown audio column: {column_name}. This is likely a bug and the audio might not be resampled to {SAMPLE_RATE} Hz."
-            )
-
         # Hugging Face datasets have an Audio object, with array and sampling_rate fields.
         # For MDS, this object is flattened into audio_array and audio_sampling_rate fields.
         if column_name in row:
@@ -412,6 +403,11 @@ class VoiceDataset(SizedIterableDataset):
             raise ValueError("No audio field found in row.")
         assert sampling_rate == SAMPLE_RATE
         return audio
+
+    def _make_messages(
+        self, user_content: str, assistant_content: str
+    ) -> List[Dict[str, str]]:
+        return _get_messages(user_content, assistant_content)
 
     def _make_sample(
         self,
@@ -428,22 +424,30 @@ class GenericDataset(VoiceDataset):
     def __init__(self, args: VoiceDatasetArgs, config: DatasetConfig) -> None:
         super().__init__(args)
         self._config = config
-        split_names = [
-            split.name
-            for split in config.splits
-            if split.is_validation == (self._args.split == DatasetSplit.VALIDATION)
-        ]
         dsets = []
         total_samples = 0
-        for split_name in split_names:
-            ds = self._load_audio_dataset(config.path, config.name, split=split_name)
-            ds = ds.cast_column(
-                config.audio_field, datasets.Audio(sampling_rate=SAMPLE_RATE)
-            )
-            dsets.append(ds)
-            total_samples += len(ds)
-        dataset = datasets.concatenate_datasets(dsets)
+        for split in config.splits:
+            if split.is_validation == (self._args.split == DatasetSplit.VALIDATION):
+                if not config.use_mds:
+                    ds = self._load_hf_dataset(
+                        config.path,
+                        config.subset,
+                        split=split.name,
+                        audio_field=config.audio_field,
+                    )
+                else:
+                    ds = self._load_mds_dataset(
+                        config.path,
+                        name=config.subset,
+                        split=split.name,
+                        batch_size=config.mds_batch_size,
+                    )
+                dsets.append(ds)
+                total_samples += split.num_samples
+        dataset = ds if len(dsets) == 1 else hf_datasets.concatenate_datasets(dsets)
         super()._init_dataset(dataset, total_samples)
+        if True:  # device_helpers.get_local_rank() == 0:
+            logging.info(f"Created GenericDataset with config:\n{self._config}")
 
     def _get_sample(self, row) -> Optional[VoiceSample]:
         try:
@@ -453,6 +457,7 @@ class GenericDataset(VoiceDataset):
                 **row,
                 text_proc=text_proc,
                 dataset=self,
+                include_audio=self._args.include_audio,
                 **self._config.user_template_args,
             )
             assistant_content = jinja2.Template(
@@ -478,50 +483,59 @@ class GenericDataset(VoiceDataset):
         )
 
 
-# Making EmptyDataset a SizedIterableDataset to be compatible with using epochs during training.
 class EmptyDataset(SizedIterableDataset):
+    def __init__(self, length: int = 1) -> None:
+        self._length = length
+
     def __iter__(self):
         return iter([])
 
     def __len__(self):
-        return 0
+        return self._length
 
 
-DATASET_MAP: Dict[str, Any] = {}
+BOOLQ_CONFIG = DatasetConfig(
+    path="fixie-ai/boolq-audio",
+    splits=[
+        DatasetSplitConfig(name="train", num_samples=10000),
+        DatasetSplitConfig(name="validation", num_samples=1000),
+    ],
+    user_template="{{passage}}\n\n{{'<|audio|>' if include_audio else question}}",
+    assistant_template="{{'True' if answer else 'False'}}",
+    transcript_template="{{question}}",
+)
+
+DATASET_MAP: Dict[str, DatasetConfig] = {
+    "boolq": BOOLQ_CONFIG,
+}
 
 
-def register_datasets(datasets: Dict):
-    for dataset in datasets:
-        DATASET_MAP[dataset] = create_dataset(dataset, datasets[dataset])
+def register_datasets(datasets: Dict[str, DatasetConfig]):
+    for name, config in datasets.items():
+        DATASET_MAP[name] = config
 
 
-def create_dataset(
-    args: VoiceDatasetArgs, config: DatasetConfig
-) -> SizedIterableDataset:
+def create_dataset(name: str, args: VoiceDatasetArgs) -> SizedIterableDataset:
+    assert name in DATASET_MAP, f"Unknown dataset: {name}"
     configs = []
-    while True:
+    temp: Optional[str] = name
+    while temp:
+        config = DATASET_MAP[temp]
         configs.append(config)
-        base = config.get("base")
-        if not base:
-            break
-        config = base
-    merged_config = configs[-1]
-    for config in configs[:-1]:
-        merged_config.update(config)
-    del merged_config["base"]
+        temp = config.base
+    merged_config = dataclasses.replace(configs[-1])
+    for config in reversed(configs[:-1]):
+        merged_config = dataclasses.replace(merged_config, **dataclasses.asdict(config))
+    merged_config = dataclasses.replace(merged_config, base=None)
+    if not merged_config.splits:
+        raise ValueError(f"Dataset {name} has no splits")
     return GenericDataset(args, merged_config)
 
 
-class StopStrategy(str, Enum):
+class StopStrategy(str, enum.Enum):
     FIRST_EXHAUSTED = "FIRST_EXHAUSTED"
     LAST_EXHAUSTED = "LAST_EXHAUSTED"
     NEVER_STOP = "NEVER_STOP"
-
-
-@dataclasses.dataclass
-class DatasetAndWeight:
-    dataset: SizedIterableDataset
-    weight: float
 
 
 class InterleaveDataset(SizedIterableDataset):
@@ -529,7 +543,8 @@ class InterleaveDataset(SizedIterableDataset):
 
     def __init__(
         self,
-        datasets: Sequence[DatasetAndWeight],
+        datasets: Sequence[SizedIterableDataset],
+        weights: Optional[Sequence[float]] = None,
         stop_strategy: StopStrategy = StopStrategy.LAST_EXHAUSTED,
         seed: Optional[int] = 42,
         static: bool = False,
@@ -537,16 +552,18 @@ class InterleaveDataset(SizedIterableDataset):
         """
         Args:
             datasets: A list of SizedIterableDataset objects.
+            weights: A list of weights for each dataset.
             stop_strategy: Strategy for stopping iteration.
             seed: Optional seed for reproducibility.
             static: If true, the datasets are interleaved in a static order with equal weights.
         """
-        self._datasets = [dataset for dataset, _ in datasets]
+        self._datasets = datasets
         self._rng = np.random.default_rng(seed)
         self._static = static
         self._stop_strategy = stop_strategy
 
-        weights = [weight for _, weight in datasets]
+        if weights is None:
+            weights = [1.0] * len(datasets)
         total_weight = sum(weights)
         self._normalized_probs = [w / total_weight for w in weights]
 
@@ -609,31 +626,16 @@ class Range(SizedIterableDataset):
     """Limits the number of samples from another dataset."""
 
     def __init__(
-        self,
-        dataset: data.IterableDataset,
-        num_samples: Optional[int] = None,
-        total_samples: Optional[int] = None,
+        self, dataset: SizedIterableDataset, num_samples: Optional[int] = None
     ) -> None:
         self._dataset = dataset
-        self._num_samples = num_samples
-
-        if isinstance(self._dataset, SizedIterableDataset):
-            self._estimated_length = len(self._dataset)
-        else:
-            if total_samples is None:
-                raise ValueError(
-                    "total_samples must be provided for non-SizedIterableDataset."
-                )
-            self._estimated_length = total_samples
-
-        if self._num_samples is not None and self._num_samples > self._estimated_length:
-            # Issuing a warning here instead of raising an error to accomodate for specific classes of VoiceDataset
-            # Once we migrate entirely to GenericVoiceDataset, we can raise an error here.
-            warnings.warn("num_samples is greater than total_samples.")
+        self._length = num_samples or len(dataset)
+        if self._length > len(dataset):
+            raise ValueError("num_samples exceeds dataset length.")
 
     def __iter__(self):
         for i, sample in enumerate(self._dataset):
-            if self._num_samples is not None and i >= self._num_samples:
+            if i >= self._length:
                 break
             yield sample
 

@@ -84,7 +84,7 @@ class OpenAIInference(base.VoiceInference):
         url = datasets.audio_to_data_uri(sample.audio, sample.sample_rate)
         parts = [
             {"type": "text", "text": fragments[0]},
-            {"type": "image_url", "image_url": {"url": url}},
+            {"type": "audio_url", "audio_url": {"url": url}},
             {"type": "text", "text": fragments[1]},
         ]
         last_turn = {"role": "user", "content": parts}

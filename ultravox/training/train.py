@@ -1,5 +1,4 @@
 import contextlib
-import copy
 import dataclasses
 import gc
 import glob
@@ -18,7 +17,6 @@ import torch.distributed
 import transformers
 import wandb
 import wandb.sdk
-from torch.utils import data
 
 from ultravox.data import datasets
 from ultravox.model import data_processing
@@ -37,6 +35,7 @@ OUTPUT_EXAMPLE = {"text": "Hello, world!"}
 
 def prepare_dataset(
     train_args: config_base.TrainConfig,
+    data_sets_and_weights: Dict[str, float],
     data_args: datasets.VoiceDatasetArgs,
     processor: ultravox_processing.UltravoxProcessor,
     train_on_inputs: bool,
@@ -44,7 +43,9 @@ def prepare_dataset(
     num_samples: Optional[int] = None,
     include_alt_fields: bool = False,  # whether to generate tensors for text-only input (e.g., used for KD training)
 ) -> datasets.SizedIterableDataset:
-    data_sets = [datasets.create_dataset(ds, data_args) for ds in dataset_names]
+    data_names = list(data_sets_and_weights.keys())
+    data_weights = list(data_sets_and_weights.values())
+    data_sets = [datasets.create_dataset(ds, data_args) for ds in data_names]
     # If we're using epochs to train, validate the dataset length is appropriate.
     if train_args.max_steps == 0:
         for ds in data_sets:
@@ -52,7 +53,9 @@ def prepare_dataset(
                 len(ds) > 1
             ), f"Dataset {ds} has length {len(ds)} which is too short for epoch training"
 
-    interleave = datasets.InterleaveDataset(data_sets, stop_strategy=stop_strategy)
+    interleave = datasets.InterleaveDataset(
+        data_sets, data_weights, stop_strategy=stop_strategy
+    )
     ds_with_proc = data_processing.UltravoxDataproc(
         interleave,
         processor=processor,
@@ -197,71 +200,50 @@ def train(args: config_base.TrainConfig):
         logging.info(f"Using device (world_size): {model.device} ({world_size})")
 
     # Register custom datasets
-    datasets.register_datasets(args.datasets)
+    datasets.register_datasets(args.data_sets)
 
     # Prepare dataset, subsetting if needed
-    train_dataset: data.IterableDataset
-    val_datasets: Dict[str, data.IterableDataset]
-    # We use multiple validation sets here so that the results are comparable even when training set changes
-    # To make sure we can compare training and validation loss (e.g. for fine-tuning), we keep a special set
-    # called "matchtrain" that uses the same data as the training set.
-    val_sets = dict(
-        # [("matchtrain", args.data_sets)]  # FIXME: see issue https://github.com/fixie-ai/ultravox/issues/58
-        [(x, [x]) for x in args.val_sets]
-        + [(f"text_{x}", [x]) for x in args.val_sets]
-    )
+    train_dataset: datasets.SizedIterableDataset
+    val_dataset: datasets.SizedIterableDataset
     train_dataset = prepare_dataset(
         train_args=args,
-        datasets=args.train_sets,
+        data_sets_and_weights=args.train_sets,
         train_on_inputs=args.train_on_inputs,
         stop_strategy=args.stop_strategy,
         processor=processor,
         num_samples=args.num_samples,
         data_args=datasets.VoiceDatasetArgs(
-            num_prompts=args.num_prompts,
-            data_dir=args.data_dir,
             shuffle=args.shuffle_data,
             shuffle_seed=args.shuffle_seed,
             max_audio_duration_secs=args.max_audio_duration_secs,
-            use_mds=args.mds,
-            mds_batch_size=args.batch_size,
         ),
         include_alt_fields=model.loss_config.requires_alt_fields,
     )
     if is_master:
         val_ds_args = datasets.VoiceDatasetArgs(
-            num_prompts=1,
             split=datasets.DatasetSplit.VALIDATION,
-            data_dir=args.data_dir,
             shuffle=False,
             max_audio_duration_secs=16,
-            use_mds=args.mds,
-            mds_batch_size=args.batch_size,
         )
-        val_ds_args_text = copy.copy(val_ds_args)
-        val_ds_args_text.include_audio = False
-        val_datasets = {
-            k: prepare_dataset(
-                train_args=args,
-                dataset_names=val_sets[k],
-                train_on_inputs=args.train_on_inputs,
-                stop_strategy=args.stop_strategy,
-                processor=processor,
-                num_samples=args.val_num_samples,
-                data_args=val_ds_args_text if k.startswith("text_") else val_ds_args,
-                include_alt_fields=model.loss_config.requires_alt_fields,
-            )
-            for k in val_sets
-        }
+        val_dataset = prepare_dataset(
+            train_args=args,
+            data_sets_and_weights=args.val_sets,
+            train_on_inputs=args.train_on_inputs,
+            stop_strategy=args.stop_strategy,
+            processor=processor,
+            num_samples=args.val_num_samples,
+            data_args=val_ds_args,
+            include_alt_fields=model.loss_config.requires_alt_fields,
+        )
         logging.info(
-            f"Loaded {args.data_sets} data sets, sample limit: {args.num_samples} (val sample limit: {args.val_num_samples})"
+            f"Loaded {len(args.train_sets)}) data sets, sample limit: {args.num_samples} (val sample limit: {args.val_num_samples})"
         )
     else:
         # When using DDP with split_batches=True, the primary process will distribute the batches to the workers
         # The point of this is to avoid unnecessary data processing/downloading in the workers.
         # When using epochs to train, emptydataset must have a length equal to the training set
         train_dataset = datasets.EmptyDataset(len(train_dataset))
-        val_datasets = {k: datasets.EmptyDataset() for k in val_sets}
+        val_dataset = datasets.EmptyDataset(len(val_dataset))
 
     # Set up the data loader
     data_collator = datasets.DataCollatorForSeq2SeqWithAudio(
@@ -273,7 +255,7 @@ def train(args: config_base.TrainConfig):
     trainer = transformers.Seq2SeqTrainer(
         model,
         train_dataset=train_dataset,
-        eval_dataset=val_datasets,
+        eval_dataset=val_dataset,
         data_collator=data_collator,
         tokenizer=text_tokenizer,
         args=transformers.Seq2SeqTrainingArguments(

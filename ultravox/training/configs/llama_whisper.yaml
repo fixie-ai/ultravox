@@ -12,7 +12,7 @@ max_steps: 20 # x8x24 = 2,764,800
 # This would go in a datasets.yaml file and we could either use pyyaml-include to include it
 # or we could just add this logic to the training script. This file can also include its own datasets
 # key, with locally defined datasets.
-datasets:
+data_sets:
   librispeech:
     path: "fixie-ai/librispeech_asr"
     user_template: "<|audio|>"
@@ -22,23 +22,23 @@ datasets:
   # Note the inheritance here
   librispeech-clean:
     base: "librispeech" # this could also be done via "<<": *librispeech, although that approach is less flexible
-    name: "clean"
+    subset: "clean"
     splits:
-      - "train.100" # 28_539 samples
+      - name: "train.100" # 28_539 samples
         num_samples: 28_539
-      - "train.360" # 104_014 samples
+      - name: "train.360" # 104_014 samples
         num_samples: 104_014
-        
+
   librispeech-other:
     base: "librispeech"
     subset: "other"
     splits:
-      - "train.500" # 148_688 samples
+      - name: "train.500" # 148_688 samples
         num_samples: 148_688
 
   covost2:
     path: "fixie-ai/covost2"
-    user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"    
+    user_template: "Please translate the text to {{target}}. Your response should only include the {{target}} translation, without any additional words:\n\n<|audio|>"
     assistant_template: "{{ translation }}"
     transcript_template: "{{ sentence }}"
 
@@ -48,14 +48,14 @@ datasets:
     subset: "es_en"
     splits:
       - name: "train"
-       num_samples: 100000
+        num_samples: 100000
       - name: "validation"
         num_samples: 15531
     user_template_args:
       target: "English"
 
   covost2-en_zh:
-    base: "covost2"    
+    base: "covost2"
     subset: "en_zh-CN"
     splits:
       - name: "train"
@@ -69,36 +69,34 @@ datasets:
     base: "covost2"
     subset: "foo"
     splits:
-    - name: "eval"
-      num_samples: 22222
-      is_validation: true
-
+      - name: "eval"
+        num_samples: 22222
+        is_validation: true
 
   covost-bar:
     base: "covost2"
     subset: "foo"
     splits:
-    - name: "eval2"
-      num_samples: 22222
-      is_validation: true 
+      - name: "eval2"
+        num_samples: 22222
+        is_validation: true
 
   covost-small:
     base: "covost2"
     subset: "foo"
     splits:
-    - name: "eval3"
-      num_samples: 22
-      is_validation: true 
-  
-  
+      - name: "eval3"
+        num_samples: 22
+        is_validation: true
+
 # This is the new approach to weighting, which keeps this out of the dataset config
-train_datasets:
+train_sets:
   librispeech-clean: 0.5
   librispeech-other: 2.0
   covost2-es_en: 1.0
   covost2-en_zh: 1.0
 
-val_datasets:
+val_sets:
   covost2-es_en: 1.0
   covost2-en_zh: 1.0
   covost-foo: 1.0
