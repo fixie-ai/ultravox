@@ -5,7 +5,7 @@ import os
 import re
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import simple_parsing
 import torch
@@ -15,20 +15,37 @@ from ultravox.model import ultravox_config
 
 
 @dataclasses.dataclass
+class DatasetOptions:
+    name: str
+    weight: float = 1.0
+    include_audio: bool = True
+
+
+@dataclasses.dataclass
 class TrainConfig:
     # Language model to use
     text_model: str
     # Audio encoder model to use
     audio_model: str
 
-    # data-defined datasets
-    data_sets: Dict[str, datasets.DatasetConfig] = dataclasses.field(
-        default_factory=dict
-    )
-    # training sets and weights
-    train_sets: Dict[str, float] = dataclasses.field(default_factory=dict)
-    # validation sets and weights
-    val_sets: Dict[str, float] = dataclasses.field(default_factory=dict)
+    # Workaround for simple_parsing not supporting lists of dataclasses; we need to
+    # define these as lists of dicts and convert them manually in helpers.
+
+    # Data-defined datasets (datasets.DatasetConfig)
+    data_sets: List[Dict[str, Any]] = simple_parsing.list_field()
+    # Training sets and weights (DatasetOptions)
+    train_sets: List[Dict[str, Any]] = simple_parsing.list_field()
+    # Validation sets and weights (DatasetOptions)
+    val_sets: List[Dict[str, Any]] = simple_parsing.list_field()
+
+    def get_data_sets(self) -> List[datasets.DatasetConfig]:
+        return [datasets.DatasetConfig.from_dict(ds) for ds in self.data_sets]
+
+    def get_train_sets(self) -> List[DatasetOptions]:
+        return [DatasetOptions(**ds) for ds in self.train_sets]
+
+    def get_val_sets(self) -> List[DatasetOptions]:
+        return [DatasetOptions(**ds) for ds in self.val_sets]
 
     do_train: bool = True
     do_eval: bool = True
@@ -146,7 +163,9 @@ def fix_hyphens(arg: str):
     return re.sub(r"^--([^=]+)", lambda m: "--" + m.group(1).replace("-", "_"), arg)
 
 
-def get_train_args(override_sys_args: Optional[List[str]] = None) -> TrainConfig:
+def get_train_args(
+    override_sys_args: Optional[List[str]] = None, config_file="meta_config.yaml"
+) -> TrainConfig:
     """
     Parse the command line arguments and return a TrainConfig object.
 
@@ -158,7 +177,7 @@ def get_train_args(override_sys_args: Optional[List[str]] = None) -> TrainConfig
 
     return simple_parsing.parse(
         config_class=TrainConfig,
-        config_path=os.path.join(os.path.dirname(__file__), "configs/meta_config.yaml"),
+        config_path=os.path.join(os.path.dirname(__file__), "configs", config_file),
         add_config_path_arg=True,
         args=[fix_hyphens(arg) for arg in args],
     )

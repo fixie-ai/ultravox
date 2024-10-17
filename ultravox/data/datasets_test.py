@@ -213,6 +213,7 @@ def test_transcribe_dataset():
 
 def test_dataset_config():
     config = datasets.DatasetConfig(
+        name="fake_dataset",
         path="mock_path",
         splits=[
             datasets.DatasetSplitConfig(name="clean", num_samples=5000),
@@ -225,6 +226,7 @@ def test_dataset_config():
             ),
         ],
     )
+    assert config.name == "fake_dataset"
     assert config.path == "mock_path"
     assert len(config.splits) == 4
     assert config.splits[0].name == "clean"
@@ -243,7 +245,8 @@ def test_dataset_config():
 
 def test_dataset_config_serialization():
     config = datasets.DatasetConfig(
-        path="mock_path",
+        name="fake_dataset",
+        path="fake_path",
         splits=[
             datasets.DatasetSplitConfig(name="clean", num_samples=5000),
             datasets.DatasetSplitConfig(name="other", num_samples=10000),
@@ -252,7 +255,8 @@ def test_dataset_config_serialization():
     serialized = config.dumps_yaml()
     deserialized = datasets.DatasetConfig.loads_yaml(serialized)
     assert isinstance(deserialized, datasets.DatasetConfig)
-    assert deserialized.path == "mock_path"
+    assert deserialized.name == "fake_dataset"
+    assert deserialized.path == "fake_path"
     assert len(deserialized.splits) == 2
     assert deserialized.splits[0].name == "clean"
     assert deserialized.splits[0].num_samples == 5000
@@ -261,11 +265,12 @@ def test_dataset_config_serialization():
 
 
 def test_generic_dataset():
-    mock_config = datasets.DatasetConfig(
-        path="mock_path",
+    config = datasets.DatasetConfig(
+        name="fake_dataset",
+        path="fake_path",
         splits=[datasets.DatasetSplitConfig(name="fake", num_samples=5)],
     )
-    ds = FakeGenericDataset(5, mock_config)
+    ds = FakeGenericDataset(5, config)
     assert len(ds) == 5
     sample = next(iter(ds))
     assert isinstance(sample, datasets.VoiceSample)
@@ -279,14 +284,15 @@ def test_generic_dataset():
 
 
 def test_generic_dataset_custom_templates():
-    mock_config = datasets.DatasetConfig(
-        path="mock_path",
+    config = datasets.DatasetConfig(
+        name="fake_dataset",
+        path="fake_path",
         splits=[datasets.DatasetSplitConfig(name="fake", num_samples=5)],
         user_template="Listen to the following and respond with 'xyzzy':\n<|audio|>",
         assistant_template="xyzzy",
         transcript_template="{{text}}",
     )
-    ds = FakeGenericDataset(5, mock_config)
+    ds = FakeGenericDataset(5, config)
     assert len(ds) == 5
     sample = next(iter(ds))
     assert isinstance(sample, datasets.VoiceSample)
@@ -302,23 +308,57 @@ def test_generic_dataset_custom_templates():
     assert sample.audio_transcript == "0"
 
 
-def test_generic_dataset_length_mismatch():
-    mock_config = datasets.DatasetConfig(
-        path="mock_path",
+def test_generic_dataset_merge_configs():
+    base_config = datasets.DatasetConfig(
+        name="fake_base",
+        path="fake_path",
         splits=[datasets.DatasetSplitConfig(name="fake", num_samples=5)],
     )
-    ds = FakeGenericDataset(10, mock_config)
+    mid_config = datasets.DatasetConfig(
+        name="fake_mid",
+        base="fake_base",
+        user_template="fake_user_template",
+        user_template_args={"a": 1},
+        transcript_template="fake_transcript_template",
+    )
+    leaf_config = datasets.DatasetConfig(
+        name="fake_leaf",
+        base="fake_mid",
+        audio_field="fake_audio_field",
+    )
+    config = datasets._merge_configs([base_config, mid_config, leaf_config])
+    assert config.name == "fake_leaf"
+    assert config.base is None
+    assert config.path == "fake_path"
+    assert config.splits[0].name == "fake"
+    assert config.splits[0].num_samples == 5
+    assert config.splits[0].split_type == datasets.DatasetSplit.TRAIN
+    assert config.user_template == "fake_user_template"
+    assert config.user_template_args == {"a": 1}
+    assert config.assistant_template == "{{text}}"  # the default
+    assert config.transcript_template == "fake_transcript_template"
+    assert config.audio_field == "fake_audio_field"
+
+
+def test_generic_dataset_length_mismatch():
+    config = datasets.DatasetConfig(
+        name="fake_dataset",
+        path="fake_path",
+        splits=[datasets.DatasetSplitConfig(name="fake", num_samples=5)],
+    )
+    ds = FakeGenericDataset(10, config)
     assert len(ds) == 5
 
     pattern = r"(has been exceeded|Mismatch between presumed length)"
     with pytest.warns(UserWarning, match=pattern):
         list(ds)
 
-    mock_config = datasets.DatasetConfig(
-        path="mock_path",
+    config = datasets.DatasetConfig(
+        name="fake_dataset",
+        path="fake_path",
         splits=[datasets.DatasetSplitConfig(name="fake", num_samples=10)],
     )
-    ds = FakeGenericDataset(5, mock_config)
+    ds = FakeGenericDataset(5, config)
     assert len(ds) == 10
 
     with pytest.warns(UserWarning, match="Mismatch between presumed length"):
@@ -326,19 +366,18 @@ def test_generic_dataset_length_mismatch():
 
 
 def test_generic_dataset_multiple_splits():
-    mock_config = datasets.DatasetConfig(
-        path="mock_path",
+    config = datasets.DatasetConfig(
+        name="fake_dataset",
+        path="fake_path",
         splits=[
             datasets.DatasetSplitConfig(name="train", num_samples=90),
             datasets.DatasetSplitConfig(name="validation", num_samples=10),
         ],
     )
-    ds = FakeGenericDataset(100, mock_config)
+    ds = FakeGenericDataset(100, config)
     assert len(ds) == 90
     ds = FakeGenericDataset(
-        100,
-        mock_config,
-        datasets.VoiceDatasetArgs(split=datasets.DatasetSplit.VALIDATION),
+        100, config, datasets.VoiceDatasetArgs(split=datasets.DatasetSplit.VALIDATION)
     )
     assert len(ds) == 10
 

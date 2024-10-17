@@ -5,212 +5,58 @@ exp_name: "ultravox-v0_4"
 text_model: "meta-llama/Meta-Llama-3.1-8B-Instruct"
 audio_model: "openai/whisper-medium"
 
-
 loss_config:
   # Choose from ["KL_Divergence", "CrossEntropy"], default is "KL_Divergence"
   loss_function: "KL_Divergence"
 
+train_sets:
+  - name: librispeech-clean-continuation
+  - name: librispeech-other-continuation
+  - name: peoplespeech-continuation
+    weight: 8
+  - name: common-voice-en-continuation
+    weight: 8
+  - name: common-voice-ar-continuation
+    weight: 0.2
+  - name: common-voice-de-continuation
+    weight: 4
+  - name: common-voice-es-continuation
+    weight: 3
+  - name: common-voice-fr-continuation
+    weight: 4
+  - name: common-voice-it-continuation
+    weight: 1.2
+  - name: common-voice-ja-continuation
+    weight: 0.1
+  - name: common-voice-pt-continuation
+    weight: 0.2
+  - name: common-voice-ru-continuation
+    weight: 0.2
+  - name: librispeech-clean-transcription
+  - name: librispeech-other-transcription
+  - name: peoplespeech-transcription
+    weight: 0.8
+  - name: common-voice-en-transcription
+    weight: 0.8
+  - name: common-voice-ar-transcription
+    weight: 0.02
+  - name: common-voice-de-transcription
+    weight: 0.4
+  - name: common-voice-es-transcription
+    weight: 0.3
+  - name: common-voice-fr-transcription
+    weight: 0.4
+  - name: common-voice-it-transcription
+    weight: 0.12
+  - name: common-voice-ja-transcription
+    weight: 0.01
+  - name: common-voice-pt-transcription
+    weight: 0.02
+  - name: common-voice-ru-transcription
+    weight: 0.02
+
 # Temporarily remove heysquad_human from val_sets as it causes the training to fail.
-val_sets: ["anyinstruct", "soda", "peoplespeech"]
+val_sets: ["peoplespeech"]
 
 batch_size: 24
 max_steps: 14400 # x8x24 = 2,764,800
-
-data_sets: ["anyinstruct"]
-data_dicts:
-# continuation
-  - path: "fixie-ai/librispeech_asr"
-    name: "clean"
-    splits:
-      - "train.100" # 28_539 samples
-      - "train.360" # 104_014 samples
-    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
-    assistant_template: "{{ continuation }}"
-    transcript_template: "{{ text }}"
-    weight: 1
-  - path: "fixie-ai/librispeech_asr"
-    name: "other"
-    splits:
-      - "train.500" # 148_688 samples
-    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
-    assistant_template: "{{ continuation }}"
-    transcript_template: "{{ text }}"
-    weight: 1
-  - path: "fixie-ai/peoples_speech"
-    name: "clean"
-    splits:
-      - "train" # 1_501_271 samples
-    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
-    assistant_template: "{{ continuation }}"
-    transcript_template: "{{ text_proc.format_asr_text(text) }}"
-    weight: 8
-  - path: "fixie-ai/common_voice_17_0"
-    name: "en"
-    splits:
-      - "train" # 1_101_170 samples
-    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
-    assistant_template: "{{ continuation }}"
-    transcript_template: "{{ text_proc.format_asr_text(sentence) }}"
-    weight: 8
-  - path: "fixie-ai/common_voice_17_0"
-    name: "ar"
-    splits:
-      - "train" # 28_369 samples
-    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
-    assistant_template: "{{ continuation }}"
-    transcript_template: "{{ sentence }}"
-    weight: 0.2
-  - path: "fixie-ai/common_voice_17_0"
-    name: "de"
-    splits:
-      - "train" # 589_100 samples
-    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
-    assistant_template: "{{ continuation }}"
-    transcript_template: "{{ sentence }}"
-    weight: 4
-  - path: "fixie-ai/common_voice_17_0"
-    name: "es"
-    splits:
-      - "train" # 336_846 samples
-    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
-    assistant_template: "{{ continuation }}"
-    transcript_template: "{{ sentence }}"
-    weight: 3
-  - path: "fixie-ai/common_voice_17_0"
-    name: "fr"
-    splits:
-      - "train" # 558_054 samples
-    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
-    assistant_template: "{{ continuation }}"
-    transcript_template: "{{ sentence }}"
-    weight: 4
-  - path: "fixie-ai/common_voice_17_0"
-    name: "it"
-    splits:
-      - "train" # 169_771 samples
-    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
-    assistant_template: "{{ continuation }}"
-    transcript_template: "{{ sentence }}"
-    weight: 1.2
-  - path: "fixie-ai/common_voice_17_0"
-    name: "ja"
-    splits:
-      - "train" # 10_039 samples
-    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
-    assistant_template: "{{ continuation }}"
-    transcript_template: "{{ sentence }}"
-    weight: 0.1
-  - path: "fixie-ai/common_voice_17_0"
-    name: "pt"
-    splits:
-      - "train" # 21_968 samples
-    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
-    assistant_template: "{{ continuation }}"
-    transcript_template: "{{ sentence }}"
-    weight: 0.2
-  - path: "fixie-ai/common_voice_17_0"
-    name: "ru"
-    splits:
-      - "train" # 26_377 samples
-    user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
-    assistant_template: "{{ continuation }}"
-    transcript_template: "{{ sentence }}"
-    weight: 0.2
-# ASR task
-  - path: "fixie-ai/librispeech_asr"
-    name: "clean"
-    splits:
-      - "train.100" # 28_539 samples
-      - "train.360" # 104_014 samples
-    user_template: "{{ dataset._get_transcribe_prompt() }}"
-    assistant_template: "{{ text }}"
-    transcript_template: "{{ text }}"
-    weight: 0.1
-  - path: "fixie-ai/librispeech_asr"
-    name: "other"
-    splits:
-      - "train.500" # 148_688 samples
-    user_template: "{{ dataset._get_transcribe_prompt() }}"
-    assistant_template: "{{ text }}"
-    transcript_template: "{{ text }}"
-    weight: 0.1
-  - path: "fixie-ai/peoples_speech"
-    name: "clean"
-    splits:
-      - "train" # 1_501_271 samples
-    user_template: "{{ dataset._get_transcribe_prompt() }}"
-    assistant_template: "{{ text_proc.format_asr_text(text) }}"
-    transcript_template: "{{ text_proc.format_asr_text(text) }}"
-    weight: 0.8
-  - path: "fixie-ai/common_voice_17_0"
-    name: "en"
-    splits:
-      - "train" # 1_101_170 samples
-    user_template: "{{ dataset._get_transcribe_prompt() }}"
-    assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
-    transcript_template: "{{ text_proc.format_asr_text(sentence) }}"
-    weight: 0.8
-  - path: "fixie-ai/common_voice_17_0"
-    name: "ar"
-    splits:
-      - "train" # 28_369 samples
-    user_template: "{{ dataset._get_transcribe_prompt() }}"
-    assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
-    transcript_template: "{{ sentence }}"
-    weight: 0.02
-  - path: "fixie-ai/common_voice_17_0"
-    name: "de"
-    splits:
-      - "train" # 589_100 samples
-    user_template: "{{ dataset._get_transcribe_prompt() }}"
-    assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
-    transcript_template: "{{ sentence }}"
-    weight: 0.4
-  - path: "fixie-ai/common_voice_17_0"
-    name: "es"
-    splits:
-      - "train" # 336_846 samples
-    user_template: "{{ dataset._get_transcribe_prompt() }}"
-    assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
-    transcript_template: "{{ sentence }}"
-    weight: 0.3
-  - path: "fixie-ai/common_voice_17_0"
-    name: "fr"
-    splits:
-      - "train" # 558_054 samples
-    user_template: "{{ dataset._get_transcribe_prompt() }}"
-    assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
-    transcript_template: "{{ sentence }}"
-    weight: 0.4
-  - path: "fixie-ai/common_voice_17_0"
-    name: "it"
-    splits:
-      - "train" # 169_771 samples
-    user_template: "{{ dataset._get_transcribe_prompt() }}"
-    assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
-    transcript_template: "{{ sentence }}"
-    weight: 0.12
-  - path: "fixie-ai/common_voice_17_0"
-    name: "ja"
-    splits:
-      - "train" # 10_039 samples
-    user_template: "{{ dataset._get_transcribe_prompt() }}"
-    assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
-    transcript_template: "{{ sentence }}"
-    weight: 0.01
-  - path: "fixie-ai/common_voice_17_0"
-    name: "pt"
-    splits:
-      - "train" # 21_968 samples
-    user_template: "{{ dataset._get_transcribe_prompt() }}"
-    assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
-    transcript_template: "{{ sentence }}"
-    weight: 0.02
-  - path: "fixie-ai/common_voice_17_0"
-    name: "ru"
-    splits:
-      - "train" # 26_377 samples
-    user_template: "{{ dataset._get_transcribe_prompt() }}"
-    assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
-    transcript_template: "{{ sentence }}"
-    weight: 0.02

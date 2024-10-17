@@ -6,7 +6,7 @@ import logging
 import os
 import subprocess
 from datetime import datetime
-from typing import Dict, Optional
+from typing import List, Optional
 
 import accelerate
 import datasets as hf_datasets
@@ -29,13 +29,10 @@ from ultravox.training import config_base
 from ultravox.training import ddp_utils
 from ultravox.training.helpers import prefetch_weights
 
-INPUT_EXAMPLE = {"text": "Transcribe\n<|audio|>", "audio": b"\x00\x00" * 16000}
-OUTPUT_EXAMPLE = {"text": "Hello, world!"}
-
 
 def prepare_dataset(
     train_args: config_base.TrainConfig,
-    data_sets_and_weights: Dict[str, float],
+    data_opts: List[config_base.DatasetOptions],
     data_args: datasets.VoiceDatasetArgs,
     processor: ultravox_processing.UltravoxProcessor,
     train_on_inputs: bool,
@@ -43,8 +40,8 @@ def prepare_dataset(
     num_samples: Optional[int] = None,
     include_alt_fields: bool = False,  # whether to generate tensors for text-only input (e.g., used for KD training)
 ) -> datasets.SizedIterableDataset:
-    data_names = list(data_sets_and_weights.keys())
-    data_weights = list(data_sets_and_weights.values())
+    data_names = [ds.name for ds in data_opts]
+    data_weights = [ds.weight for ds in data_opts]
     data_sets = [datasets.create_dataset(ds, data_args) for ds in data_names]
     # If we're using epochs to train, validate the dataset length is appropriate.
     if train_args.max_steps == 0:
@@ -200,14 +197,15 @@ def train(args: config_base.TrainConfig):
         logging.info(f"Using device (world_size): {model.device} ({world_size})")
 
     # Register custom datasets
-    datasets.register_datasets(args.data_sets)
+    datasets.register_datasets(args.get_data_sets())
 
     # Prepare dataset, subsetting if needed
     train_dataset: datasets.SizedIterableDataset
     val_dataset: datasets.SizedIterableDataset
+
     train_dataset = prepare_dataset(
         train_args=args,
-        data_sets_and_weights=args.train_sets,
+        data_opts=args.get_train_sets(),
         train_on_inputs=args.train_on_inputs,
         stop_strategy=args.stop_strategy,
         processor=processor,
@@ -227,7 +225,7 @@ def train(args: config_base.TrainConfig):
         )
         val_dataset = prepare_dataset(
             train_args=args,
-            data_sets_and_weights=args.val_sets,
+            data_opts=args.get_val_sets(),
             train_on_inputs=args.train_on_inputs,
             stop_strategy=args.stop_strategy,
             processor=processor,

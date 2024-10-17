@@ -2,12 +2,10 @@ text_model: "meta-llama/Meta-Llama-3-8B-Instruct"
 audio_model: "facebook/wav2vec2-base-960h"
 
 train_sets:
-  gigaspeech: 1.0
+  - name: gigaspeech
 val_sets:
-  heysquad_human: 1.0
-  anyinstruct: 1.0
-  soda: 1.0
-  peoplespeech: 1.0
+  - name: gigaspeech
+  - weight: 0.1
 stop_strategy: "LAST_EXHAUSTED"
 
 train_on_inputs: False
