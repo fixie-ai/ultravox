@@ -14,49 +14,50 @@ train_sets:
   - name: librispeech-other-continuation
   - name: peoplespeech-clean-continuation
     weight: 8
-  - name: common-voice-en-continuation
+  - name: commonvoice-en-continuation
     weight: 8
-  - name: common-voice-ar-continuation
+  - name: commonvoice-ar-continuation
     weight: 0.2
-  - name: common-voice-de-continuation
+  - name: commonvoice-de-continuation
     weight: 4
-  - name: common-voice-es-continuation
+  - name: commonvoice-es-continuation
     weight: 3
-  - name: common-voice-fr-continuation
+  - name: commonvoice-fr-continuation
     weight: 4
-  - name: common-voice-it-continuation
+  - name: commonvoice-it-continuation
     weight: 1.2
-  - name: common-voice-ja-continuation
+  - name: commonvoice-ja-continuation
     weight: 0.1
-  - name: common-voice-pt-continuation
+  - name: commonvoice-pt-continuation
     weight: 0.2
-  - name: common-voice-ru-continuation
+  - name: commonvoice-ru-continuation
     weight: 0.2
   - name: librispeech-clean-transcription
   - name: librispeech-other-transcription
-  - name: peoplespeech-transcription
+  - name: peoplespeech-clean-transcription
     weight: 0.8
-  - name: common-voice-en-transcription
+  - name: commonvoice-en-transcription
     weight: 0.8
-  - name: common-voice-ar-transcription
+  - name: commonvoice-ar-transcription
     weight: 0.02
-  - name: common-voice-de-transcription
+  - name: commonvoice-de-transcription
     weight: 0.4
-  - name: common-voice-es-transcription
+  - name: commonvoice-es-transcription
     weight: 0.3
-  - name: common-voice-fr-transcription
+  - name: commonvoice-fr-transcription
     weight: 0.4
-  - name: common-voice-it-transcription
+  - name: commonvoice-it-transcription
     weight: 0.12
-  - name: common-voice-ja-transcription
+  - name: commonvoice-ja-transcription
     weight: 0.01
-  - name: common-voice-pt-transcription
+  - name: commonvoice-pt-transcription
     weight: 0.02
-  - name: common-voice-ru-transcription
+  - name: commonvoice-ru-transcription
     weight: 0.02
 
 # Temporarily remove heysquad_human from val_sets as it causes the training to fail.
-val_sets: ["peoplespeech-clean"]
+val_sets:
+  - name: peoplespeech
 
 batch_size: 24
 max_steps: 14400 # x8x24 = 2,764,800
