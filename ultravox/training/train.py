@@ -6,8 +6,10 @@ import glob
 import logging
 import os
 import subprocess
+import warnings
 from datetime import datetime
 from typing import Dict, List, Optional
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 import accelerate
 import datasets as hf_datasets
@@ -31,6 +33,8 @@ from ultravox.training import config_base
 from ultravox.training import ddp_utils
 from ultravox.training.helpers import prefetch_weights
 
+# warnings.filterwarnings("ignore")
+warnings.filterwarnings("ignore", module="transformers")
 INPUT_EXAMPLE = {"text": "Transcribe\n<|audio|>", "audio": b"\x00\x00" * 16000}
 OUTPUT_EXAMPLE = {"text": "Hello, world!"}
 

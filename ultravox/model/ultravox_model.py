@@ -16,7 +16,9 @@ from transformers.models.whisper import modeling_whisper as whisper
 from .ultravox_config import LossConfig
 from .ultravox_config import LossFunction
 from .ultravox_config import UltravoxConfig
+from .ultravox_encoder import audio_encoder_init
 
+USE_BUILTIN_ENCODER = True
 
 class UltravoxModel(transformers.LlamaPreTrainedModel):
     """
@@ -194,9 +196,12 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             ), "audio_token_start_idx, audio_token_len, and audio_values must have the same batch size."
 
             # B x A/3200 x D
-            audio_tower_output = self.audio_tower.forward(
+
+            audio_tower_output = self.audio_tower(
                 audio_values.to(self.audio_tower.dtype)
-            ).last_hidden_state
+            )
+
+            # torch.save(audio_tower_output, 'a.pt' if USE_BUILTIN_ENCODER else 'b.pt')
             audio_tower_output = audio_tower_output.to(inputs_embeds.dtype)
 
             audio_embeds = self.multi_modal_projector.forward(audio_tower_output)
@@ -284,18 +289,23 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
     def _create_audio_tower(
         cls, config: UltravoxConfig
     ) -> Union[transformers.Wav2Vec2Model, "ModifiedWhisperEncoder"]:
+        audio_tower2 = None
         if config.audio_model_id is not None:
             if "whisper" in config.audio_model_id is not None:
-                audio_tower = ModifiedWhisperEncoder.from_pretrained(
-                    config.audio_model_id, torch_dtype=config.torch_dtype
-                )
+                if USE_BUILTIN_ENCODER:
+                    audio_tower = audio_encoder_init(config.audio_model_id, config.audio_config)
+                else:
+                    audio_tower = ModifiedWhisperEncoder.from_pretrained(config.audio_model_id, torch_dtype=config.torch_dtype)
             else:
                 audio_tower = transformers.AutoModel.from_pretrained(
                     config.audio_model_id, torch_dtype=config.torch_dtype
                 )
         else:
             if "whisper" in config.audio_config._name_or_path:
-                audio_tower = ModifiedWhisperEncoder(config.audio_config)
+                if USE_BUILTIN_ENCODER:
+                    audio_tower = audio_encoder_init(config=config.audio_config)
+                else:
+                    audio_tower = ModifiedWhisperEncoder(config.audio_config)
             else:
                 with transformers.modeling_utils.no_init_weights():
                     # we only ever use from_config if the weights are retrained, hence initializing is not
@@ -549,90 +559,31 @@ class ModifiedWhisperEncoder(whisper.WhisperEncoder):
                 f"Whisper expects the mel input features to be of length {expected_seq_length} or less, but found {input_features.shape[-1]}. Make sure to pad the input mel features to {expected_seq_length}."
             )
 
-        output_attentions = (
-            output_attentions
-            if output_attentions is not None
-            else self.config.output_attentions
-        )
-        output_hidden_states = (
-            output_hidden_states
-            if output_hidden_states is not None
-            else self.config.output_hidden_states
-        )
-        return_dict = (
-            return_dict if return_dict is not None else self.config.use_return_dict
-        )
-        inputs_embeds = nn.functional.gelu(self.conv1(input_features))
-        inputs_embeds = nn.functional.gelu(self.conv2(inputs_embeds))
 
+        inputs_embeds = F.gelu(self.conv1(input_features))
+        inputs_embeds = F.gelu(self.conv2(inputs_embeds))
         inputs_embeds = inputs_embeds.permute(0, 2, 1)
         embed_pos = self.embed_positions.weight[: inputs_embeds.size(-2)]
 
         hidden_states = inputs_embeds + embed_pos
-        hidden_states = nn.functional.dropout(
+        hidden_states = F.dropout(
             hidden_states, p=self.dropout, training=self.training
         )
 
-        encoder_states = () if output_hidden_states else None
-        all_attentions = () if output_attentions else None
-
-        # check if head_mask has a correct number of layers specified if desired
-        if head_mask is not None:
-            assert head_mask.size()[0] == (
-                len(self.layers)
-            ), f"The head_mask should be specified for {len(self.layers)} layers, but it is for {head_mask.size()[0]}."
-
         for idx, encoder_layer in enumerate(self.layers):
-            if output_hidden_states:
-                encoder_states = encoder_states + (hidden_states,)
-            # add LayerDrop (see https://arxiv.org/abs/1909.11556 for description)
-            to_drop = False
-            if self.training:
-                dropout_probability = torch.rand([])
-                if dropout_probability < self.layerdrop:  # skip the layer
-                    to_drop = True
+            layer_outputs = encoder_layer(
+                hidden_states,
+                None,
+                layer_head_mask=(
+                    head_mask[idx] if head_mask is not None else None
+                ),
+                output_attentions=output_attentions,
+            )
 
-            if to_drop:
-                layer_outputs = (None, None)
-            else:
-                if self.gradient_checkpointing and self.training:
-                    layer_outputs = self._gradient_checkpointing_func(
-                        encoder_layer.__call__,
-                        hidden_states,
-                        None,
-                        (head_mask[idx] if head_mask is not None else None),
-                        output_attentions,
-                    )
-                else:
-                    layer_outputs = encoder_layer(
-                        hidden_states,
-                        None,
-                        layer_head_mask=(
-                            head_mask[idx] if head_mask is not None else None
-                        ),
-                        output_attentions=output_attentions,
-                    )
-
-                hidden_states = layer_outputs[0]
-
-            if output_attentions:
-                all_attentions = all_attentions + (layer_outputs[1],)
+            hidden_states = layer_outputs[0]
 
         hidden_states = self.layer_norm(hidden_states)
-        if output_hidden_states:
-            encoder_states = encoder_states + (hidden_states,)
-
-        if not return_dict:
-            return tuple(
-                v
-                for v in [hidden_states, encoder_states, all_attentions]
-                if v is not None
-            )
-        return transformers.modeling_outputs.BaseModelOutput(
-            last_hidden_state=hidden_states,
-            hidden_states=encoder_states,
-            attentions=all_attentions,
-        )
+        return hidden_states
 
 
 UltravoxConfig.register_for_auto_class()
