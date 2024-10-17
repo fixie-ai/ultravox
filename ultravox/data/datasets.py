@@ -401,11 +401,11 @@ class VoiceDataset(SizedIterableDataset):
             actual_length += 1
             if actual_length == len(self) + 1:
                 warnings.warn(
-                    f"The presumed length {self._length} has been exceeded for split {self._dataset.split}. Make sure to update."
+                    f"The presumed length {self._length} has been exceeded for {self._config.name}:{self._args.split}. Make sure to update."
                 )
         if actual_length != len(self):
             warnings.warn(
-                f"Mismatch between presumed length ({self._length}) and actual length ({actual_length}) for split {self._dataset.split}. Make sure to update."
+                f"Mismatch between presumed length ({self._length}) and actual length ({actual_length}) for {self._config.name}:{self._args.split}. Make sure to update."
             )
 
     @abc.abstractmethod
