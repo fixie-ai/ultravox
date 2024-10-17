@@ -308,6 +308,24 @@ def test_generic_dataset_custom_templates():
     assert sample.audio_transcript == "0"
 
 
+def test_generic_dataset_text_only():
+    config = datasets.DatasetConfig(
+        name="fake_dataset",
+        path="fake_path",
+        splits=[datasets.DatasetSplitConfig(name="fake", num_samples=5)],
+        user_template="Transcribe\n<|audio|>",
+    )
+    ds = FakeGenericDataset(5, config, datasets.VoiceDatasetArgs(include_audio=False))
+    assert len(ds) == 5
+    sample = next(iter(ds))
+    assert isinstance(sample, datasets.VoiceSample)
+    assert sample.messages == [
+        {"role": "user", "content": 'Transcribe\n"0"'},
+        {"role": "assistant", "content": "0"},
+    ]
+    assert sample.audio is None
+
+
 def test_generic_dataset_merge_configs():
     base_config = datasets.DatasetConfig(
         name="fake_base",
