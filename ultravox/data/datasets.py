@@ -80,26 +80,43 @@ class DatasetSplitConfig(helpers.Serializable):
 class DatasetConfig(helpers.Serializable):
     base: Optional[str] = None
     """Base dataset config to inherit from."""
-    path: str = ""
+    path: Optional[str] = None
     """Directory of the dataset, or huggingface dataset name; must be set for "generic" datasets. If not set, it is automatically inferred for predefined dataset types."""
     subset: Optional[str] = None
     """Name of the dataset, or huggingface dataset config/subset name."""
-    splits: List[DatasetSplitConfig] = dataclasses.field(default_factory=list)
+    splits: Optional[List[DatasetSplitConfig]] = None
     """List of splits to use, e.g. [{"name": "train", "num_samples": 1000}, {"name": "validation", "num_samples": 100}]."""
-    user_template: str = "<|audio|>"
+    user_template: Optional[str] = None
     """Template for the user message."""
-    user_template_args: Dict[str, str] = dataclasses.field(default_factory=dict)
+    user_template_args: Optional[Dict[str, str]] = None
     """Optional arguments (e.g., target language) for the user template."""
-    assistant_template: str = "{{text}}"
+    assistant_template: Optional[str] = None
     """Template for the assistant message."""
-    transcript_template: str = "{{text}}"
+    transcript_template: Optional[str] = None
     """Template for the transcript."""
-    audio_field: Optional[str] = "audio"
+    audio_field: Optional[str] = None
     """Field in the dataset that contains the audio, use None if the dataset does not contain audio."""
-    use_mds: bool = False
+    use_mds: Optional[bool] = None
     """Set to True to load the dataset from GCP (using MDS) instead of Hugging Face."""
-    mds_batch_size: int = 32
+    mds_batch_size: Optional[int] = None
     """Batch size for the dataset when using MDS."""
+
+    def __post_init__(self):
+        """Set defaults only if this is a root config, so that said defaults in a subclass don't act as overrides."""
+        DEFAULTS = {
+            "splits": [],
+            "user_template": "<|audio|>",
+            "user_template_args": {},
+            "assistant_template": "{{text}}",
+            "transcript_template": "{{text}}",
+            "audio_field": "audio",
+            "use_mds": False,
+            "mds_batch_size": 32,
+        }
+        if self.base is None:
+            for attr, default_value in DEFAULTS.items():
+                if getattr(self, attr) is None:
+                    setattr(self, attr, default_value)
 
 
 @dataclasses.dataclass
@@ -448,8 +465,6 @@ class GenericDataset(VoiceDataset):
                 total_samples += split.num_samples
         dataset = ds if len(dsets) == 1 else hf_datasets.concatenate_datasets(dsets)
         super()._init_dataset(dataset, total_samples)
-        if True:  # device_helpers.get_local_rank() == 0:
-            logging.info(f"Created GenericDataset with config:\n{self._config}")
 
     def _get_sample(self, row) -> Optional[VoiceSample]:
         try:
@@ -494,44 +509,6 @@ class EmptyDataset(SizedIterableDataset):
 
     def __len__(self):
         return self._length
-
-
-BOOLQ_CONFIG = DatasetConfig(
-    path="fixie-ai/boolq-audio",
-    splits=[
-        DatasetSplitConfig(name="train", num_samples=10000),
-        DatasetSplitConfig(name="validation", num_samples=1000),
-    ],
-    user_template="{{passage}}\n\n{{'<|audio|>' if include_audio else question}}",
-    assistant_template="{{'True' if answer else 'False'}}",
-    transcript_template="{{question}}",
-)
-
-DATASET_MAP: Dict[str, DatasetConfig] = {
-    "boolq": BOOLQ_CONFIG,
-}
-
-
-def register_datasets(datasets: Dict[str, DatasetConfig]):
-    for name, config in datasets.items():
-        DATASET_MAP[name] = config
-
-
-def create_dataset(name: str, args: VoiceDatasetArgs) -> SizedIterableDataset:
-    assert name in DATASET_MAP, f"Unknown dataset: {name}"
-    configs = []
-    temp: Optional[str] = name
-    while temp:
-        config = DATASET_MAP[temp]
-        configs.append(config)
-        temp = config.base
-    merged_config = dataclasses.replace(configs[-1])
-    for config in reversed(configs[:-1]):
-        merged_config = dataclasses.replace(merged_config, **dataclasses.asdict(config))
-    merged_config = dataclasses.replace(merged_config, base=None)
-    if not merged_config.splits:
-        raise ValueError(f"Dataset {name} has no splits")
-    return GenericDataset(args, merged_config)
 
 
 class StopStrategy(str, enum.Enum):
@@ -643,3 +620,313 @@ class Range(SizedIterableDataset):
 
     def __len__(self):
         return self._length
+
+
+CONTINUATION_USER_TEMPLATE = (
+    "Continue the following text using less than 50 words:\n\n<|audio|>"
+)
+CONTINUATION_ASSISTANT_TEMPLATE = "{{continuation}}"
+TRANSCRIPTION_USER_TEMPLATE = "Transcribe\n<|audio|>"
+
+BOOLQ_CONFIG = DatasetConfig(
+    path="fixie-ai/boolq-audio",
+    splits=[
+        DatasetSplitConfig(name="train", num_samples=10000),
+        DatasetSplitConfig(name="validation", num_samples=1000),
+    ],
+    user_template="{{passage}}\n\n{{'<|audio|>' if include_audio else question}}",
+    assistant_template="{{'True' if answer else 'False'}}",
+    transcript_template="{{question}}",
+)
+
+CV_BASE_CONFIG = DatasetConfig(
+    path="fixie-ai/common_voice_17_0",
+    assistant_template="{{sentence}}",
+    transcript_template="{{sentence}}",
+)
+
+CV_EN_CONFIG = DatasetConfig(
+    base="commonvoice",
+    subset="en",
+    splits=[DatasetSplitConfig(name="train", num_samples=1_101_170)],
+)
+
+CV_AR_CONFIG = DatasetConfig(
+    base="commonvoice",
+    subset="ar",
+    splits=[DatasetSplitConfig(name="train", num_samples=28_369)],
+)
+
+CV_DE_CONFIG = DatasetConfig(
+    base="commonvoice",
+    subset="de",
+    splits=[DatasetSplitConfig(name="train", num_samples=589_100)],
+)
+
+CV_ES_CONFIG = DatasetConfig(
+    base="commonvoice",
+    subset="es",
+    splits=[DatasetSplitConfig(name="train", num_samples=336_846)],
+)
+
+CV_FR_CONFIG = DatasetConfig(
+    base="commonvoice",
+    subset="fr",
+    splits=[DatasetSplitConfig(name="train", num_samples=558_054)],
+)
+
+CV_IT_CONFIG = DatasetConfig(
+    base="commonvoice",
+    subset="it",
+    splits=[DatasetSplitConfig(name="train", num_samples=169_771)],
+)
+
+CV_JA_CONFIG = DatasetConfig(
+    base="commonvoice",
+    subset="ja",
+    splits=[DatasetSplitConfig(name="train", num_samples=10_039)],
+)
+
+CV_PT_CONFIG = DatasetConfig(
+    base="commonvoice",
+    subset="pt",
+    splits=[DatasetSplitConfig(name="train", num_samples=21_968)],
+)
+
+CV_RU_CONFIG = DatasetConfig(
+    base="commonvoice",
+    subset="ru",
+    splits=[DatasetSplitConfig(name="train", num_samples=26_377)],
+)
+
+GS_XL_CONFIG = DatasetConfig(
+    path="speechcolab/gigaspeech",
+    subset="xl",
+    splits=[
+        DatasetSplitConfig(name="train", num_samples=1_000_000),
+        DatasetSplitConfig(name="validation", num_samples=10_000),
+    ],
+    assistant_template="{{text_proc.format_asr_text(text)}}",
+    transcript_template="{{text_proc.format_asr_text(text)}}",
+)
+
+LS_BASE_CONFIG = DatasetConfig(
+    path="fixie-ai/librispeech_asr",
+    assistant_template="{{text_proc.format_asr_text(text)}}",
+    transcript_template="{{text_proc.format_asr_text(text)}}",
+)
+
+LS_CLEAN_CONFIG = DatasetConfig(
+    base="librispeech",
+    subset="clean",
+    splits=[
+        DatasetSplitConfig(name="train.100", num_samples=28_539),
+        DatasetSplitConfig(name="train.360", num_samples=104_014),
+    ],
+    user_template_args={"foo": "bar"},
+)
+
+LS_OTHER_CONFIG = DatasetConfig(
+    base="librispeech",
+    subset="other",
+    splits=[
+        DatasetSplitConfig(name="train.500", num_samples=148_688),
+    ],
+)
+
+PS_CLEAN_CONFIG = DatasetConfig(
+    path="fixie-ai/peoples_speech",
+    subset="clean",
+    splits=[
+        DatasetSplitConfig(name="train", num_samples=1_000_000),
+        DatasetSplitConfig(name="validation", num_samples=10_000),
+    ],
+)
+
+VP_EN_CONFIG = DatasetConfig(
+    path="facebook/voxpopuli",
+    subset="en",
+    splits=[
+        DatasetSplitConfig(name="train", num_samples=1_000_000),
+        DatasetSplitConfig(name="validation", num_samples=10_000),
+    ],
+    assistant_template="{{raw_text}}",
+    transcript_template="{{raw_text}}",
+)
+
+CV_EN_TRANS_CONFIG = DatasetConfig(
+    base="commonvoice-en", user_template=TRANSCRIPTION_USER_TEMPLATE
+)
+CV_AR_TRANS_CONFIG = DatasetConfig(
+    base="commonvoice-ar", user_template=TRANSCRIPTION_USER_TEMPLATE
+)
+CV_DE_TRANS_CONFIG = DatasetConfig(
+    base="commonvoice-de", user_template=TRANSCRIPTION_USER_TEMPLATE
+)
+CV_ES_TRANS_CONFIG = DatasetConfig(
+    base="commonvoice-es", user_template=TRANSCRIPTION_USER_TEMPLATE
+)
+CV_FR_TRANS_CONFIG = DatasetConfig(
+    base="commonvoice-fr", user_template=TRANSCRIPTION_USER_TEMPLATE
+)
+CV_IT_TRANS_CONFIG = DatasetConfig(
+    base="commonvoice-it", user_template=TRANSCRIPTION_USER_TEMPLATE
+)
+CV_JA_TRANS_CONFIG = DatasetConfig(
+    base="commonvoice-ja", user_template=TRANSCRIPTION_USER_TEMPLATE
+)
+CV_PT_TRANS_CONFIG = DatasetConfig(
+    base="commonvoice-pt", user_template=TRANSCRIPTION_USER_TEMPLATE
+)
+CV_RU_TRANS_CONFIG = DatasetConfig(
+    base="commonvoice-ru", user_template=TRANSCRIPTION_USER_TEMPLATE
+)
+
+LS_CLEAN_TRANS_CONFIG = DatasetConfig(
+    base="librispeech-clean", user_template=TRANSCRIPTION_USER_TEMPLATE
+)
+LS_OTHER_TRANS_CONFIG = DatasetConfig(
+    base="librispeech-other", user_template=TRANSCRIPTION_USER_TEMPLATE
+)
+
+PS_CLEAN_TRANS_CONFIG = DatasetConfig(
+    base="peoples_speech", user_template=TRANSCRIPTION_USER_TEMPLATE
+)
+
+CV_EN_CONT_CONFIG = DatasetConfig(
+    base="commonvoice-en",
+    user_template=CONTINUATION_USER_TEMPLATE,
+    assistant_template=CONTINUATION_ASSISTANT_TEMPLATE,
+)
+CV_AR_CONT_CONFIG = DatasetConfig(
+    base="commonvoice-ar",
+    user_template=CONTINUATION_USER_TEMPLATE,
+    assistant_template=CONTINUATION_ASSISTANT_TEMPLATE,
+)
+CV_DE_CONT_CONFIG = DatasetConfig(
+    base="commonvoice-de",
+    user_template=CONTINUATION_USER_TEMPLATE,
+    assistant_template=CONTINUATION_ASSISTANT_TEMPLATE,
+)
+CV_ES_CONT_CONFIG = DatasetConfig(
+    base="commonvoice-es",
+    user_template=CONTINUATION_USER_TEMPLATE,
+    assistant_template=CONTINUATION_ASSISTANT_TEMPLATE,
+)
+CV_FR_CONT_CONFIG = DatasetConfig(
+    base="commonvoice-fr",
+    user_template=CONTINUATION_USER_TEMPLATE,
+    assistant_template=CONTINUATION_ASSISTANT_TEMPLATE,
+)
+CV_IT_CONT_CONFIG = DatasetConfig(
+    base="commonvoice-it",
+    user_template=CONTINUATION_USER_TEMPLATE,
+    assistant_template=CONTINUATION_ASSISTANT_TEMPLATE,
+)
+CV_JA_CONT_CONFIG = DatasetConfig(
+    base="commonvoice-ja",
+    user_template=CONTINUATION_USER_TEMPLATE,
+    assistant_template=CONTINUATION_ASSISTANT_TEMPLATE,
+)
+CV_PT_CONT_CONFIG = DatasetConfig(
+    base="commonvoice-pt",
+    user_template=CONTINUATION_USER_TEMPLATE,
+    assistant_template=CONTINUATION_ASSISTANT_TEMPLATE,
+)
+CV_RU_CONT_CONFIG = DatasetConfig(
+    base="commonvoice-ru",
+    user_template=CONTINUATION_USER_TEMPLATE,
+    assistant_template=CONTINUATION_ASSISTANT_TEMPLATE,
+)
+
+LS_CLEAN_CONT_CONFIG = DatasetConfig(
+    base="librispeech-clean",
+    user_template=CONTINUATION_USER_TEMPLATE,
+    assistant_template=CONTINUATION_ASSISTANT_TEMPLATE,
+)
+
+LS_OTHER_CONT_CONFIG = DatasetConfig(
+    base="librispeech-other",
+    user_template=CONTINUATION_USER_TEMPLATE,
+    assistant_template=CONTINUATION_ASSISTANT_TEMPLATE,
+)
+
+PS_CLEAN_CONT_CONFIG = DatasetConfig(
+    base="peoplespeech",
+    user_template=CONTINUATION_USER_TEMPLATE,
+    assistant_template=CONTINUATION_ASSISTANT_TEMPLATE,
+)
+
+
+DATASET_MAP: Dict[str, DatasetConfig] = {
+    "boolq": BOOLQ_CONFIG,
+    "commonvoice": CV_BASE_CONFIG,
+    "commonvoice-en": CV_EN_CONFIG,
+    "commonvoice-ar": CV_AR_CONFIG,
+    "commonvoice-de": CV_DE_CONFIG,
+    "commonvoice-es": CV_ES_CONFIG,
+    "commonvoice-fr": CV_FR_CONFIG,
+    "commonvoice-it": CV_IT_CONFIG,
+    "commonvoice-ja": CV_JA_CONFIG,
+    "commonvoice-pt": CV_PT_CONFIG,
+    "commonvoice-ru": CV_RU_CONFIG,
+    "commonvoice-en-transcription": CV_EN_TRANS_CONFIG,
+    "commonvoice-ar-transcription": CV_AR_TRANS_CONFIG,
+    "commonvoice-de-transcription": CV_DE_TRANS_CONFIG,
+    "commonvoice-es-transcription": CV_ES_TRANS_CONFIG,
+    "commonvoice-fr-transcription": CV_FR_TRANS_CONFIG,
+    "commonvoice-it-transcription": CV_IT_TRANS_CONFIG,
+    "commonvoice-ja-transcription": CV_JA_TRANS_CONFIG,
+    "commonvoice-pt-transcription": CV_PT_TRANS_CONFIG,
+    "commonvoice-ru-transcription": CV_RU_TRANS_CONFIG,
+    "commonvoice-en-continuation": CV_EN_CONT_CONFIG,
+    "commonvoice-ar-continuation": CV_AR_CONT_CONFIG,
+    "commonvoice-de-continuation": CV_DE_CONT_CONFIG,
+    "commonvoice-es-continuation": CV_ES_CONT_CONFIG,
+    "commonvoice-fr-continuation": CV_FR_CONT_CONFIG,
+    "commonvoice-it-continuation": CV_IT_CONT_CONFIG,
+    "commonvoice-ja-continuation": CV_JA_CONT_CONFIG,
+    "commonvoice-pt-continuation": CV_PT_CONT_CONFIG,
+    "commonvoice-ru-continuation": CV_RU_CONT_CONFIG,
+    "gigaspeech": GS_XL_CONFIG,
+    "librispeech": LS_BASE_CONFIG,
+    "librispeech-clean": LS_CLEAN_CONFIG,
+    "librispeech-other": LS_OTHER_CONFIG,
+    "librispeech-clean-transcription": LS_CLEAN_TRANS_CONFIG,
+    "librispeech-other-transcription": LS_OTHER_TRANS_CONFIG,
+    "librispeech-clean-continuation": LS_CLEAN_CONT_CONFIG,
+    "librispeech-other-continuation": LS_OTHER_CONT_CONFIG,
+    "peoplespeech": PS_CLEAN_CONFIG,
+    "peoplespeech-transcription": PS_CLEAN_TRANS_CONFIG,
+    "peoplespeech-continuation": PS_CLEAN_CONT_CONFIG,
+    "voxpopuli": VP_EN_CONFIG,
+}
+
+
+def register_datasets(datasets: Dict[str, DatasetConfig]):
+    for name, config in datasets.items():
+        DATASET_MAP[name] = config
+
+
+def create_dataset(name: str, args: VoiceDatasetArgs) -> SizedIterableDataset:
+    assert name in DATASET_MAP, f"Unknown dataset: {name}"
+    # Make a list of configs from root->base.
+    configs = []
+    temp: Optional[str] = name
+    while temp:
+        config = DATASET_MAP[temp]
+        configs.insert(0, config)
+        temp = config.base
+    # Set the root config, and then apply any non-None overrides from the subclasses.
+    merged_config = dataclasses.replace(configs[0])
+    for config in configs[1:]:
+        for field in dataclasses.fields(config):
+            value = getattr(config, field.name)
+            if field.name != "base" and value is not None:
+                merged_config = dataclasses.replace(
+                    merged_config, **{field.name: value}
+                )
+    # Sanity check.
+    if not merged_config.splits:
+        raise ValueError(f"Dataset {name} has no splits")
+    return GenericDataset(args, merged_config)
