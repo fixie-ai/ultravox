@@ -57,16 +57,22 @@ class OpenAIInference(base.VoiceInference):
             data["temperature"] = temperature
         response = requests.post(url, headers=headers, json=data, stream=True)
         response.raise_for_status()
+        num_tokens = 0
+        got_stats = False
         for line in response.iter_lines():
             event = line[6:].decode("utf-8")
             if event and event[0] == "{":
                 obj = json.loads(event)
                 if obj.get("choices") and obj["choices"][0]["delta"].get("content"):
+                    num_tokens += 1
                     yield base.InferenceChunk(obj["choices"][0]["delta"]["content"])
                 if obj.get("usage"):
+                    got_stats = True
                     yield base.InferenceStats(
                         obj["usage"]["prompt_tokens"], obj["usage"]["completion_tokens"]
                     )
+        if not got_stats:
+            yield base.InferenceStats(-1, num_tokens)
 
     def _build_messages(self, sample: datasets.VoiceSample):
         """
@@ -77,7 +83,7 @@ class OpenAIInference(base.VoiceInference):
         Audio is converted to a data URI and inserted into the message under an image_url type.
         """
         if sample.audio is None:
-            return sample
+            return sample.messages
 
         fragments = sample.messages[-1]["content"].split("<|audio|>")
         assert len(fragments) == 2, "Expected one <|audio|> placeholder"

@@ -527,8 +527,10 @@ class LibriSpeechDummyDataset(VoiceDataset):
 
     def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
         text = text_proc.format_asr_text(row["text"])
+        user_content = "Transcribe\n"
+        user_content += AUDIO_PLACEHOLDER if self._args.include_audio else f'"{text}"'
         return self._make_sample(
-            self._make_messages(f"Transcribe\n{AUDIO_PLACEHOLDER}", text),
+            self._make_messages(user_content, text),
             self._get_audio(row, "audio"),
             audio_transcript=text,
         )
