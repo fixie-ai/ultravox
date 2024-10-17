@@ -474,6 +474,9 @@ class GenericDataset(VoiceDataset):
                     )
                 dsets.append(ds)
                 total_samples += split.num_samples
+        assert (
+            len(dsets) > 0
+        ), f"The {config.name} dataset has no {self._args.split} splits."
         dataset = ds if len(dsets) == 1 else hf_datasets.concatenate_datasets(dsets)
         super()._init_dataset(dataset, total_samples)
 
