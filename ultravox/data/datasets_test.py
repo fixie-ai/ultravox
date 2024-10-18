@@ -8,28 +8,22 @@ import torch
 from torch.utils import data
 from transformers.feature_extraction_utils import BatchFeature
 
-from ultravox.data import dataset_config
 from ultravox.data import datasets
 
 
 class FakeSizedIterableDataset(datasets.SizedIterableDataset):
     """Fake version of datasets.SizedIterableDataset"""
 
-    def __init__(self, n, start=0, weight=1, estimated_length=0):
+    def __init__(self, n, start=0, length=0):
         self.data = range(start, start + n)
-        self._weight = weight
-        self._estimated_length = estimated_length
-
-    @property
-    def weight(self) -> float:
-        return self._weight
+        self._length = length
 
     def __iter__(self):
         for sample in self.data:
             yield sample
 
     def __len__(self):
-        return self._estimated_length
+        return self._length
 
 
 class FakeHuggingFaceIterableDataset(hf_datasets.IterableDataset):
@@ -43,37 +37,48 @@ class FakeHuggingFaceIterableDataset(hf_datasets.IterableDataset):
             }
             for i in range(n)
         ]
+        self._split = "fake"
 
     def __iter__(self):
         return (i for i in self.data)
 
 
 class FakeTranscribeDataset(datasets.VoiceDataset):
-    """Fake version of our VoiceDataset using a transcribe prompt."""
+    """Fake version of our VoiceDataset."""
 
     def __init__(self, n: int, args: Optional[datasets.VoiceDatasetArgs] = None):
-        super().__init__(args or datasets.VoiceDatasetArgs())
-
+        super().__init__(
+            args or datasets.VoiceDatasetArgs(),
+        )
         self._init_dataset(FakeHuggingFaceIterableDataset(n), n)
 
     def _get_sample(self, row: BatchFeature) -> Optional[datasets.VoiceSample]:
-        return self._get_transcribe_sample(row)
+        messages = self._make_messages("<|audio|>", row["text"])
+        return self._make_sample(messages, np.zeros(256), row["text"])
 
 
-class FakeGenericDataset(datasets.VoiceDataset):
-    """Fake version of GenericDataset."""
+class FakeGenericDataset(datasets.GenericDataset):
+    """Fake version of GenericDataset, hooked to return a FakeHuggingFaceIterableDataset."""
 
     def __init__(
         self,
         n: int,
-        config: dataset_config.DataDictConfig,
+        config: datasets.DatasetConfig,
         args: Optional[datasets.VoiceDatasetArgs] = None,
     ):
-        super().__init__(args or datasets.VoiceDatasetArgs())
-        self._init_dataset(FakeHuggingFaceIterableDataset(n), config.total_samples)
+        self._n = n
+        super().__init__(args or datasets.VoiceDatasetArgs(), config)
 
-    def _get_sample(self, row: BatchFeature) -> Optional[datasets.VoiceSample]:
-        return self._get_transcribe_sample(row)
+    def _load_hf_dataset(
+        self,
+        path: str,
+        name: Optional[str] = None,
+        *,
+        split: Optional[str] = None,
+        streaming: bool = True,
+        audio_field: Optional[str] = None,
+    ) -> data.Dataset:
+        return FakeHuggingFaceIterableDataset(self._n)
 
 
 class FakeDataproc(datasets.Dataproc):
@@ -135,10 +140,11 @@ def test_interleaved_never_stop():
 
 
 def test_interleaved_random():
-    ds1 = FakeSizedIterableDataset(4, weight=10)
-    ds2 = FakeSizedIterableDataset(2, start=10, weight=1)
+    ds1 = FakeSizedIterableDataset(4)
+    ds2 = FakeSizedIterableDataset(2, start=10)
     s = datasets.InterleaveDataset(
         [ds1, ds2],
+        [10.0, 1.0],
     )
     # stop_strategy=last_exhausted will stop interleaving when the last dataset is exhausted (attempted after exhaustion)
     assert list(s) == [
@@ -178,11 +184,13 @@ def test_interleaved_with_multiprocessing():
 
 
 def test_range():
-    ds = FakeSizedIterableDataset(10, estimated_length=10)
+    ds = FakeSizedIterableDataset(10, length=10)
     s = datasets.Range(ds, 5)
     assert len(s) == 5
     assert list(s) == [0, 1, 2, 3, 4]
-    s = datasets.Range(ds, 100)
+    with pytest.raises(ValueError, match="exceeds dataset length"):
+        s = datasets.Range(ds, 100)
+    s = datasets.Range(ds, 10)
     assert list(s) == [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
     s = datasets.Range(ds)
     assert len(s) == 10
@@ -195,7 +203,7 @@ def test_transcribe_dataset():
     sample = next(iter(ds))
     assert isinstance(sample, datasets.VoiceSample)
     assert sample.messages == [
-        {"role": "user", "content": "Transcribe\n<|audio|>"},
+        {"role": "user", "content": "<|audio|>"},
         {"role": "assistant", "content": "0"},
     ]
     assert np.array_equal(sample.audio, np.zeros(256))
@@ -203,22 +211,193 @@ def test_transcribe_dataset():
     assert sample.audio_transcript == "0"
 
 
-def test_num_prompts():
-    ds = FakeTranscribeDataset(5, datasets.VoiceDatasetArgs(num_prompts=3))
-    samples = list(ds)
-    assert samples[0].messages[0]["content"] == "Transcribe\n<|audio|>"
-    assert (
-        samples[1].messages[0]["content"]
-        == "Repeat exactly what is written here: <|audio|>"
+def test_dataset_config():
+    config = datasets.DatasetConfig(
+        name="fake_dataset",
+        path="mock_path",
+        splits=[
+            datasets.DatasetSplitConfig(name="clean", num_samples=5000),
+            datasets.DatasetSplitConfig(name="other", num_samples=10000),
+            datasets.DatasetSplitConfig(name="validation", num_samples=1000),
+            datasets.DatasetSplitConfig(
+                name="another_validation",
+                num_samples=1000,
+                split_type=datasets.DatasetSplit.VALIDATION,
+            ),
+        ],
     )
-    assert (
-        samples[2].messages[0]["content"]
-        == "Transcribe exactly what is said here\n<|audio|>"
+    assert config.name == "fake_dataset"
+    assert config.path == "mock_path"
+    assert len(config.splits) == 4
+    assert config.splits[0].name == "clean"
+    assert config.splits[0].num_samples == 5000
+    assert config.splits[0].split_type == datasets.DatasetSplit.TRAIN
+    assert config.splits[1].name == "other"
+    assert config.splits[1].num_samples == 10000
+    assert config.splits[1].split_type == datasets.DatasetSplit.TRAIN
+    assert config.splits[2].name == "validation"
+    assert config.splits[2].num_samples == 1000
+    assert config.splits[2].split_type == datasets.DatasetSplit.VALIDATION
+    assert config.splits[3].name == "another_validation"
+    assert config.splits[3].num_samples == 1000
+    assert config.splits[3].split_type == datasets.DatasetSplit.VALIDATION
+
+
+def test_dataset_config_serialization():
+    config = datasets.DatasetConfig(
+        name="fake_dataset",
+        path="fake_path",
+        splits=[
+            datasets.DatasetSplitConfig(name="clean", num_samples=5000),
+            datasets.DatasetSplitConfig(name="other", num_samples=10000),
+        ],
     )
-    assert (
-        samples[3].messages[0]["content"]
-        == "Transcribe exactly what is said here\n<|audio|>"
+    serialized = config.dumps_yaml()
+    deserialized = datasets.DatasetConfig.loads_yaml(serialized)
+    assert isinstance(deserialized, datasets.DatasetConfig)
+    assert deserialized.name == "fake_dataset"
+    assert deserialized.path == "fake_path"
+    assert len(deserialized.splits) == 2
+    assert deserialized.splits[0].name == "clean"
+    assert deserialized.splits[0].num_samples == 5000
+    assert deserialized.splits[1].name == "other"
+    assert deserialized.splits[1].num_samples == 10000
+
+
+def test_generic_dataset():
+    config = datasets.DatasetConfig(
+        name="fake_dataset",
+        path="fake_path",
+        splits=[datasets.DatasetSplitConfig(name="fake", num_samples=5)],
     )
+    ds = FakeGenericDataset(5, config)
+    assert len(ds) == 5
+    sample = next(iter(ds))
+    assert isinstance(sample, datasets.VoiceSample)
+    assert sample.messages == [
+        {"role": "user", "content": "<|audio|>"},
+        {"role": "assistant", "content": "0"},
+    ]
+    assert np.array_equal(sample.audio, np.zeros(256))
+    assert sample.sample_rate == 16000
+    assert sample.audio_transcript == "0"
+
+
+def test_generic_dataset_custom_templates():
+    config = datasets.DatasetConfig(
+        name="fake_dataset",
+        path="fake_path",
+        splits=[datasets.DatasetSplitConfig(name="fake", num_samples=5)],
+        user_template="Listen to the following and respond with 'xyzzy':\n<|audio|>",
+        assistant_template="xyzzy",
+        transcript_template="{{text}}",
+    )
+    ds = FakeGenericDataset(5, config)
+    assert len(ds) == 5
+    sample = next(iter(ds))
+    assert isinstance(sample, datasets.VoiceSample)
+    assert sample.messages == [
+        {
+            "role": "user",
+            "content": "Listen to the following and respond with 'xyzzy':\n<|audio|>",
+        },
+        {"role": "assistant", "content": "xyzzy"},
+    ]
+    assert np.array_equal(sample.audio, np.zeros(256))
+    assert sample.sample_rate == 16000
+    assert sample.audio_transcript == "0"
+
+
+def test_generic_dataset_text_only():
+    config = datasets.DatasetConfig(
+        name="fake_dataset",
+        path="fake_path",
+        splits=[datasets.DatasetSplitConfig(name="fake", num_samples=5)],
+        user_template="Transcribe\n<|audio|>",
+    )
+    ds = FakeGenericDataset(5, config, datasets.VoiceDatasetArgs(include_audio=False))
+    assert len(ds) == 5
+    sample = next(iter(ds))
+    assert isinstance(sample, datasets.VoiceSample)
+    assert sample.messages == [
+        {"role": "user", "content": 'Transcribe\n"0"'},
+        {"role": "assistant", "content": "0"},
+    ]
+    assert sample.audio is None
+
+
+def test_generic_dataset_merge_configs():
+    base_config = datasets.DatasetConfig(
+        name="fake_base",
+        path="fake_path",
+        splits=[datasets.DatasetSplitConfig(name="fake", num_samples=5)],
+    )
+    mid_config = datasets.DatasetConfig(
+        name="fake_mid",
+        base="fake_base",
+        user_template="fake_user_template",
+        user_template_args={"a": 1},
+        transcript_template="fake_transcript_template",
+    )
+    leaf_config = datasets.DatasetConfig(
+        name="fake_leaf",
+        base="fake_mid",
+        audio_field="fake_audio_field",
+    )
+    config = datasets._merge_configs([base_config, mid_config, leaf_config])
+    assert config.name == "fake_leaf"
+    assert config.base is None
+    assert config.path == "fake_path"
+    assert config.splits[0].name == "fake"
+    assert config.splits[0].num_samples == 5
+    assert config.splits[0].split_type == datasets.DatasetSplit.TRAIN
+    assert config.user_template == "fake_user_template"
+    assert config.user_template_args == {"a": 1}
+    assert config.assistant_template == "{{text}}"  # the default
+    assert config.transcript_template == "fake_transcript_template"
+    assert config.audio_field == "fake_audio_field"
+
+
+def test_generic_dataset_length_mismatch():
+    config = datasets.DatasetConfig(
+        name="fake_dataset",
+        path="fake_path",
+        splits=[datasets.DatasetSplitConfig(name="fake", num_samples=5)],
+    )
+    ds = FakeGenericDataset(10, config)
+    assert len(ds) == 5
+
+    pattern = r"(has been exceeded|Mismatch between presumed length)"
+    with pytest.warns(UserWarning, match=pattern):
+        list(ds)
+
+    config = datasets.DatasetConfig(
+        name="fake_dataset",
+        path="fake_path",
+        splits=[datasets.DatasetSplitConfig(name="fake", num_samples=10)],
+    )
+    ds = FakeGenericDataset(5, config)
+    assert len(ds) == 10
+
+    with pytest.warns(UserWarning, match="Mismatch between presumed length"):
+        list(ds)
+
+
+def test_generic_dataset_multiple_splits():
+    config = datasets.DatasetConfig(
+        name="fake_dataset",
+        path="fake_path",
+        splits=[
+            datasets.DatasetSplitConfig(name="train", num_samples=90),
+            datasets.DatasetSplitConfig(name="validation", num_samples=10),
+        ],
+    )
+    ds = FakeGenericDataset(100, config)
+    assert len(ds) == 90
+    ds = FakeGenericDataset(
+        100, config, datasets.VoiceDatasetArgs(split=datasets.DatasetSplit.VALIDATION)
+    )
+    assert len(ds) == 10
 
 
 def _create_sine_wave(
@@ -294,7 +473,7 @@ def test_create_sample__float64():
 def test_create_sample__raises_on_unsupported_dtype():
     with pytest.raises(AssertionError):
         array = np.ndarray(shape=(16000,), dtype=np.uint8)
-        sample = datasets.VoiceSample.from_prompt_and_raw(
+        _ = datasets.VoiceSample.from_prompt_and_raw(
             "Transcribe\n<|audio|>", array, 16000
         )
 
@@ -321,20 +500,3 @@ def test_get_messages():
         {"role": "user", "content": "B"},
         {"role": "assistant", "content": "C"},
     ]
-
-
-def test_voice_dataset_size():
-    mock_config = dataset_config.DataDictConfig(path="mock_path", total_samples=5)
-    ds = FakeGenericDataset(10, mock_config)
-    assert len(ds) == 5
-
-    pattern = r"(has been exceeded|Mismatch between estimated length)"
-    with pytest.warns(UserWarning, match=pattern):
-        list(ds)
-
-    mock_config = dataset_config.DataDictConfig(path="mock_path", total_samples=10)
-    ds = FakeGenericDataset(5, mock_config)
-    assert len(ds) == 10
-
-    with pytest.warns(UserWarning, match="Mismatch between estimated length"):
-        list(ds)
