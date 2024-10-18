@@ -550,77 +550,46 @@ class EmptyDataset(SizedIterableDataset):
         return self._length
 
 
-class StopStrategy(str, enum.Enum):
-    FIRST_EXHAUSTED = "FIRST_EXHAUSTED"
-    LAST_EXHAUSTED = "LAST_EXHAUSTED"
-    NEVER_STOP = "NEVER_STOP"
-
-
 class InterleaveDataset(SizedIterableDataset):
-    """Interleaves multiple IterableDataset objects based on normalized weights."""
+    """Interleaves multiple SizedIterableDataset objects based on normalized weights."""
 
     def __init__(
         self,
         datasets: Sequence[SizedIterableDataset],
         weights: Optional[Sequence[float]] = None,
-        stop_strategy: StopStrategy = StopStrategy.LAST_EXHAUSTED,
         seed: Optional[int] = 42,
-        static: bool = False,
     ) -> None:
         """
         Args:
             datasets: A list of SizedIterableDataset objects.
-            weights: A list of weights for each dataset.
-            stop_strategy: Strategy for stopping iteration.
+            weights: An optional list of dataset weights, i.e., the number of times it should be repeated.
             seed: Optional seed for reproducibility.
-            static: If true, the datasets are interleaved in a static order with equal weights.
         """
         self._datasets = datasets
         self._rng = np.random.default_rng(seed)
-        self._static = static
-        self._stop_strategy = stop_strategy
 
         if weights is None:
             weights = [1.0] * len(datasets)
-        total_weight = sum(weights)
-        self._normalized_probs = [w / total_weight for w in weights]
+        dataset_samples = [w * len(d) for w, d in zip(weights, datasets)]
+        self._total_samples = int(sum(dataset_samples))
+        self._normalized_probs = [s / self._total_samples for s in dataset_samples]
 
     def __iter__(self):
-        # If no datasets are provided, return an empty iterator
-        if not self._datasets:
-            return
-
+        # if the overall position is >= than the individual iterator position,
+        # we can vend a sample from that iterator and update both positions.
+        # the overall position is the loop counter. we can also keep an array
+        # for each dataset position
         iters = [iter(ds) for ds in self._datasets]
-        exhausted = [False] * len(iters)
-
-        if self._static:
-            static_iter = itertools.cycle(range(len(self._datasets)))
-
-        while True:
-            if self._static:
-                iter_index = next(static_iter)
-            else:
-                iter_index = self._rng.choice(len(iters), p=self._normalized_probs)
-
+        for _ in range(self._total_samples):
+            iter_index = self._rng.choice(len(iters), p=self._normalized_probs)
             try:
                 yield next(iters[iter_index])
             except StopIteration:
-                exhausted[iter_index] = True
-
-                # Check if stopping condition is met
-                if self._stop_strategy == StopStrategy.FIRST_EXHAUSTED or (
-                    self._stop_strategy == StopStrategy.LAST_EXHAUSTED
-                    and all(exhausted)
-                ):
-                    break
-
-                # Recreate the iterator if stopping condition is not met and yield the next sample
                 iters[iter_index] = iter(self._datasets[iter_index])
                 yield next(iters[iter_index])
 
     def __len__(self):
-        # TODO: Implement the length method for different stop strategies
-        return sum(len(ds) for ds in self._datasets)
+        return self._total_samples
 
 
 class Dataproc(SizedIterableDataset):

@@ -16,7 +16,7 @@ class FakeSizedIterableDataset(datasets.SizedIterableDataset):
 
     def __init__(self, n, start=0, length=0):
         self.data = range(start, start + n)
-        self._length = length
+        self._length = length or n
 
     def __iter__(self):
         for sample in self.data:
@@ -103,8 +103,8 @@ def test_interleaved_first_exhausted():
     ds3 = FakeSizedIterableDataset(3)
     s = datasets.InterleaveDataset(
         [ds1, ds2, ds3],
-        stop_strategy=datasets.StopStrategy.FIRST_EXHAUSTED,
-        static=True,
+        # stop_strategy=datasets.StopStrategy.FIRST_EXHAUSTED,
+        # static=True,
     )
     # static=True disables random sampling of datasets, so the order is deterministic
     # stop_strategy=first_exhausted will stop interleave when the first dataset is exhausted
@@ -118,8 +118,8 @@ def test_interleaved_last_exhausted():
     ds2 = FakeSizedIterableDataset(2, start=10)
     s = datasets.InterleaveDataset(
         [ds1, ds2],
-        stop_strategy=datasets.StopStrategy.LAST_EXHAUSTED,
-        static=True,
+        # stop_strategy=datasets.StopStrategy.LAST_EXHAUSTED,
+        # static=True,
     )
     # static=True disables random sampling of datasets, so the order is deterministic
     # stop_strategy=last_exhausted will stop interleave when the last dataset is exhausted
@@ -131,8 +131,8 @@ def test_interleaved_never_stop():
     ds2 = FakeSizedIterableDataset(2, start=10)
     s = datasets.InterleaveDataset(
         [ds1, ds2],
-        stop_strategy=datasets.StopStrategy.NEVER_STOP,
-        static=True,
+        # stop_strategy=datasets.StopStrategy.NEVER_STOP,
+        # static=True,
     )
     # static=True disables random sampling of datasets, so the order is deterministic
     # stop_strategy=never_stop will continue interleaving forever
