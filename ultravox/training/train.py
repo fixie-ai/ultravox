@@ -36,7 +36,6 @@ def prepare_dataset(
     data_args: datasets.VoiceDatasetArgs,
     processor: ultravox_processing.UltravoxProcessor,
     train_on_inputs: bool,
-    stop_strategy: datasets.StopStrategy,
     num_samples: Optional[int] = None,
     include_alt_fields: bool = False,  # whether to generate tensors for text-only input (e.g., used for KD training)
 ) -> datasets.SizedIterableDataset:
@@ -50,9 +49,7 @@ def prepare_dataset(
                 len(ds) > 1
             ), f"Dataset {ds} has length {len(ds)} which is too short for epoch training"
 
-    interleave = datasets.InterleaveDataset(
-        data_sets, data_weights, stop_strategy=stop_strategy
-    )
+    interleave = datasets.InterleaveDataset(data_sets, data_weights)
     ds_with_proc = data_processing.UltravoxDataproc(
         interleave,
         processor=processor,
@@ -207,7 +204,6 @@ def train(args: config_base.TrainConfig):
         train_args=args,
         data_opts=args.get_train_sets(),
         train_on_inputs=args.train_on_inputs,
-        stop_strategy=args.stop_strategy,
         processor=processor,
         num_samples=args.num_samples,
         data_args=datasets.VoiceDatasetArgs(
@@ -228,7 +224,6 @@ def train(args: config_base.TrainConfig):
                 train_args=args,
                 data_opts=[val_opt],
                 train_on_inputs=args.train_on_inputs,
-                stop_strategy=args.stop_strategy,
                 processor=processor,
                 num_samples=args.val_num_samples,
                 data_args=val_ds_args,
