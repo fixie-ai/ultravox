@@ -1,4 +1,3 @@
-import itertools
 from typing import Optional, Union
 
 import datasets as hf_datasets
@@ -95,90 +94,43 @@ def test_dataproc():
     assert list(s) == [0, -1, -2, -3, -4]
 
 
-def test_interleaved_first_exhausted():
-    ds1 = FakeSizedIterableDataset(5)
-    s = datasets.InterleaveDataset([ds1])
-    assert list(s) == [0, 1, 2, 3, 4]
-    ds2 = FakeSizedIterableDataset(9)
-    ds3 = FakeSizedIterableDataset(3)
-    s = datasets.InterleaveDataset(
-        [ds1, ds2, ds3],
-        # stop_strategy=datasets.StopStrategy.FIRST_EXHAUSTED,
-        # static=True,
-    )
-    # static=True disables random sampling of datasets, so the order is deterministic
-    # stop_strategy=first_exhausted will stop interleave when the first dataset is exhausted
-    assert list(s) == [0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3]
+def test_interleaved_empty():
     s = datasets.InterleaveDataset([])
     assert list(s) == []
 
 
-def test_interleaved_last_exhausted():
+def test_interleaved_single_set():
+    ds1 = FakeSizedIterableDataset(4)
+    s = datasets.InterleaveDataset([ds1])
+    assert list(s) == [0, 1, 2, 3]
+
+
+def test_interleaved_normal_weights():
+    ds1 = FakeSizedIterableDataset(4)
+    ds2 = FakeSizedIterableDataset(8, start=10)
+    ds3 = FakeSizedIterableDataset(2, start=100)
+    s = datasets.InterleaveDataset([ds1, ds2, ds3])
+    assert list(s) == [0, 10, 100, 11, 1, 12, 13, 2, 14, 101, 15, 3, 16, 17]
+
+
+def test_interleaved_specific_weights():
     ds1 = FakeSizedIterableDataset(4)
     ds2 = FakeSizedIterableDataset(2, start=10)
-    s = datasets.InterleaveDataset(
-        [ds1, ds2],
-        # stop_strategy=datasets.StopStrategy.LAST_EXHAUSTED,
-        # static=True,
-    )
-    # static=True disables random sampling of datasets, so the order is deterministic
-    # stop_strategy=last_exhausted will stop interleave when the last dataset is exhausted
-    assert list(s) == [0, 10, 1, 11, 2, 10, 3, 11]
+    s = datasets.InterleaveDataset([ds1, ds2], [0.5, 2.0])
+    assert list(s) == [0, 10, 11, 1, 10, 11]
 
 
-def test_interleaved_never_stop():
+def test_interleaved_zero_weights():
     ds1 = FakeSizedIterableDataset(4)
     ds2 = FakeSizedIterableDataset(2, start=10)
-    s = datasets.InterleaveDataset(
-        [ds1, ds2],
-        # stop_strategy=datasets.StopStrategy.NEVER_STOP,
-        # static=True,
-    )
-    # static=True disables random sampling of datasets, so the order is deterministic
-    # stop_strategy=never_stop will continue interleaving forever
-    assert list(itertools.islice(s, 12)) == [0, 10, 1, 11, 2, 10, 3, 11, 0, 10, 1, 11]
-
-
-def test_interleaved_random():
-    ds1 = FakeSizedIterableDataset(4)
-    ds2 = FakeSizedIterableDataset(2, start=10)
-    s = datasets.InterleaveDataset(
-        [ds1, ds2],
-        [10.0, 1.0],
-    )
-    # stop_strategy=last_exhausted will stop interleaving when the last dataset is exhausted (attempted after exhaustion)
-    assert list(s) == [
-        0,
-        1,
-        2,
-        3,
-        0,
-        10,
-        1,
-        2,
-        3,
-        0,
-        1,
-        11,
-        2,
-        3,
-        0,
-        1,
-        2,
-        3,
-        0,
-        1,
-        2,
-        3,
-    ]
+    s = datasets.InterleaveDataset([ds1, ds2], [0.0, 0.0])
+    assert list(s) == []
 
 
 def test_interleaved_with_multiprocessing():
     ds = FakeSizedIterableDataset(5)
     s = datasets.InterleaveDataset([ds])
-
     dl = data.DataLoader(s, num_workers=1, batch_size=5)
-
     batch = next(iter(dl))
     assert torch.allclose(batch, torch.tensor([0, 1, 2, 3, 4]))
 
