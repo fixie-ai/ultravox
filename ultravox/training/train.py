@@ -256,7 +256,7 @@ def train(args: config_base.TrainConfig):
     trainer = transformers.Seq2SeqTrainer(
         model,
         train_dataset=train_dataset,
-        eval_dataset=val_dataset,
+        eval_dataset=val_datasets,
         data_collator=data_collator,
         tokenizer=text_tokenizer,
         args=transformers.Seq2SeqTrainingArguments(
