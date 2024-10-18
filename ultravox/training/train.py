@@ -201,7 +201,7 @@ def train(args: config_base.TrainConfig):
 
     # Prepare dataset, subsetting if needed
     train_dataset: datasets.SizedIterableDataset
-    val_datasets: Dict[str, datasets.SizedIterableDataset]
+    val_datasets: Dict[str, datasets.SizedIterableDataset] = {}
 
     train_dataset = prepare_dataset(
         train_args=args,
@@ -223,7 +223,6 @@ def train(args: config_base.TrainConfig):
             shuffle=False,
             max_audio_duration_secs=16,
         )
-        val_datasets = {}
         for val_opt in args.get_val_sets():
             val_dataset = prepare_dataset(
                 train_args=args,
@@ -244,10 +243,8 @@ def train(args: config_base.TrainConfig):
         # The point of this is to avoid unnecessary data processing/downloading in the workers.
         # When using epochs to train, emptydataset must have a length equal to the training set
         train_dataset = datasets.EmptyDataset(len(train_dataset))
-        val_datasets = {
-            val_set_name: datasets.EmptyDataset()
-            for val_set_name, val_dataset in val_datasets.items()
-        }
+        for val_opts in args.get_val_sets():
+            val_datasets[val_opts.name] = datasets.EmptyDataset()
 
     # Set up the data loader
     data_collator = datasets.DataCollatorForSeq2SeqWithAudio(
