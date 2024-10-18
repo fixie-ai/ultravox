@@ -6,7 +6,7 @@ import logging
 import os
 import subprocess
 from datetime import datetime
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import accelerate
 import datasets as hf_datasets
@@ -201,7 +201,7 @@ def train(args: config_base.TrainConfig):
 
     # Prepare dataset, subsetting if needed
     train_dataset: datasets.SizedIterableDataset
-    val_dataset: datasets.SizedIterableDataset
+    val_datasets: Dict[str, datasets.SizedIterableDataset]
 
     train_dataset = prepare_dataset(
         train_args=args,
@@ -223,16 +223,19 @@ def train(args: config_base.TrainConfig):
             shuffle=False,
             max_audio_duration_secs=16,
         )
-        val_dataset = prepare_dataset(
-            train_args=args,
-            data_opts=args.get_val_sets(),
-            train_on_inputs=args.train_on_inputs,
-            stop_strategy=args.stop_strategy,
-            processor=processor,
-            num_samples=args.val_num_samples,
-            data_args=val_ds_args,
-            include_alt_fields=model.loss_config.requires_alt_fields,
-        )
+        val_datasets = {}
+        for val_opt in args.get_val_sets():
+            val_dataset = prepare_dataset(
+                train_args=args,
+                data_opts=[val_opt],
+                train_on_inputs=args.train_on_inputs,
+                stop_strategy=args.stop_strategy,
+                processor=processor,
+                num_samples=args.val_num_samples,
+                data_args=val_ds_args,
+                include_alt_fields=model.loss_config.requires_alt_fields,
+            )
+            val_datasets[val_opt.name] = val_dataset
         logging.info(
             f"Loaded {len(args.train_sets)}) data sets, sample limit: {args.num_samples} (val sample limit: {args.val_num_samples})"
         )
@@ -241,7 +244,10 @@ def train(args: config_base.TrainConfig):
         # The point of this is to avoid unnecessary data processing/downloading in the workers.
         # When using epochs to train, emptydataset must have a length equal to the training set
         train_dataset = datasets.EmptyDataset(len(train_dataset))
-        val_dataset = datasets.EmptyDataset(len(val_dataset))
+        val_datasets = {
+            val_set_name: datasets.EmptyDataset()
+            for val_set_name, val_dataset in val_datasets.items()
+        }
 
     # Set up the data loader
     data_collator = datasets.DataCollatorForSeq2SeqWithAudio(
