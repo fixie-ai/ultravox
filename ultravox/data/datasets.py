@@ -279,7 +279,7 @@ class SizedIterableDataset(abc.ABC, data.IterableDataset):
     """
 
     @abc.abstractmethod
-    def __len__(self):
+    def __len__(self) -> int:
         pass
 
 
@@ -296,7 +296,7 @@ class VoiceDataset(SizedIterableDataset):
         self._args = args
         self._session: Optional[requests.Session] = None
         self._rng = np.random.default_rng(self._args.shuffle_seed)
-        self._weight = 1.0  # the default weight for the dataset
+        self._multiplier = 1.0
 
     def _init_dataset(self, dataset: data.Dataset, estimated_length: int = 1) -> None:
         self._dataset = dataset
@@ -304,8 +304,8 @@ class VoiceDataset(SizedIterableDataset):
         self._estimated_length = estimated_length
 
     @property
-    def weight(self) -> float:
-        return self._weight
+    def multiplier(self) -> float:
+        return self._multiplier
 
     def _load_audio_dataset(
         self,
@@ -373,7 +373,7 @@ class VoiceDataset(SizedIterableDataset):
                 f"Mismatch between estimated length ({self._estimated_length}) and actual length ({actual_length}) for dataset of type {type(self._dataset)}. Make sure to update."
             )
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self._estimated_length
 
     @abc.abstractmethod
@@ -493,7 +493,7 @@ class EmptyDataset(SizedIterableDataset):
     def __iter__(self):
         return iter([])
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self._estimated_length
 
 
@@ -1049,16 +1049,17 @@ class GenericVoiceDataset(VoiceDataset):
         if self._args.shuffle:
             dataset = dataset.shuffle(seed=self._args.shuffle_seed)
 
-        if config.num_samples:
-            dataset = Range(dataset, config.num_samples, config.total_samples)
-
-        self._weight = config.weight
+        self._multiplier = config.multiplier
 
         self.user_template = config.user_template
         self.assistant_template = config.assistant_template
         self.transcript_template = config.transcript_template
 
-        super()._init_dataset(dataset, config.total_samples)
+        if config.num_samples:
+            dataset = Range(dataset, config.num_samples, config.total_samples)
+            super()._init_dataset(dataset, len(dataset))
+        else:
+            super()._init_dataset(dataset, config.total_samples)
 
     def _get_sample(self, row) -> VoiceSample:
         try:
@@ -1121,7 +1122,7 @@ class StopStrategy(str, Enum):
 
 
 class InterleaveDataset(SizedIterableDataset):
-    """Interleaves multiple IterableDataset objects based on normalized weights."""
+    """Interleaves multiple IterableDataset objects based on multiplier."""
 
     def __init__(
         self,
@@ -1142,10 +1143,12 @@ class InterleaveDataset(SizedIterableDataset):
         self._static = static
 
         self._stop_strategy = stop_strategy
+        relative_frequencies = [
+            int(getattr(ds, "multiplier", 1.0) * float(len(ds))) for ds in datasets
+        ]
 
-        weights = [getattr(ds, "weight", 1) for ds in datasets]
-        total_weight = sum(weights)
-        self._normalized_probs = [w / total_weight for w in weights]
+        total_frequency = sum(relative_frequencies)
+        self._normalized_probs = [f / total_frequency for f in relative_frequencies]
 
     def __iter__(self):
         # If no datasets are provided, return an empty iterator
@@ -1180,9 +1183,12 @@ class InterleaveDataset(SizedIterableDataset):
                 iters[iter_index] = iter(self._datasets[iter_index])
                 yield next(iters[iter_index])
 
-    def __len__(self):
+    def __len__(self) -> int:
         # TODO: Implement the length method for different stop strategies
-        return sum(len(ds) for ds in self._datasets)
+        return sum(
+            int(getattr(ds, "multiplier", 1.0) * float(len(ds)))
+            for ds in self._datasets
+        )
 
 
 class Dataproc(SizedIterableDataset):
@@ -1198,7 +1204,7 @@ class Dataproc(SizedIterableDataset):
     def __iter__(self):
         return (self._process(sample) for sample in self._dataset)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self._dataset)
 
 
@@ -1234,7 +1240,7 @@ class Range(SizedIterableDataset):
                 break
             yield sample
 
-    def __len__(self):
+    def __len__(self) -> int:
         return (
             self._num_samples
             if self._num_samples is not None

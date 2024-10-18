@@ -16,7 +16,7 @@ val_sets: ["anyinstruct", "soda", "peoplespeech"]
 batch_size: 24
 max_steps: 14400 # x8x24 = 2,764,800
 
-data_sets: ["anyinstruct"]
+data_sets: [] # Can't use datasets with "multiplier" because it doesn't have a length attribute.
 data_dicts:
 # continuation
   - path: "fixie-ai/librispeech_asr"
@@ -27,7 +27,8 @@ data_dicts:
     user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
     assistant_template: "{{ continuation }}"
     transcript_template: "{{ text }}"
-    weight: 1
+    multiplier: 1
+    total_samples: 132553
   - path: "fixie-ai/librispeech_asr"
     name: "other"
     splits:
@@ -35,7 +36,8 @@ data_dicts:
     user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
     assistant_template: "{{ continuation }}"
     transcript_template: "{{ text }}"
-    weight: 1
+    multiplier: 1
+    total_samples: 148688
   - path: "fixie-ai/peoples_speech"
     name: "clean"
     splits:
@@ -43,7 +45,8 @@ data_dicts:
     user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
     assistant_template: "{{ continuation }}"
     transcript_template: "{{ text_proc.format_asr_text(text) }}"
-    weight: 8
+    multiplier: 1
+    total_samples: 1501271
   - path: "fixie-ai/common_voice_17_0"
     name: "en"
     splits:
@@ -51,7 +54,8 @@ data_dicts:
     user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
     assistant_template: "{{ continuation }}"
     transcript_template: "{{ text_proc.format_asr_text(sentence) }}"
-    weight: 8
+    multiplier: 1
+    total_samples: 1101170
   - path: "fixie-ai/common_voice_17_0"
     name: "ar"
     splits:
@@ -59,7 +63,8 @@ data_dicts:
     user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
     assistant_template: "{{ continuation }}"
     transcript_template: "{{ sentence }}"
-    weight: 0.2
+    multiplier: 1
+    total_samples: 28369
   - path: "fixie-ai/common_voice_17_0"
     name: "de"
     splits:
@@ -67,7 +72,8 @@ data_dicts:
     user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
     assistant_template: "{{ continuation }}"
     transcript_template: "{{ sentence }}"
-    weight: 4
+    multiplier: 1
+    total_samples: 589100
   - path: "fixie-ai/common_voice_17_0"
     name: "es"
     splits:
@@ -75,7 +81,8 @@ data_dicts:
     user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
     assistant_template: "{{ continuation }}"
     transcript_template: "{{ sentence }}"
-    weight: 3
+    multiplier: 1
+    total_samples: 336846
   - path: "fixie-ai/common_voice_17_0"
     name: "fr"
     splits:
@@ -83,7 +90,8 @@ data_dicts:
     user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
     assistant_template: "{{ continuation }}"
     transcript_template: "{{ sentence }}"
-    weight: 4
+    multiplier: 1
+    total_samples: 558054
   - path: "fixie-ai/common_voice_17_0"
     name: "it"
     splits:
@@ -91,7 +99,8 @@ data_dicts:
     user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
     assistant_template: "{{ continuation }}"
     transcript_template: "{{ sentence }}"
-    weight: 1.2
+    multiplier: 1
+    total_samples: 169771
   - path: "fixie-ai/common_voice_17_0"
     name: "ja"
     splits:
@@ -99,7 +108,8 @@ data_dicts:
     user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
     assistant_template: "{{ continuation }}"
     transcript_template: "{{ sentence }}"
-    weight: 0.1
+    multiplier: 1
+    total_samples: 10039
   - path: "fixie-ai/common_voice_17_0"
     name: "pt"
     splits:
@@ -107,7 +117,8 @@ data_dicts:
     user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
     assistant_template: "{{ continuation }}"
     transcript_template: "{{ sentence }}"
-    weight: 0.2
+    multiplier: 1
+    total_samples: 21968
   - path: "fixie-ai/common_voice_17_0"
     name: "ru"
     splits:
@@ -115,7 +126,8 @@ data_dicts:
     user_template: "Continue the following text using less than 50 words:\n\n<|audio|>"
     assistant_template: "{{ continuation }}"
     transcript_template: "{{ sentence }}"
-    weight: 0.2
+    multiplier: 1
+    total_samples: 26377
 # ASR task
   - path: "fixie-ai/librispeech_asr"
     name: "clean"
@@ -125,7 +137,8 @@ data_dicts:
     user_template: "{{ dataset._get_transcribe_prompt() }}"
     assistant_template: "{{ text }}"
     transcript_template: "{{ text }}"
-    weight: 0.1
+    multiplier: 1
+    total_samples: 132553
   - path: "fixie-ai/librispeech_asr"
     name: "other"
     splits:
@@ -133,7 +146,8 @@ data_dicts:
     user_template: "{{ dataset._get_transcribe_prompt() }}"
     assistant_template: "{{ text }}"
     transcript_template: "{{ text }}"
-    weight: 0.1
+    multiplier: 1
+    total_samples: 148688
   - path: "fixie-ai/peoples_speech"
     name: "clean"
     splits:
@@ -141,7 +155,8 @@ data_dicts:
     user_template: "{{ dataset._get_transcribe_prompt() }}"
     assistant_template: "{{ text_proc.format_asr_text(text) }}"
     transcript_template: "{{ text_proc.format_asr_text(text) }}"
-    weight: 0.8
+    multiplier: 1
+    total_samples: 1501271
   - path: "fixie-ai/common_voice_17_0"
     name: "en"
     splits:
@@ -149,7 +164,8 @@ data_dicts:
     user_template: "{{ dataset._get_transcribe_prompt() }}"
     assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
     transcript_template: "{{ text_proc.format_asr_text(sentence) }}"
-    weight: 0.8
+    multiplier: 1
+    total_samples: 1101170
   - path: "fixie-ai/common_voice_17_0"
     name: "ar"
     splits:
@@ -157,7 +173,8 @@ data_dicts:
     user_template: "{{ dataset._get_transcribe_prompt() }}"
     assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
     transcript_template: "{{ sentence }}"
-    weight: 0.02
+    multiplier: 1
+    total_samples: 28369
   - path: "fixie-ai/common_voice_17_0"
     name: "de"
     splits:
@@ -165,7 +182,8 @@ data_dicts:
     user_template: "{{ dataset._get_transcribe_prompt() }}"
     assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
     transcript_template: "{{ sentence }}"
-    weight: 0.4
+    multiplier: 1
+    total_samples: 589100
   - path: "fixie-ai/common_voice_17_0"
     name: "es"
     splits:
@@ -173,7 +191,8 @@ data_dicts:
     user_template: "{{ dataset._get_transcribe_prompt() }}"
     assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
     transcript_template: "{{ sentence }}"
-    weight: 0.3
+    multiplier: 1
+    total_samples: 336846
   - path: "fixie-ai/common_voice_17_0"
     name: "fr"
     splits:
@@ -181,7 +200,8 @@ data_dicts:
     user_template: "{{ dataset._get_transcribe_prompt() }}"
     assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
     transcript_template: "{{ sentence }}"
-    weight: 0.4
+    multiplier: 1
+    total_samples: 558054
   - path: "fixie-ai/common_voice_17_0"
     name: "it"
     splits:
@@ -189,7 +209,8 @@ data_dicts:
     user_template: "{{ dataset._get_transcribe_prompt() }}"
     assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
     transcript_template: "{{ sentence }}"
-    weight: 0.12
+    multiplier: 1
+    total_samples: 169771
   - path: "fixie-ai/common_voice_17_0"
     name: "ja"
     splits:
@@ -197,7 +218,8 @@ data_dicts:
     user_template: "{{ dataset._get_transcribe_prompt() }}"
     assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
     transcript_template: "{{ sentence }}"
-    weight: 0.01
+    multiplier: 1
+    total_samples: 10039
   - path: "fixie-ai/common_voice_17_0"
     name: "pt"
     splits:
@@ -205,7 +227,8 @@ data_dicts:
     user_template: "{{ dataset._get_transcribe_prompt() }}"
     assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
     transcript_template: "{{ sentence }}"
-    weight: 0.02
+    multiplier: 1
+    total_samples: 21968
   - path: "fixie-ai/common_voice_17_0"
     name: "ru"
     splits:
@@ -213,4 +236,5 @@ data_dicts:
     user_template: "{{ dataset._get_transcribe_prompt() }}"
     assistant_template: "{{ text_proc.format_asr_text(sentence) }}"
     transcript_template: "{{ sentence }}"
-    weight: 0.02
+    multiplier: 1
+    total_samples: 26377
