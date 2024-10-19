@@ -10,7 +10,7 @@ import numpy as np
 import simple_parsing
 from torch.utils import data as data_utils
 
-from ultravox.data import datasets
+from ultravox import data as datasets
 from ultravox.evaluation import eval
 from ultravox.evaluation import eval_types
 from ultravox.inference import base

@@ -3,7 +3,7 @@ import argparse
 import librosa
 import sounddevice as sd
 
-from ultravox.data import datasets
+from ultravox import data as datasets
 
 parser = argparse.ArgumentParser()
 parser.add_argument("data_sets", nargs="*", help="List of datasets to use")

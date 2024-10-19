@@ -8,7 +8,7 @@ from typing import List, Optional
 import numpy as np
 from torch.utils import data
 
-from ultravox.data import datasets
+from ultravox import data as datasets
 from ultravox.evaluation import eval
 from ultravox.evaluation import eval_types
 from ultravox.inference import infer

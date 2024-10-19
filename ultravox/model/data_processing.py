@@ -1,17 +1,15 @@
 from typing import Any, Dict
 
-import datasets
 import numpy as np
-from torch.utils import data
 
-from ultravox.data import datasets
+from ultravox import data as datasets
 from ultravox.model import ultravox_processing
 
 
 class UltravoxDataproc(datasets.Dataproc):
     def __init__(
         self,
-        dataset: data.IterableDataset,
+        dataset: datasets.SizedIterableDataset,
         processor: ultravox_processing.UltravoxProcessor,
         train_on_inputs: bool = False,
         inference_mode: bool = False,

@@ -1,8 +1,6 @@
 import abc
-import base64
 import dataclasses
 import enum
-import io
 import itertools
 import logging
 import os
@@ -12,20 +10,15 @@ from typing import Any, Dict, List, Optional, Sequence
 
 import datasets as hf_datasets
 import jinja2
-import librosa
 import numpy as np
-import soundfile as sf
 import streaming as mds
 import torch
 import torch.nn.functional as F
 import transformers
-from simple_parsing import helpers
 from torch.utils import data
 
 from ultravox.data import text_proc
-
-AUDIO_PLACEHOLDER = "<|audio|>"
-SAMPLE_RATE = 16000
+from ultravox.data import types
 
 # TODO(juberti): set these in the environment so they don't need to be hard-coded here.
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "service_account.json"
@@ -33,98 +26,6 @@ os.environ["GOOGLE_CLOUD_PROJECT"] = "fixie-training"
 
 # Silence the spurious warnings coming from the MosaicML streaming library.
 logging.getLogger("streaming.base.dataset").setLevel(logging.ERROR)
-
-
-class DatasetSplit(str, enum.Enum):
-    TRAIN = "train"
-    VALIDATION = "validation"
-
-
-@dataclasses.dataclass
-class VoiceDatasetArgs:
-    """Global arguments for voice datasets."""
-
-    batch_size: int = 4
-    """Batch size for train, eval, or validation."""
-    include_audio: bool = True
-    """Whether to include audio in the samples."""
-    shuffle: bool = False
-    """Whether to shuffle the dataset."""
-    shuffle_seed: int = 42
-    """Seed for shuffling the dataset."""
-    max_audio_duration_secs: Optional[float] = None
-    """Whether to skip samples with audio longer than this duration."""
-    split: DatasetSplit = DatasetSplit.TRAIN
-    """Which split of the dataset to use."""
-
-    def __post_init__(self):
-        if isinstance(self.split, str):
-            self.split = DatasetSplit(self.split.lower())
-
-
-@dataclasses.dataclass
-class DatasetSplitConfig(helpers.Serializable):
-    name: str
-    """Name of the split."""
-    num_samples: int
-    """Number of samples in the split"""
-    split_type: DatasetSplit = DatasetSplit.TRAIN
-    """Type of split, i.e., train or validation."""
-
-    def __post_init__(self):
-        """Automatically set is_validation if it's a validation split."""
-        if self.name == "test":
-            self.split_type = DatasetSplit.TEST
-        elif self.name == "validation":
-            self.split_type = DatasetSplit.VALIDATION
-
-
-@dataclasses.dataclass
-class DatasetConfig(helpers.Serializable):
-    # Note that subclasses can override any of these fields, but they currently can't
-    # extend structured fields like splits or user_template_args.
-    # See _merge_configs below for the current implementation.
-    name: str
-    """Name of the dataset."""
-    base: Optional[str] = None
-    """Base dataset config to inherit from."""
-    path: Optional[str] = None
-    """Directory of the dataset, or huggingface dataset name; must be set for "generic" datasets. If not set, it is automatically inferred for predefined dataset types."""
-    subset: Optional[str] = None
-    """Name of the dataset, or huggingface dataset config/subset name."""
-    splits: Optional[List[DatasetSplitConfig]] = None
-    """List of splits to use, e.g. [{"name": "train", "num_samples": 1000}, {"name": "validation", "num_samples": 100}]."""
-    user_template: Optional[str] = None
-    """Template for the user message."""
-    user_template_args: Optional[Dict[str, str]] = None
-    """Optional arguments (e.g., target language) for the user template."""
-    assistant_template: Optional[str] = None
-    """Template for the assistant message."""
-    transcript_template: Optional[str] = None
-    """Template for the transcript."""
-    audio_field: Optional[str] = None
-    """Field in the dataset that contains the audio, use None if the dataset does not contain audio."""
-    use_mds: Optional[bool] = None
-    """Set to True to load the dataset from GCP (using MDS) instead of Hugging Face."""
-    mds_batch_size: Optional[int] = None
-    """Batch size for the dataset when using MDS."""
-
-    def __post_init__(self):
-        """Set defaults only if this is a root config, so that said defaults in a subclass don't act as overrides."""
-        DEFAULTS = {
-            "splits": [],
-            "user_template": AUDIO_PLACEHOLDER,
-            "user_template_args": {},
-            "assistant_template": "{{text}}",
-            "transcript_template": "{{text}}",
-            "audio_field": "audio",
-            "use_mds": False,
-            "mds_batch_size": 32,
-        }
-        if self.base is None:
-            for attr, default_value in DEFAULTS.items():
-                if getattr(self, attr) is None:
-                    setattr(self, attr, default_value)
 
 
 @dataclasses.dataclass
@@ -167,107 +68,6 @@ class DataCollatorForSeq2SeqWithAudio(transformers.DataCollatorForSeq2Seq):
         return batch
 
 
-def audio_from_file(path: str) -> np.ndarray:
-    """Load audio from a file, converting to float32 PCM @ 16 kHz."""
-    audio, _ = librosa.load(path, sr=SAMPLE_RATE)
-    assert audio.dtype == np.float32
-    return audio
-
-
-def audio_from_buf(buf: bytes) -> np.ndarray:
-    """Load audio from a buffer, converting to float32 PCM @ 16 kHz."""
-    audio, _ = librosa.load(io.BytesIO(buf), sr=SAMPLE_RATE)
-    assert audio.dtype == np.float32
-    return audio
-
-
-def audio_to_wav(audio: np.ndarray, sample_rate: int = SAMPLE_RATE) -> bytes:
-    """Convert audio to WAV format, 16-bit PCM @ 16 kHz."""
-    assert audio.dtype == np.float32
-    with io.BytesIO() as buf:
-        sf.write(buf, audio, sample_rate, format="WAV", subtype="PCM_16")
-        return buf.getvalue()
-
-
-def audio_to_wav_base64(audio: np.ndarray, sample_rate: int = SAMPLE_RATE) -> str:
-    """Convert audio to a base64-encoded WAV file."""
-    return base64.b64encode(audio_to_wav(audio, sample_rate)).decode("utf-8")
-
-
-def audio_to_data_uri(audio: np.ndarray, sample_rate: int = SAMPLE_RATE) -> str:
-    """Convert audio to a data URI."""
-    return f"data:audio/wav;base64,{audio_to_wav_base64(audio, sample_rate)}"
-
-
-def messages_from_prompt(prompt: str) -> List[Dict[str, str]]:
-    return [{"role": "user", "content": prompt}]
-
-
-@dataclasses.dataclass
-class VoiceSample:
-    @staticmethod
-    def from_json(data: Dict[str, Any]) -> "VoiceSample":
-        """Convert from JSON format; audio is expected as base64ed WAV."""
-        bytes = base64.b64decode(data["audio"])
-        return VoiceSample(data["messages"], audio_from_buf(bytes))
-
-    @staticmethod
-    def from_prompt(prompt: str) -> "VoiceSample":
-        """Create a VoiceSample from a prompt only."""
-        return VoiceSample(messages_from_prompt(prompt), None)
-
-    @staticmethod
-    def from_prompt_and_file(prompt: str, path: str) -> "VoiceSample":
-        """Create a VoiceSample from a prompt and an audio file."""
-        return VoiceSample(messages_from_prompt(prompt), audio_from_file(path))
-
-    @staticmethod
-    def from_prompt_and_buf(prompt: str, buf: bytes) -> "VoiceSample":
-        """Create a VoiceSample from a prompt and an encoded audio buffer."""
-        return VoiceSample(messages_from_prompt(prompt), audio_from_buf(buf))
-
-    @staticmethod
-    def from_prompt_and_raw(
-        prompt: str, buf: np.ndarray, sample_rate: int
-    ) -> "VoiceSample":
-        """Create a VoiceSample from a prompt and raw audio data with sample rate."""
-        # Keep in native sample rate; we'll resample later if needed.
-        return VoiceSample(messages_from_prompt(prompt), buf, sample_rate)
-
-    def to_json(self) -> Dict[str, Any]:
-        """Convert to JSON format; audio is written as base64ed WAV."""
-        obj: Dict[str, Any] = {"messages": self.messages}
-        if self.audio is not None:
-            obj["audio"] = audio_to_wav_base64(self.audio, self.sample_rate)
-        return obj
-
-    def __post_init__(self):
-        """Ensure audio is float32 PCM."""
-        if self.audio is not None:
-            if self.audio.dtype == np.float64:
-                self.audio = self.audio.astype(np.float32)
-            elif self.audio.dtype == np.int16:
-                self.audio = self.audio.astype(np.float32) / np.float32(32768.0)
-            elif self.audio.dtype == np.int32:
-                self.audio = self.audio.astype(np.float32) / np.float32(2147483648.0)
-            assert (
-                self.audio.dtype == np.float32
-            ), f"Unexpected audio dtype: {self.audio.dtype}"
-            assert self.audio.ndim == 1, f"Unexpected audio shape: {self.audio.shape}"
-
-    def add_past_messages(self, past_messages: List[Dict[str, str]]):
-        self.messages = past_messages + self.messages
-
-    messages: List[Dict[str, str]]
-    """List of messages, each with a "role" and "content" field."""
-    audio: Optional[np.typing.NDArray[np.float32]] = None
-    """Audio data as float32 PCM @ `sample_rate`."""
-    sample_rate: int = SAMPLE_RATE
-    """Audio sample rate in Hz."""
-    audio_transcript: Optional[str] = None
-    """For evaluations, the known transcript of the audio."""
-
-
 def _get_messages(
     *turns: str, sys_prompt: Optional[str] = None, assistant_last: bool = True
 ) -> List[Dict[str, str]]:
@@ -308,7 +108,7 @@ class VoiceDataset(SizedIterableDataset):
     Wraps a Hugging Face dataset or MDS-formatted dataset from GCP.
     """
 
-    def __init__(self, args: VoiceDatasetArgs) -> None:
+    def __init__(self, args: types.VoiceDatasetArgs) -> None:
         super().__init__()
         self._args = args
         self._rng = np.random.default_rng(self._args.shuffle_seed)
@@ -340,7 +140,7 @@ class VoiceDataset(SizedIterableDataset):
         )
         if audio_field is not None:
             dataset = dataset.cast_column(
-                audio_field, hf_datasets.Audio(sampling_rate=SAMPLE_RATE)
+                audio_field, hf_datasets.Audio(sampling_rate=types.SAMPLE_RATE)
             )
         if self._args.shuffle:
             dataset = dataset.shuffle(seed=self._args.shuffle_seed)
@@ -388,10 +188,10 @@ class VoiceDataset(SizedIterableDataset):
                     raise ValueError(f"Audio length is 0 for sample {sample}")
                 if (
                     self._args.max_audio_duration_secs is not None
-                    and sample.audio.shape[-1] / SAMPLE_RATE
+                    and sample.audio.shape[-1] / types.SAMPLE_RATE
                     > self._args.max_audio_duration_secs
                 ):
-                    duration = sample.audio.shape[-1] / SAMPLE_RATE
+                    duration = sample.audio.shape[-1] / types.SAMPLE_RATE
                     warnings.warn(
                         f"Audio length ({duration}s) exceeds max audio duration ({self._args.max_audio_duration_secs}s), skipping sample."
                     )
@@ -409,7 +209,9 @@ class VoiceDataset(SizedIterableDataset):
             )
 
     @abc.abstractmethod
-    def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
+    def _get_sample(
+        self, row: transformers.BatchFeature
+    ) -> Optional[types.VoiceSample]:
         """
         Converts a row from the dataset into a VoiceSample.
         Returns None if the sample should be skipped.
@@ -428,7 +230,7 @@ class VoiceDataset(SizedIterableDataset):
             sampling_rate = row[f"{column_name}_sampling_rate"]
         else:
             raise ValueError("No audio field found in row.")
-        assert sampling_rate == SAMPLE_RATE
+        assert sampling_rate == types.SAMPLE_RATE
         return audio
 
     def _make_messages(
@@ -441,14 +243,16 @@ class VoiceDataset(SizedIterableDataset):
         messages: List[Dict[str, str]],
         audio: np.ndarray,
         audio_transcript: Optional[str] = None,
-    ) -> VoiceSample:
+    ) -> types.VoiceSample:
         if not self._args.include_audio:
-            return VoiceSample(messages)
-        return VoiceSample(messages, audio, audio_transcript=audio_transcript)
+            return types.VoiceSample(messages)
+        return types.VoiceSample(messages, audio, audio_transcript=audio_transcript)
 
 
 class GenericDataset(VoiceDataset):
-    def __init__(self, args: VoiceDatasetArgs, config: DatasetConfig) -> None:
+    def __init__(
+        self, args: types.VoiceDatasetArgs, config: types.DatasetConfig
+    ) -> None:
         assert config.splits is not None
         assert config.path is not None
         assert config.mds_batch_size is not None
@@ -480,7 +284,7 @@ class GenericDataset(VoiceDataset):
         dataset = ds if len(dsets) == 1 else hf_datasets.concatenate_datasets(dsets)
         super()._init_dataset(dataset, total_samples)
 
-    def _get_sample(self, row) -> Optional[VoiceSample]:
+    def _get_sample(self, row) -> Optional[types.VoiceSample]:
         assert self._config.user_template is not None
         assert self._config.user_template_args is not None
         assert self._config.assistant_template is not None
@@ -510,14 +314,16 @@ class GenericDataset(VoiceDataset):
                 "Template rendering failed. Make sure all keys in the template exist in the sample."
             ) from e
         if not self._args.include_audio:
-            user_content = user_content.replace(AUDIO_PLACEHOLDER, f'"{transcript}"')
+            user_content = user_content.replace(
+                types.AUDIO_PLACEHOLDER, f'"{transcript}"'
+            )
         messages = _get_messages(user_content, assistant_content)
         audio = self._get_audio(row, self._config.audio_field)
         return self._make_sample(messages, audio, audio_transcript=transcript)
 
 
 class LibriSpeechDummyDataset(VoiceDataset):
-    def __init__(self, args: VoiceDatasetArgs) -> None:
+    def __init__(self, args: types.VoiceDatasetArgs) -> None:
         super().__init__(args)
         # This dataset doesn't support streaming.
         dataset = self._load_hf_dataset(
@@ -528,10 +334,14 @@ class LibriSpeechDummyDataset(VoiceDataset):
         )
         self._init_dataset(dataset, 73)
 
-    def _get_sample(self, row: transformers.BatchFeature) -> Optional[VoiceSample]:
+    def _get_sample(
+        self, row: transformers.BatchFeature
+    ) -> Optional[types.VoiceSample]:
         text = text_proc.format_asr_text(row["text"])
         user_content = "Transcribe\n"
-        user_content += AUDIO_PLACEHOLDER if self._args.include_audio else f'"{text}"'
+        user_content += (
+            types.AUDIO_PLACEHOLDER if self._args.include_audio else f'"{text}"'
+        )
         return self._make_sample(
             self._make_messages(user_content, text),
             self._get_audio(row, "audio"),
@@ -630,7 +440,7 @@ class Dataproc(SizedIterableDataset):
         self._dataset = dataset
 
     @abc.abstractmethod
-    def _process(self, sample: VoiceSample) -> Dict[str, Any]:
+    def _process(self, sample: types.VoiceSample) -> Dict[str, Any]:
         pass
 
     def __iter__(self):
@@ -659,396 +469,3 @@ class Range(SizedIterableDataset):
 
     def __len__(self):
         return self._length
-
-
-CONTINUATION_USER_TEMPLATE = (
-    f"Continue the following text using less than 50 words:\n\n{AUDIO_PLACEHOLDER}"
-)
-CONTINUATION_ASSISTANT_TEMPLATE = "{{continuation}}"
-TRANSCRIPTION_USER_TEMPLATE = f"Transcribe\n{AUDIO_PLACEHOLDER}"
-
-BOOLQ_CONFIG = DatasetConfig(
-    name="boolq",
-    path="fixie-ai/boolq-audio",
-    splits=[
-        DatasetSplitConfig(name="train", num_samples=10000),
-        DatasetSplitConfig(name="validation", num_samples=1000),
-    ],
-    user_template="{{passage}}\n\n{AUDIO_PLACEHOLDER}",
-    assistant_template="{{'True' if answer else 'False'}}",
-    transcript_template="{{question}}",
-)
-
-CV_BASE_CONFIG = DatasetConfig(
-    name="commonvoice",
-    path="fixie-ai/common_voice_17_0",
-    assistant_template="{{sentence}}",
-    transcript_template="{{sentence}}",
-)
-
-CV_EN_CONFIG = DatasetConfig(
-    name="commonvoice-en",
-    base="commonvoice",
-    subset="en",
-    splits=[DatasetSplitConfig(name="train", num_samples=1_101_170)],
-)
-
-CV_AR_CONFIG = DatasetConfig(
-    name="commonvoice-ar",
-    base="commonvoice",
-    subset="ar",
-    splits=[DatasetSplitConfig(name="train", num_samples=28_369)],
-)
-
-CV_DE_CONFIG = DatasetConfig(
-    name="commonvoice-de",
-    base="commonvoice",
-    subset="de",
-    splits=[DatasetSplitConfig(name="train", num_samples=589_100)],
-)
-
-CV_ES_CONFIG = DatasetConfig(
-    name="commonvoice-es",
-    base="commonvoice",
-    subset="es",
-    splits=[DatasetSplitConfig(name="train", num_samples=336_846)],
-)
-
-CV_FR_CONFIG = DatasetConfig(
-    name="commonvoice-fr",
-    base="commonvoice",
-    subset="fr",
-    splits=[DatasetSplitConfig(name="train", num_samples=558_054)],
-)
-
-CV_IT_CONFIG = DatasetConfig(
-    name="commonvoice-it",
-    base="commonvoice",
-    subset="it",
-    splits=[DatasetSplitConfig(name="train", num_samples=169_771)],
-)
-
-CV_JA_CONFIG = DatasetConfig(
-    name="commonvoice-ja",
-    base="commonvoice",
-    subset="ja",
-    splits=[DatasetSplitConfig(name="train", num_samples=10_039)],
-)
-
-CV_PT_CONFIG = DatasetConfig(
-    name="commonvoice-pt",
-    base="commonvoice",
-    subset="pt",
-    splits=[DatasetSplitConfig(name="train", num_samples=21_968)],
-)
-
-CV_RU_CONFIG = DatasetConfig(
-    name="commonvoice-ru",
-    base="commonvoice",
-    subset="ru",
-    splits=[DatasetSplitConfig(name="train", num_samples=26_377)],
-)
-
-GS_XL_CONFIG = DatasetConfig(
-    name="gigaspeech",
-    path="speechcolab/gigaspeech",
-    subset="xl",
-    splits=[
-        DatasetSplitConfig(name="train", num_samples=1_000_000),
-        DatasetSplitConfig(name="validation", num_samples=10_000),
-    ],
-    assistant_template="{{text_proc.format_asr_text(text)}}",
-    transcript_template="{{text_proc.format_asr_text(text)}}",
-)
-
-LS_BASE_CONFIG = DatasetConfig(
-    name="librispeech",
-    path="fixie-ai/librispeech_asr",
-    assistant_template="{{text_proc.format_asr_text(text)}}",
-    transcript_template="{{text_proc.format_asr_text(text)}}",
-)
-
-LS_CLEAN_CONFIG = DatasetConfig(
-    name="librispeech-clean",
-    base="librispeech",
-    subset="clean",
-    splits=[
-        DatasetSplitConfig(name="train.100", num_samples=28_539),
-        DatasetSplitConfig(name="train.360", num_samples=104_014),
-    ],
-)
-
-LS_OTHER_CONFIG = DatasetConfig(
-    name="librispeech-other",
-    base="librispeech",
-    subset="other",
-    splits=[
-        DatasetSplitConfig(name="train.500", num_samples=148_688),
-    ],
-)
-
-PS_CLEAN_CONFIG = DatasetConfig(
-    name="peoplespeech",
-    path="fixie-ai/peoples_speech",
-    subset="clean",
-    splits=[
-        DatasetSplitConfig(name="train", num_samples=1_000_000),
-        DatasetSplitConfig(name="validation", num_samples=10_000),
-    ],
-)
-
-# SODA_CONFIG = DatasetConfig(
-#     name="soda",
-#     path="fixie-ai/soda-audio",
-#     splits=[
-#         DatasetSplitConfig(name="train", num_samples=1_000_000),
-#         DatasetSplitConfig(name="validation", num_samples=10_000),
-#     ],
-#     # Need way to specify message history.
-#     audio_field="audio_second_last_turn",
-#     assistant_template="{{alt_last_turn}}",
-#     transcript_template="{{turns[-2]}}",
-# )
-
-VP_EN_CONFIG = DatasetConfig(
-    name="voxpopuli-en",
-    path="facebook/voxpopuli",
-    subset="en",
-    splits=[
-        DatasetSplitConfig(name="train", num_samples=1_000_000),
-        DatasetSplitConfig(name="validation", num_samples=10_000),
-    ],
-    assistant_template="{{raw_text}}",
-    transcript_template="{{raw_text}}",
-)
-
-CV_EN_TRANS_CONFIG = DatasetConfig(
-    name="commonvoice-en-transcription",
-    base="commonvoice-en",
-    user_template=TRANSCRIPTION_USER_TEMPLATE,
-)
-CV_AR_TRANS_CONFIG = DatasetConfig(
-    name="commonvoice-ar-transcription",
-    base="commonvoice-ar",
-    user_template=TRANSCRIPTION_USER_TEMPLATE,
-)
-CV_DE_TRANS_CONFIG = DatasetConfig(
-    name="commonvoice-de-transcription",
-    base="commonvoice-de",
-    user_template=TRANSCRIPTION_USER_TEMPLATE,
-)
-CV_ES_TRANS_CONFIG = DatasetConfig(
-    name="commonvoice-es-transcription",
-    base="commonvoice-es",
-    user_template=TRANSCRIPTION_USER_TEMPLATE,
-)
-CV_FR_TRANS_CONFIG = DatasetConfig(
-    name="commonvoice-fr-transcription",
-    base="commonvoice-fr",
-    user_template=TRANSCRIPTION_USER_TEMPLATE,
-)
-CV_IT_TRANS_CONFIG = DatasetConfig(
-    name="commonvoice-it-transcription",
-    base="commonvoice-it",
-    user_template=TRANSCRIPTION_USER_TEMPLATE,
-)
-CV_JA_TRANS_CONFIG = DatasetConfig(
-    name="commonvoice-ja-transcription",
-    base="commonvoice-ja",
-    user_template=TRANSCRIPTION_USER_TEMPLATE,
-)
-CV_PT_TRANS_CONFIG = DatasetConfig(
-    name="commonvoice-pt-transcription",
-    base="commonvoice-pt",
-    user_template=TRANSCRIPTION_USER_TEMPLATE,
-)
-CV_RU_TRANS_CONFIG = DatasetConfig(
-    name="commonvoice-ru-transcription",
-    base="commonvoice-ru",
-    user_template=TRANSCRIPTION_USER_TEMPLATE,
-)
-
-LS_CLEAN_TRANS_CONFIG = DatasetConfig(
-    name="librispeech-clean-transcription",
-    base="librispeech-clean",
-    user_template=TRANSCRIPTION_USER_TEMPLATE,
-)
-LS_OTHER_TRANS_CONFIG = DatasetConfig(
-    name="librispeech-other-transcription",
-    base="librispeech-other",
-    user_template=TRANSCRIPTION_USER_TEMPLATE,
-)
-
-PS_CLEAN_TRANS_CONFIG = DatasetConfig(
-    name="peoplespeech-clean-transcription",
-    base="peoplespeech",
-    user_template=TRANSCRIPTION_USER_TEMPLATE,
-)
-
-CV_EN_CONT_CONFIG = DatasetConfig(
-    name="commonvoice-en-continuation",
-    base="commonvoice-en",
-    user_template=CONTINUATION_USER_TEMPLATE,
-    assistant_template=CONTINUATION_ASSISTANT_TEMPLATE,
-)
-CV_AR_CONT_CONFIG = DatasetConfig(
-    name="commonvoice-ar-continuation",
-    base="commonvoice-ar",
-    user_template=CONTINUATION_USER_TEMPLATE,
-    assistant_template=CONTINUATION_ASSISTANT_TEMPLATE,
-)
-CV_DE_CONT_CONFIG = DatasetConfig(
-    name="commonvoice-de-continuation",
-    base="commonvoice-de",
-    user_template=CONTINUATION_USER_TEMPLATE,
-    assistant_template=CONTINUATION_ASSISTANT_TEMPLATE,
-)
-CV_ES_CONT_CONFIG = DatasetConfig(
-    name="commonvoice-es-continuation",
-    base="commonvoice-es",
-    user_template=CONTINUATION_USER_TEMPLATE,
-    assistant_template=CONTINUATION_ASSISTANT_TEMPLATE,
-)
-CV_FR_CONT_CONFIG = DatasetConfig(
-    name="commonvoice-fr-continuation",
-    base="commonvoice-fr",
-    user_template=CONTINUATION_USER_TEMPLATE,
-    assistant_template=CONTINUATION_ASSISTANT_TEMPLATE,
-)
-CV_IT_CONT_CONFIG = DatasetConfig(
-    name="commonvoice-it-continuation",
-    base="commonvoice-it",
-    user_template=CONTINUATION_USER_TEMPLATE,
-    assistant_template=CONTINUATION_ASSISTANT_TEMPLATE,
-)
-CV_JA_CONT_CONFIG = DatasetConfig(
-    name="commonvoice-ja-continuation",
-    base="commonvoice-ja",
-    user_template=CONTINUATION_USER_TEMPLATE,
-    assistant_template=CONTINUATION_ASSISTANT_TEMPLATE,
-)
-CV_PT_CONT_CONFIG = DatasetConfig(
-    name="commonvoice-pt-continuation",
-    base="commonvoice-pt",
-    user_template=CONTINUATION_USER_TEMPLATE,
-    assistant_template=CONTINUATION_ASSISTANT_TEMPLATE,
-)
-CV_RU_CONT_CONFIG = DatasetConfig(
-    name="commonvoice-ru-continuation",
-    base="commonvoice-ru",
-    user_template=CONTINUATION_USER_TEMPLATE,
-    assistant_template=CONTINUATION_ASSISTANT_TEMPLATE,
-)
-
-LS_CLEAN_CONT_CONFIG = DatasetConfig(
-    name="librispeech-clean-continuation",
-    base="librispeech-clean",
-    user_template=CONTINUATION_USER_TEMPLATE,
-    assistant_template=CONTINUATION_ASSISTANT_TEMPLATE,
-)
-LS_OTHER_CONT_CONFIG = DatasetConfig(
-    name="librispeech-other-continuation",
-    base="librispeech-other",
-    user_template=CONTINUATION_USER_TEMPLATE,
-    assistant_template=CONTINUATION_ASSISTANT_TEMPLATE,
-)
-
-PS_CLEAN_CONT_CONFIG = DatasetConfig(
-    name="peoplespeech-clean-continuation",
-    base="peoplespeech",
-    user_template=CONTINUATION_USER_TEMPLATE,
-    assistant_template=CONTINUATION_ASSISTANT_TEMPLATE,
-)
-
-INTERNAL_DATASETS = [
-    BOOLQ_CONFIG,
-    CV_BASE_CONFIG,
-    CV_EN_CONFIG,
-    CV_AR_CONFIG,
-    CV_DE_CONFIG,
-    CV_ES_CONFIG,
-    CV_FR_CONFIG,
-    CV_IT_CONFIG,
-    CV_JA_CONFIG,
-    CV_PT_CONFIG,
-    CV_RU_CONFIG,
-    CV_EN_TRANS_CONFIG,
-    CV_AR_TRANS_CONFIG,
-    CV_DE_TRANS_CONFIG,
-    CV_ES_TRANS_CONFIG,
-    CV_FR_TRANS_CONFIG,
-    CV_IT_TRANS_CONFIG,
-    CV_JA_TRANS_CONFIG,
-    CV_PT_TRANS_CONFIG,
-    CV_RU_TRANS_CONFIG,
-    CV_EN_CONT_CONFIG,
-    CV_AR_CONT_CONFIG,
-    CV_DE_CONT_CONFIG,
-    CV_ES_CONT_CONFIG,
-    CV_FR_CONT_CONFIG,
-    CV_IT_CONT_CONFIG,
-    CV_JA_CONT_CONFIG,
-    CV_PT_CONT_CONFIG,
-    CV_RU_CONT_CONFIG,
-    GS_XL_CONFIG,
-    LS_BASE_CONFIG,
-    LS_CLEAN_CONFIG,
-    LS_OTHER_CONFIG,
-    LS_CLEAN_TRANS_CONFIG,
-    LS_OTHER_TRANS_CONFIG,
-    LS_CLEAN_CONT_CONFIG,
-    LS_OTHER_CONT_CONFIG,
-    PS_CLEAN_CONFIG,
-    PS_CLEAN_TRANS_CONFIG,
-    PS_CLEAN_CONT_CONFIG,
-    VP_EN_CONFIG,
-]
-DATASET_MAP: Dict[str, DatasetConfig] = {}
-
-
-def register_datasets(datasets: List[DatasetConfig]):
-    for config in datasets:
-        name = config.name
-        assert name not in DATASET_MAP, f"Dataset {name} already registered"
-        DATASET_MAP[name] = config
-
-
-def unregister_datasets(datasets: List[str]):
-    for name in datasets:
-        del DATASET_MAP[name]
-
-
-def _merge_configs(configs: List[DatasetConfig]) -> DatasetConfig:
-    merged_config = dataclasses.replace(configs[0])
-    for config in configs[1:]:
-        for field in dataclasses.fields(config):
-            value = getattr(config, field.name)
-            if field.name != "base" and value is not None:
-                merged_config = dataclasses.replace(
-                    merged_config, **{field.name: value}
-                )
-    return merged_config
-
-
-def create_dataset(name: str, args: VoiceDatasetArgs) -> SizedIterableDataset:
-    if name == "dummy":
-        return LibriSpeechDummyDataset(args)
-    assert name in DATASET_MAP, f"Unknown dataset: {name}"
-    # Make a list of configs from root->base.
-    configs: List[DatasetConfig] = []
-    temp: Optional[str] = name
-    while temp:
-        config = DATASET_MAP[temp]
-        configs.insert(0, config)
-        temp = config.base
-    # Set the root config, and then apply any non-None overrides from the subclasses.
-    merged_config = _merge_configs(configs)
-    # Sanity check.
-    if not merged_config.path:
-        raise ValueError(f"Dataset {name} has no path")
-    if not merged_config.splits:
-        raise ValueError(f"Dataset {name} has no splits")
-    return GenericDataset(args, merged_config)
-
-
-register_datasets(INTERNAL_DATASETS)

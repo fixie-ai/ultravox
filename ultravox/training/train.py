@@ -18,7 +18,7 @@ import transformers
 import wandb
 import wandb.sdk
 
-from ultravox.data import datasets
+from ultravox import data as datasets
 from ultravox.model import data_processing
 from ultravox.model import ultravox_config
 from ultravox.model import ultravox_model

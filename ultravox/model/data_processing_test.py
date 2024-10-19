@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import torch
 
-from ultravox.data import datasets
+from ultravox import data as datasets
 from ultravox.model import data_processing
 
 TEST_USER_MESSAGE = {
