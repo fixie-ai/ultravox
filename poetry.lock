@@ -1612,6 +1612,7 @@ tqdm = "*"
 transformers = {version = "*", extras = ["torch"]}
 types-PyYAML = "*"
 types-tqdm = "*"
+websockets = "*"
 zstandard = "*"
 
 [package.extras]
@@ -1621,8 +1622,8 @@ torch = ["torch"]
 [package.source]
 type = "git"
 url = "https://github.com/fixie-ai/evals"
-reference = "0c66bf85df7a4b903ecb202b23c2a826b749fd71"
-resolved_reference = "0c66bf85df7a4b903ecb202b23c2a826b749fd71"
+reference = "7d2a02c21eabcfaad58af18b3f06b3beda5b86f5"
+resolved_reference = "7d2a02c21eabcfaad58af18b3f06b3beda5b86f5"
 
 [[package]]
 name = "evaluate"
@@ -1974,7 +1975,6 @@ description = "Python AST that abstracts the underlying Python version"
 optional = false
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,>=2.7"
 files = [
-    {file = "gast-0.6.0-py3-none-any.whl", hash = "sha256:52b182313f7330389f72b069ba00f174cfe2a06411099547288839c6cbafbd54"},
     {file = "gast-0.6.0.tar.gz", hash = "sha256:88fc5300d32c7ac6ca7b515310862f71e6fdf2c029bbec7c66c0f5dd47b6b1fb"},
 ]
 
@@ -8945,4 +8945,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10,<4.0"
-content-hash = "c4693b73dfa41331ab316421304ca68f344c4c8ce00ca7036b126d1277a79ae2"
+content-hash = "53c5bd0110b69d52c69d87bf3413767830d35b285b5c48ffb89e6abb9700c5f8"

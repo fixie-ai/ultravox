@@ -61,6 +61,9 @@ gradio *FLAGS:
 run *FLAGS:
     poetry run mcli run -f mcloud.yaml --follow {{FLAGS}}
 
+vllm_eval *FLAGS:
+    poetry run mcli run -f mcloud_eval.yaml --follow {{FLAGS}}
+
 mcloud *FLAGS:
     poetry run mcli interactive {{FLAGS}} --cluster ${MCLOUD_CLUSTER} --instance ${MCLOUD_INSTANCE}  --name `whoami` --command "bash -c \"$(cat setup.sh)\"" 
 

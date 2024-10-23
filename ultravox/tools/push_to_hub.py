@@ -27,6 +27,8 @@ class UploadToHubArgs:
     data_type: Optional[str] = None
     # Public or private (default)
     private: bool = True
+    # Verify the model after uploading
+    verify: bool = True
 
 
 def main(args: UploadToHubArgs):
@@ -45,16 +47,17 @@ def main(args: UploadToHubArgs):
     print("Uploading model to HuggingFace Hub...")
     pipe.push_to_hub(args.hf_upload_model, private=args.private)
 
-    print("Model uploaded. Testing model...")
-    loaded_pipe = transformers.pipeline(
-        model=args.hf_upload_model, trust_remote_code=True
-    )
-    ds = datasets.BoolQDataset(datasets.VoiceDatasetArgs())
-    sample = next(iter(ds))
-    generated = loaded_pipe(
-        {"audio": sample.audio, "turns": sample.messages[:-1]}, max_new_tokens=10
-    )
-    print(f"Generated (max 10 tokens): {generated}")
+    if args.verify:
+        print("Model uploaded. Testing model...")
+        loaded_pipe = transformers.pipeline(
+            model=args.hf_upload_model, trust_remote_code=True
+        )
+        ds = datasets.BoolQDataset(datasets.VoiceDatasetArgs())
+        sample = next(iter(ds))
+        generated = loaded_pipe(
+            {"audio": sample.audio, "turns": sample.messages[:-1]}, max_new_tokens=10
+        )
+        print(f"Generated (max 10 tokens): {generated}")
 
 
 if __name__ == "__main__":
