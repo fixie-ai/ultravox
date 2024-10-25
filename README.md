@@ -94,6 +94,7 @@ mcli set api-key <new-value>
 ```bash
 # Huggging Face token for accessing walled data and models
 mcli create secret env HF_TOKEN=hf_<your_token>
+mcli create secret env HF_WRITE_TOKEN=hf_<your_token_with_write_access>
 
 # WandB token for logging experiments
 mcli create secret env WANDB_PROJECT=ultravox
