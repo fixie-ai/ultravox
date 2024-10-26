@@ -3,7 +3,6 @@ import base64
 import dataclasses
 import enum
 import io
-import itertools
 import logging
 import os
 import tempfile
@@ -550,77 +549,48 @@ class EmptyDataset(SizedIterableDataset):
         return self._length
 
 
-class StopStrategy(str, enum.Enum):
-    FIRST_EXHAUSTED = "FIRST_EXHAUSTED"
-    LAST_EXHAUSTED = "LAST_EXHAUSTED"
-    NEVER_STOP = "NEVER_STOP"
-
-
 class InterleaveDataset(SizedIterableDataset):
-    """Interleaves multiple IterableDataset objects based on normalized weights."""
+    """Interleaves multiple SizedIterableDataset objects based on normalized weights."""
 
     def __init__(
         self,
         datasets: Sequence[SizedIterableDataset],
         weights: Optional[Sequence[float]] = None,
-        stop_strategy: StopStrategy = StopStrategy.LAST_EXHAUSTED,
-        seed: Optional[int] = 42,
-        static: bool = False,
     ) -> None:
         """
         Args:
             datasets: A list of SizedIterableDataset objects.
-            weights: A list of weights for each dataset.
-            stop_strategy: Strategy for stopping iteration.
+            weights: An optional list of dataset weights, i.e., the number of times it should be repeated.
             seed: Optional seed for reproducibility.
-            static: If true, the datasets are interleaved in a static order with equal weights.
         """
         self._datasets = datasets
-        self._rng = np.random.default_rng(seed)
-        self._static = static
-        self._stop_strategy = stop_strategy
-
-        if weights is None:
+        if weights is not None:
+            assert len(weights) == len(datasets)
+        else:
             weights = [1.0] * len(datasets)
-        total_weight = sum(weights)
-        self._normalized_probs = [w / total_weight for w in weights]
+        self._weighted_samples = [int(w * len(d)) for w, d in zip(weights, datasets)]
+        self._total_samples = sum(self._weighted_samples)
 
     def __iter__(self):
-        # If no datasets are provided, return an empty iterator
-        if not self._datasets:
-            return
-
-        iters = [iter(ds) for ds in self._datasets]
-        exhausted = [False] * len(iters)
-
-        if self._static:
-            static_iter = itertools.cycle(range(len(self._datasets)))
-
-        while True:
-            if self._static:
-                iter_index = next(static_iter)
-            else:
-                iter_index = self._rng.choice(len(iters), p=self._normalized_probs)
-
+        ds_iters = [iter(ds) for ds in self._datasets]
+        ds_pos = [0] * len(ds_iters)
+        # Find the iterator that is least far along and vend from it.
+        for i in range(self._total_samples):
+            min_fraction = 1.0
+            for j in range(len(ds_iters)):
+                iter_fraction = ds_pos[j] / self._weighted_samples[j]
+                if iter_fraction < min_fraction:
+                    min_fraction = iter_fraction
+                    iter_index = j
             try:
-                yield next(iters[iter_index])
+                yield next(ds_iters[iter_index])
             except StopIteration:
-                exhausted[iter_index] = True
-
-                # Check if stopping condition is met
-                if self._stop_strategy == StopStrategy.FIRST_EXHAUSTED or (
-                    self._stop_strategy == StopStrategy.LAST_EXHAUSTED
-                    and all(exhausted)
-                ):
-                    break
-
-                # Recreate the iterator if stopping condition is not met and yield the next sample
-                iters[iter_index] = iter(self._datasets[iter_index])
-                yield next(iters[iter_index])
+                ds_iters[iter_index] = iter(self._datasets[iter_index])
+                yield next(ds_iters[iter_index])
+            ds_pos[iter_index] += 1
 
     def __len__(self):
-        # TODO: Implement the length method for different stop strategies
-        return sum(len(ds) for ds in self._datasets)
+        return self._total_samples
 
 
 class Dataproc(SizedIterableDataset):
