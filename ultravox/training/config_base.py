@@ -50,17 +50,12 @@ class TrainConfig:
     do_train: bool = True
     do_eval: bool = True
 
-    # In InterleaveDataset, when to stop interleave: choose from last_exhausted (default), first_exhausted, or never_stop
-    stop_strategy: datasets.StopStrategy = datasets.StopStrategy.LAST_EXHAUSTED
-    data_dir: Optional[str] = None
-    mds: bool = False
     num_samples: Optional[int] = None
     val_num_samples: int = 100
     eval_num_samples: int = 100
     eval_max_new_tokens: Optional[int] = None
     eval_num_procs: int = 8
     eval_text_only: bool = False
-    num_prompts: int = 1
     # number of data loader workers
     num_workers: int = 8 if torch.cuda.is_available() else 1
     train_on_inputs: bool = False

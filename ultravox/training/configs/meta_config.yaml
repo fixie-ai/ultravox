@@ -6,7 +6,6 @@ train_sets:
 val_sets:
   - name: gigaspeech
   - weight: 0.01
-stop_strategy: "LAST_EXHAUSTED"
 
 train_on_inputs: False
 shuffle_data: True
