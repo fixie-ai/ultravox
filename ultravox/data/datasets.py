@@ -17,6 +17,7 @@ import torch.nn.functional as F
 import transformers
 from torch.utils import data
 
+from ultravox.data import data_sample
 from ultravox.data import text_proc
 from ultravox.data import types
 
@@ -140,7 +141,7 @@ class VoiceDataset(SizedIterableDataset):
         )
         if audio_field is not None:
             dataset = dataset.cast_column(
-                audio_field, hf_datasets.Audio(sampling_rate=types.SAMPLE_RATE)
+                audio_field, hf_datasets.Audio(sampling_rate=data_sample.SAMPLE_RATE)
             )
         if self._args.shuffle:
             dataset = dataset.shuffle(seed=self._args.shuffle_seed)
@@ -211,7 +212,7 @@ class VoiceDataset(SizedIterableDataset):
     @abc.abstractmethod
     def _get_sample(
         self, row: transformers.BatchFeature
-    ) -> Optional[types.VoiceSample]:
+    ) -> Optional[data_sample.VoiceSample]:
         """
         Converts a row from the dataset into a VoiceSample.
         Returns None if the sample should be skipped.
@@ -230,7 +231,7 @@ class VoiceDataset(SizedIterableDataset):
             sampling_rate = row[f"{column_name}_sampling_rate"]
         else:
             raise ValueError("No audio field found in row.")
-        assert sampling_rate == types.SAMPLE_RATE
+        assert sampling_rate == data_sample.SAMPLE_RATE
         return audio
 
     def _make_messages(
@@ -243,10 +244,12 @@ class VoiceDataset(SizedIterableDataset):
         messages: List[Dict[str, str]],
         audio: np.ndarray,
         audio_transcript: Optional[str] = None,
-    ) -> types.VoiceSample:
+    ) -> data_sample.VoiceSample:
         if not self._args.include_audio:
-            return types.VoiceSample(messages)
-        return types.VoiceSample(messages, audio, audio_transcript=audio_transcript)
+            return data_sample.VoiceSample(messages)
+        return data_sample.VoiceSample(
+            messages, audio, audio_transcript=audio_transcript
+        )
 
 
 class GenericDataset(VoiceDataset):
@@ -284,7 +287,7 @@ class GenericDataset(VoiceDataset):
         dataset = ds if len(dsets) == 1 else hf_datasets.concatenate_datasets(dsets)
         super()._init_dataset(dataset, total_samples)
 
-    def _get_sample(self, row) -> Optional[types.VoiceSample]:
+    def _get_sample(self, row) -> Optional[data_sample.VoiceSample]:
         assert self._config.user_template is not None
         assert self._config.user_template_args is not None
         assert self._config.assistant_template is not None
@@ -336,7 +339,7 @@ class LibriSpeechDummyDataset(VoiceDataset):
 
     def _get_sample(
         self, row: transformers.BatchFeature
-    ) -> Optional[types.VoiceSample]:
+    ) -> Optional[data_sample.VoiceSample]:
         text = text_proc.format_asr_text(row["text"])
         user_content = "Transcribe\n"
         user_content += (
@@ -440,7 +443,7 @@ class Dataproc(SizedIterableDataset):
         self._dataset = dataset
 
     @abc.abstractmethod
-    def _process(self, sample: types.VoiceSample) -> Dict[str, Any]:
+    def _process(self, sample: data_sample.VoiceSample) -> Dict[str, Any]:
         pass
 
     def __iter__(self):

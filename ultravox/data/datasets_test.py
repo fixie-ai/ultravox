@@ -1,5 +1,5 @@
 import itertools
-from typing import Optional, Union
+from typing import Optional
 
 import datasets as hf_datasets
 import numpy as np
@@ -8,6 +8,7 @@ import torch
 from torch.utils import data
 from transformers.feature_extraction_utils import BatchFeature
 
+from ultravox.data import data_sample
 from ultravox.data import datasets
 from ultravox.data import registry
 from ultravox.data import types
@@ -52,7 +53,7 @@ class FakeTranscribeDataset(datasets.VoiceDataset):
         super().__init__(args or types.VoiceDatasetArgs())
         self._init_dataset(FakeHuggingFaceIterableDataset(n), n)
 
-    def _get_sample(self, row: BatchFeature) -> Optional[types.VoiceSample]:
+    def _get_sample(self, row: BatchFeature) -> Optional[data_sample.VoiceSample]:
         messages = self._make_messages("<|audio|>", row["text"])
         return self._make_sample(messages, np.zeros(256), row["text"])
 
@@ -201,7 +202,7 @@ def test_transcribe_dataset():
     ds = FakeTranscribeDataset(5)
     assert len(ds) == 5
     sample = next(iter(ds))
-    assert isinstance(sample, types.VoiceSample)
+    assert isinstance(sample, data_sample.VoiceSample)
     assert sample.messages == [
         {"role": "user", "content": "<|audio|>"},
         {"role": "assistant", "content": "0"},
@@ -273,7 +274,7 @@ def test_generic_dataset():
     ds = FakeGenericDataset(5, config)
     assert len(ds) == 5
     sample = next(iter(ds))
-    assert isinstance(sample, types.VoiceSample)
+    assert isinstance(sample, data_sample.VoiceSample)
     assert sample.messages == [
         {"role": "user", "content": "<|audio|>"},
         {"role": "assistant", "content": "0"},
@@ -295,7 +296,7 @@ def test_generic_dataset_custom_templates():
     ds = FakeGenericDataset(5, config)
     assert len(ds) == 5
     sample = next(iter(ds))
-    assert isinstance(sample, types.VoiceSample)
+    assert isinstance(sample, data_sample.VoiceSample)
     assert sample.messages == [
         {
             "role": "user",
@@ -318,7 +319,7 @@ def test_generic_dataset_text_only():
     ds = FakeGenericDataset(5, config, types.VoiceDatasetArgs(include_audio=False))
     assert len(ds) == 5
     sample = next(iter(ds))
-    assert isinstance(sample, types.VoiceSample)
+    assert isinstance(sample, data_sample.VoiceSample)
     assert sample.messages == [
         {"role": "user", "content": 'Transcribe\n"0"'},
         {"role": "assistant", "content": "0"},
@@ -398,82 +399,6 @@ def test_generic_dataset_multiple_splits():
         100, config, types.VoiceDatasetArgs(split=types.DatasetSplit.VALIDATION)
     )
     assert len(ds) == 10
-
-
-def _create_sine_wave(
-    freq: int = 440,
-    duration: float = 1.0,
-    sample_rate: int = 16000,
-    amplitude: float = 0.1,
-    target_dtype: str = "float32",
-) -> Union[
-    np.typing.NDArray[np.float32],
-    np.typing.NDArray[np.float64],
-    np.typing.NDArray[np.int16],
-    np.typing.NDArray[np.int32],
-]:
-    t = np.arange(sample_rate * duration, dtype=np.float32) / sample_rate
-    wave = amplitude * np.sin(2 * np.pi * freq * t)
-    match target_dtype:
-        case "int16":
-            wave = np.int16(wave * 32767)
-        case "int32":
-            wave = np.int32(wave * 2147483647)
-        case "float32":
-            # Already float32, nothing needed.
-            pass
-        case "float64":
-            wave = wave.astype(np.float64)
-        case _:
-            raise ValueError(f"Unsupported dtype: {target_dtype}")
-    return wave
-
-
-def _create_and_validate_sample(target_dtype: str = "float32"):
-    # Create a sine wave at 440 Hz with a duration of 1.0 second, sampled at 16
-    # kHz, with an amplitude of 0.1, and the specified dtype.
-    array = _create_sine_wave(target_dtype=target_dtype)
-    sample = types.VoiceSample.from_prompt_and_raw(
-        "Transcribe\n<|audio|>", array, 16000
-    )
-    assert sample.sample_rate == 16000
-    assert sample.audio is not None, "sample.audio should not be None"
-    assert len(sample.audio) == 16000
-    assert sample.audio.dtype == np.float32
-    assert sample.messages == [
-        {"role": "user", "content": "Transcribe\n<|audio|>"},
-    ]
-    # Serialize and deserialize the sample.
-    json = sample.to_json()
-    sample2 = types.VoiceSample.from_json(json)
-    assert sample2.sample_rate == sample.sample_rate
-    assert sample2.audio is not None, "sample2.audio should not be None"
-    assert len(sample2.audio) == len(sample.audio)
-    assert sample2.audio.dtype == sample.audio.dtype
-    assert sample2.messages == sample.messages
-    assert np.allclose(sample2.audio, sample.audio, rtol=0.0001, atol=0.0001)
-
-
-def test_create_sample__int16():
-    _create_and_validate_sample("int16")
-
-
-def test_create_sample__int32():
-    _create_and_validate_sample("int32")
-
-
-def test_create_sample__float32():
-    _create_and_validate_sample("float32")
-
-
-def test_create_sample__float64():
-    _create_and_validate_sample("float64")
-
-
-def test_create_sample__raises_on_unsupported_dtype():
-    with pytest.raises(AssertionError):
-        array = np.ndarray(shape=(16000,), dtype=np.uint8)
-        _ = types.VoiceSample.from_prompt_and_raw("Transcribe\n<|audio|>", array, 16000)
 
 
 def test_get_messages():
