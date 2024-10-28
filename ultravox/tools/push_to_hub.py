@@ -6,7 +6,7 @@ from typing import Optional
 import simple_parsing
 import transformers
 
-from ultravox.data import datasets
+from ultravox import data as datasets
 from ultravox.inference import ultravox_infer
 from ultravox.model import ultravox_pipeline
 

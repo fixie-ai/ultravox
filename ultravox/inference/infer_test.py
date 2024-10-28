@@ -5,7 +5,7 @@ import pytest
 import torch
 import transformers
 
-from ultravox.data import datasets
+from ultravox import data as datasets
 from ultravox.inference import base as infer_base
 from ultravox.inference import infer
 from ultravox.model import ultravox_processing

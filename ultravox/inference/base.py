@@ -2,7 +2,7 @@ import abc
 import dataclasses
 from typing import Generator, List, Optional
 
-from ultravox.data import datasets
+from ultravox import data as datasets
 
 
 @dataclasses.dataclass

@@ -8,7 +8,7 @@ import gradio_client
 import numpy as np
 import requests
 
-from ultravox.data import datasets
+from ultravox import data as datasets
 from ultravox.inference import base
 
 

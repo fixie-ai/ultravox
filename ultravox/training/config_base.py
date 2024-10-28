@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional
 import simple_parsing
 import torch
 
-from ultravox.data import datasets
+from ultravox import data as datasets
 from ultravox.model import ultravox_config
 
 
