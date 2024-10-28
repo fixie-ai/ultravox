@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 import librosa
 import numpy as np
 import soundfile as sf
+from numpy import typing as npt
 
 SAMPLE_RATE = 16000
 
@@ -103,7 +104,7 @@ class VoiceSample:
 
     messages: List[Dict[str, str]]
     """List of messages, each with a "role" and "content" field."""
-    audio: Optional[np.ndarray] = None
+    audio: Optional[npt.NDArray[np.float32]] = None
     """Audio data as float32 PCM @ `sample_rate`."""
     sample_rate: int = SAMPLE_RATE
     """Audio sample rate in Hz."""
