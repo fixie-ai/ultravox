@@ -1,4 +1,4 @@
-from typing import Optional, Union
+from typing import Optional
 
 import datasets as hf_datasets
 import numpy as np
