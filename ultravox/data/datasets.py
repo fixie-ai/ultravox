@@ -34,6 +34,7 @@ class DataCollatorForSeq2SeqWithAudio(transformers.DataCollatorForSeq2Seq):
 
     def __call__(self, features, *args, **kwargs):
         audio_values = [f.pop("audio_values", None) for f in features]
+
         if self.include_alt_fields:
             # these fields are hard-coded in the transformer data collator, so they need special handling before calling the super method
             alt_features = [
@@ -44,6 +45,7 @@ class DataCollatorForSeq2SeqWithAudio(transformers.DataCollatorForSeq2Seq):
                 }
                 for f in features
             ]
+
         input_ids_lens = torch.LongTensor([f["input_ids"].shape[-1] for f in features])
         batch = super().__call__(features, *args, **kwargs)
         if self.include_alt_fields:
@@ -55,7 +57,7 @@ class DataCollatorForSeq2SeqWithAudio(transformers.DataCollatorForSeq2Seq):
         # Pad the last dimension of all audio_values to the same length, with 0s on the right.
         if audio_values and audio_values[0] is not None:
             max_len = max([x.shape[-1] for x in audio_values])
-            batch["audio_values"] = torch.stack(
+            batch["audio_values"] = torch.cat(
                 [F.pad(x, (0, max_len - x.shape[-1])) for x in audio_values]
             )
             if self.tokenizer.padding_side == "left":
@@ -63,7 +65,6 @@ class DataCollatorForSeq2SeqWithAudio(transformers.DataCollatorForSeq2Seq):
                 batch["audio_token_start_idx"] += displacement.to(
                     batch["audio_token_start_idx"].device
                 )
-
         return batch
 
 

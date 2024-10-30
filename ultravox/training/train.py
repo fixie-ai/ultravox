@@ -113,7 +113,6 @@ def train(args: config_base.TrainConfig):
     text_tokenizer.padding_side = "right"
     text_tokenizer.pad_token = text_tokenizer.eos_token
     audio_processor = transformers.AutoProcessor.from_pretrained(args.audio_model)
-    processor = ultravox_processing.UltravoxProcessor(audio_processor, text_tokenizer)
 
     # Instantiate the model and processor
     config = ultravox_config.UltravoxConfig(
@@ -137,6 +136,12 @@ def train(args: config_base.TrainConfig):
     # Otherwise we'd be loading the model on every process, which uses too much CPU memory.
     with model_load_context:
         model = ultravox_model.UltravoxModel(config)
+
+    processor = ultravox_processing.UltravoxProcessor(
+        audio_processor,
+        text_tokenizer,
+        audio_context_size=model.audio_tower_context_length,
+    )
 
     assert model.get_input_embeddings().num_embeddings == len(
         text_tokenizer

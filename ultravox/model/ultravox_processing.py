@@ -1,7 +1,8 @@
-from typing import Optional, Union
+from typing import Any, Dict, Optional, Union
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 import transformers
 
 from .ultravox_config import UltravoxConfig
@@ -38,6 +39,9 @@ class UltravoxProcessor(transformers.ProcessorMixin):
         encoder_ds_factor: int = 320,
         stack_factor: int = 8,
         audio_placeholder: str = "<|audio|>",
+        audio_context_size: Optional[
+            int
+        ] = 3000,  # Defaults to whisper encoder context size
     ):
         """
         Args:
@@ -53,6 +57,7 @@ class UltravoxProcessor(transformers.ProcessorMixin):
         self.stack_factor = stack_factor
         self.audio_placeholder = audio_placeholder
         self.audio_token_replacement = tokenizer.eos_token
+        self.audio_context_size = audio_context_size
         assert (
             self.audio_token_replacement is not None
         ), "The tokenizer has no EOS token. Cannot recover."
@@ -132,7 +137,7 @@ class UltravoxProcessor(transformers.ProcessorMixin):
             - **audio_token_start_idx** -- The index in the tokenized text where the audio starts. Returned when `audio` is not `None`.
         """
         # TODO: Add support for multiple audio and text inputs.
-        data = {}
+        data: Dict[str, Any] = {}
         audio_embed_frames = 0
         if audio is not None and len(audio) > 0:
             if self.audio_padding == "max_length":
@@ -141,6 +146,7 @@ class UltravoxProcessor(transformers.ProcessorMixin):
                 audio_len = 30 * sampling_rate
             else:
                 audio_len = audio.shape[-1]
+
             # It's guaranteed that the number of frames is less than or equal to this amount.
             # For Whisper this is exact AFAICT, but for Wav2Vec2 it's an upper bound.
             # Currently, StackAudioFrames makes sure an over-estimation won't cause issues by padding the audio embeddings.
@@ -157,9 +163,37 @@ class UltravoxProcessor(transformers.ProcessorMixin):
                 **kwargs,
             )
             if "input_features" in x:
-                data["audio_values"] = x.input_features
+                audio_values = x.input_features
             else:
-                data["audio_values"] = x.input_values
+                audio_values = x.input_values
+
+            audio_values = torch.tensor(audio_values)
+            if (
+                self.audio_context_size
+                and audio_values.shape[-1] > self.audio_context_size
+            ):
+                audio_values_chunks = list(
+                    torch.split(
+                        audio_values,
+                        self.audio_context_size,
+                        dim=len(audio_values.shape) - 1,
+                    )
+                )
+                # Pad the last chunk to match audio_context_size
+                last_chunk = audio_values_chunks[-1]
+                pad_size = self.audio_context_size - last_chunk.shape[-1]
+                if pad_size > 0:
+                    # Pad only the last dimension (T) in B,D,T format
+                    audio_values_chunks[-1] = F.pad(
+                        last_chunk, (0, pad_size, 0, 0, 0, 0)
+                    )
+            else:
+                audio_values_chunks = [audio_values]
+
+            data["audio_values"] = torch.cat(audio_values_chunks)
+            num_audio_chunks = data["audio_values"].shape[0]
+
+            data["audio_batch_size"] = [num_audio_chunks]
 
         if text is not None:
             assert isinstance(
