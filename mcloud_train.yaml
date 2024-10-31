@@ -1,0 +1,23 @@
+# Ultravox training configuration
+name: <RUN_NAME>
+image: mosaicml/composer:latest
+compute:
+  gpus: 8
+  cluster: r15z1p1
+integrations:
+  - integration_type: git_repo
+    git_repo: fixie-ai/ultravox-expts
+    git_branch: $UV_BRANCH
+    pip_install: poetry==1.7.1
+scheduling:
+  max_duration: 6  # 6 hours max for jobs to avoid hanging jobs
+command: >-
+  cd ultravox &&
+  poetry install --no-dev &&
+  poetry run python -m ultravox.training.helpers.prefetch_weights $TRAIN_ARGS &&
+  poetry run torchrun --nproc_per_node=8 -m ultravox.training.train $TRAIN_ARGS --exp_name <RUN_NAME>
+env_variables:
+  MLFLOW_TRACKING_URI: databricks
+  UV_BRANCH: <BRANCH_NAME>
+  TRAIN_ARGS: --config_path ultravox/training/configs/expt_config.yaml
+  HF_HUB_DOWNLOAD_TIMEOUT: "300"  # Set timeout to 300 seconds (5 minutes)

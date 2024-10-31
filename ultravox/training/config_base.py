@@ -95,6 +95,7 @@ class TrainConfig:
     lr: float = 1e-5
     lr_scheduler: str = "cosine"
     lr_warmup_steps: int = 0
+    min_lr_ratio: float = 0.0
     weight_decay: float = 0.0
     seed: int = 42
     shuffle_seed: int = 42

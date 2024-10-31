@@ -140,6 +140,33 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         )
         return {"loss": kl_loss}
 
+    def _compute_audio_attention_mask(self, audio_feature_len, device, dtype):
+        """
+        Computes the attention mask based on the audio lengths, hidden states, and input features.
+
+        Args:
+            audio_len (torch.Tensor): Tensor containing the lengths of the audio sequences.
+            hidden_states (torch.Tensor): Tensor of hidden states from the model.
+            input_features (torch.Tensor): Tensor of input features.
+
+        Returns:
+            torch.Tensor: The computed attention mask.
+        """
+        max_seq_len = audio_feature_len.max()
+        batch_size = len(audio_feature_len)
+        attention_mask = (
+            torch.arange(max_seq_len, device=device)[None, :]
+            .expand(batch_size, -1)
+            .lt(audio_feature_len.view(batch_size, 1))
+        )
+        attention_mask = self.get_extended_attention_mask(
+            attention_mask,
+            None,
+            device=device,
+            dtype=dtype,
+        )
+        return attention_mask
+
     def forward(
         self,
         input_ids: torch.Tensor,
@@ -148,6 +175,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         labels: Optional[torch.Tensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
         audio_token_start_idx: Optional[torch.Tensor] = None,
+        audio_len: Optional[torch.Tensor] = None,
         audio_token_len: Optional[torch.Tensor] = None,
         past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
         # the alt_* fields are needed for KL divergence loss
@@ -188,8 +216,14 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             ), "audio_token_start_idx, audio_token_len, and audio_values must have the same batch size."
 
             # B x A/3200 x D
+            audio_attention_mask = self._compute_audio_attention_mask(
+                self.audio_tower._get_feat_extract_output_lengths(audio_len),
+                audio_values.device,
+                self.audio_tower.dtype,
+            )
             audio_tower_output = self.audio_tower.forward(
-                audio_values.to(self.audio_tower.dtype)
+                audio_values.to(self.audio_tower.dtype),
+                attention_mask=audio_attention_mask,
             ).last_hidden_state
             audio_tower_output = audio_tower_output.to(inputs_embeds.dtype)
 
@@ -508,7 +542,7 @@ class UltravoxProjector(nn.Sequential):
         return hidden_states
 
 
-class ModifiedWhisperEncoder(whisper.WhisperEncoder):
+class ModifiedWhisperEncoder(whisper.WhisperEncoder, transformers.modeling_utils.ModuleUtilsMixin):
     """
     Encoder portion of OpenAI's Whisper model.
 
@@ -593,14 +627,14 @@ class ModifiedWhisperEncoder(whisper.WhisperEncoder):
                     layer_outputs = self._gradient_checkpointing_func(
                         encoder_layer.__call__,
                         hidden_states,
-                        None,
+                        attention_mask,
                         (head_mask[idx] if head_mask is not None else None),
                         output_attentions,
                     )
                 else:
                     layer_outputs = encoder_layer(
                         hidden_states,
-                        None,
+                        attention_mask,
                         layer_head_mask=(
                             head_mask[idx] if head_mask is not None else None
                         ),

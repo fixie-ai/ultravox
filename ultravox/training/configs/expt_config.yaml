@@ -1,0 +1,98 @@
+# Make sure to accept the license agreement on huggingface hub
+# text_model: "meta-llama/Meta-Llama-3.1-8B-Instruct"
+# audio_model: "openai/whisper-medium"
+text_model: "meta-llama/Meta-Llama-3.1-8B-Instruct"
+audio_model: "openai/whisper-large-v3-turbo"
+model_load_dir: "wandb://fixie/ultravox/model-zhuang.2024-10-09-v0_4_1.stacking-1c.3709b1b:v4"
+
+loss_config:
+  # Choose from ["KL_Divergence", "CrossEntropy"], default is "KL_Divergence"
+  loss_function: "KL_Divergence"
+
+train_sets:
+  - name: librispeech-clean-continuation
+  - name: librispeech-other-continuation
+  - name: peoplespeech-clean-continuation
+  - name: gigaspeech-xl-continuation
+    weight: 0.5
+  - name: wenetspeech-continuation
+    weight: 0.25
+  - name: commonvoice-en-continuation
+  - name: commonvoice-ar-continuation
+    weight: 3
+  - name: commonvoice-de-continuation
+  - name: commonvoice-es-continuation
+  - name: commonvoice-fr-continuation
+  - name: commonvoice-it-continuation
+  - name: commonvoice-ja-continuation
+    weight: 5
+  - name: commonvoice-pt-continuation
+    weight: 5
+  - name: commonvoice-ru-continuation
+    weight: 5
+  - name: commonvoice-hi-continuation
+    weight: 10
+  - name: commonvoice-tr-continuation
+    weight: 5
+  - name: commonvoice-sv-continuation
+    weight: 10
+  - name: commonvoice-uk-continuation
+    weight: 5
+  - name: multilingual_librispeech-nl-continuation
+  - name: multilingual_librispeech-pt-continuation
+    weight: 5
+  - name: librispeech-clean-transcription
+    weight: 0.1
+  - name: librispeech-other-transcription
+    weight: 0.1
+  - name: peoplespeech-clean-transcription
+    weight: 0.1
+  - name: gigaspeech-xl-transcription
+    weight: 0.05
+  - name: wenetspeech-transcription
+    weight: 0.025
+  - name: commonvoice-en-transcription
+    weight: 0.1
+  - name: commonvoice-ar-transcription
+    weight: 0.3
+  - name: commonvoice-de-transcription
+    weight: 0.1
+  - name: commonvoice-es-transcription
+    weight: 0.1
+  - name: commonvoice-fr-transcription
+    weight: 0.1
+  - name: commonvoice-it-transcription
+    weight: 0.5
+  - name: commonvoice-ja-transcription
+    weight: 0.5
+  - name: commonvoice-pt-transcription
+    weight: 0.5
+  - name: commonvoice-ru-transcription
+    weight: 0.5
+  - name: commonvoice-hi-transcription
+    weight: 1
+  - name: commonvoice-tr-transcription
+    weight: 0.5
+  - name: commonvoice-sv-transcription
+    weight: 1
+  - name: commonvoice-uk-transcription
+    weight: 0.5
+  - name: multilingual_librispeech-nl-transcription
+    weight: 0.1
+  - name: multilingual_librispeech-pt-transcription
+    weight: 0.5
+
+# Temporarily remove heysquad_human from val_sets as it causes the training to fail.
+val_sets:
+  - name: covost2-en-de
+  - name: covost2-zh-en
+  - name: covost2-tr-en
+  - name: peoplespeech-clean-continuation
+
+# batch_size: 24
+lr: 5e-4
+batch_size: 24
+max_steps: 21600
+val_num_samples: 200
+save_steps: 0.1
+

@@ -160,6 +160,10 @@ class UltravoxProcessor(transformers.ProcessorMixin):
                 data["audio_values"] = x.input_features
             else:
                 data["audio_values"] = x.input_values
+            if self.audio_padding == "max_length":
+                data["audio_len"] = x.attention_mask.sum(-1) - 1
+            else:
+                data["audio_len"] = data["audio_values"].shape[-1]
 
         if text is not None:
             assert isinstance(

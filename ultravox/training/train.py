@@ -278,6 +278,7 @@ def train(args: config_base.TrainConfig):
             ddp_find_unused_parameters=False,
             learning_rate=args.lr,
             lr_scheduler_type=args.lr_scheduler,
+            lr_scheduler_kwargs={"min_lr": args.lr * args.min_lr_ratio},
             warmup_steps=args.lr_warmup_steps,
             weight_decay=args.weight_decay,
             # fp16=dtype == torch.float16,
