@@ -9,7 +9,7 @@ val_sets:
 
 train_on_inputs: False
 shuffle_data: True
-max_audio_duration_secs: 30
+max_audio_duration_secs: 16
 
 val_num_samples: 64
 val_steps: 1000

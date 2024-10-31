@@ -89,7 +89,7 @@ val_sets:
 
 # batch_size: 24
 lr: 5e-4
-batch_size: 24
+batch_size: 20
 max_steps: 21600
 val_num_samples: 200
 save_steps: 0.1
