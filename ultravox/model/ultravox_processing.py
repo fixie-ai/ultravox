@@ -164,7 +164,7 @@ class UltravoxProcessor(transformers.ProcessorMixin):
             if self.audio_padding == "max_length":
                 data["audio_len"] = x.attention_mask.sum(-1) - 1
             else:
-                data["audio_len"] = torch.tensor([data["audio_values"].shape[-1]], dtype=torch.int32)
+                data["audio_len"] = [data["audio_values"].shape[-1]]
 
         if text is not None:
             assert isinstance(
