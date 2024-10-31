@@ -82,10 +82,10 @@ train_sets:
 
 # Temporarily remove heysquad_human from val_sets as it causes the training to fail.
 val_sets:
-  - name: covost2-en-de
-  - name: covost2-zh-en
-  - name: covost2-tr-en
-  - name: peoplespeech-clean-continuation
+  # - name: covost2-en-de
+  # - name: covost2-zh-en
+  # - name: covost2-tr-en
+  # - name: peoplespeech-clean-continuation
 
 # batch_size: 24
 lr: 5e-4
