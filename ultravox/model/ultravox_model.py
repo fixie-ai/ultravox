@@ -140,33 +140,6 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         )
         return {"loss": kl_loss}
 
-    def _compute_audio_attention_mask(self, audio_feature_len, device, dtype):
-        """
-        Computes the attention mask based on the audio lengths, hidden states, and input features.
-
-        Args:
-            audio_len (torch.Tensor): Tensor containing the lengths of the audio sequences.
-            hidden_states (torch.Tensor): Tensor of hidden states from the model.
-            input_features (torch.Tensor): Tensor of input features.
-
-        Returns:
-            torch.Tensor: The computed attention mask.
-        """
-        max_seq_len = audio_feature_len.max()
-        batch_size = len(audio_feature_len)
-        attention_mask = (
-            torch.arange(max_seq_len, device=device)[None, :]
-            .expand(batch_size, -1)
-            .lt(audio_feature_len.view(batch_size, 1))
-        )
-        attention_mask = self.get_extended_attention_mask(
-            attention_mask,
-            None,
-            device=device,
-            dtype=dtype,
-        )
-        return attention_mask
-
     def forward(
         self,
         input_ids: torch.Tensor,
@@ -216,14 +189,9 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             ), "audio_token_start_idx, audio_token_len, and audio_values must have the same batch size."
 
             # B x A/3200 x D
-            audio_attention_mask = self._compute_audio_attention_mask(
-                self.audio_tower._get_feat_extract_output_lengths(audio_len),
-                audio_values.device,
-                self.audio_tower.dtype,
-            )
             audio_tower_output = self.audio_tower.forward(
                 audio_values.to(self.audio_tower.dtype),
-                attention_mask=audio_attention_mask,
+                audio_len = audio_len
             ).last_hidden_state
             audio_tower_output = audio_tower_output.to(inputs_embeds.dtype)
 
@@ -561,7 +529,7 @@ class ModifiedWhisperEncoder(whisper.WhisperEncoder, transformers.modeling_utils
     def forward(
         self,
         input_features,
-        attention_mask=None,
+        audio_len=None,
         head_mask=None,
         output_attentions=None,
         output_hidden_states=None,
@@ -603,6 +571,23 @@ class ModifiedWhisperEncoder(whisper.WhisperEncoder, transformers.modeling_utils
 
         encoder_states = () if output_hidden_states else None
         all_attentions = () if output_attentions else None
+
+        attention_mask = None
+        if audio_len != None:
+            audio_feature_len = self._get_feat_extract_output_lengths(audio_len)
+            batch_size = hidden_states.shape[0]
+            max_seq_len = hidden_states.shape[1]
+            attention_mask = (
+                torch.arange(max_seq_len, device=hidden_states.device)[None, :]
+                .expand(batch_size, -1)
+                .lt(audio_feature_len.view(batch_size, 1))
+            )
+            attention_mask = self.get_extended_attention_mask(
+                attention_mask,
+                None,
+                device=hidden_states.device,
+                dtype=hidden_states.dtype,
+            )
 
         # check if head_mask has a correct number of layers specified if desired
         if head_mask is not None:
