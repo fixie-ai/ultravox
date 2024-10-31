@@ -266,7 +266,7 @@ PS_BASE_CONFIG = types.DatasetConfig(
     subset="clean",
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=1_501_271),
-        types.DatasetSplitConfig(name="validation", num_samples=18_622),
+        types.DatasetSplitConfig(name="test", num_samples=34_898, split_type=types.DatasetSplitType.VALIDATION),
     ],
     assistant_template="{{text_proc.format_asr_text(text)}}",
     transcript_template="{{text_proc.format_asr_text(text)}}",
