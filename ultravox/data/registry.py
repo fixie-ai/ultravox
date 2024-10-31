@@ -90,6 +90,34 @@ CV_RU_CONFIG = types.DatasetConfig(
     splits=[types.DatasetSplitConfig(name="train", num_samples=26_377)],
 )
 
+CV_HI_CONFIG = types.DatasetConfig(
+    name="commonvoice-hi",
+    base="commonvoice",
+    subset="hi",
+    splits=[types.DatasetSplitConfig(name="train", num_samples=4_690)],
+)
+
+CV_SV_SE_CONFIG = types.DatasetConfig(
+    name="commonvoice-sv-se",
+    base="commonvoice",
+    subset="sv-SE",
+    splits=[types.DatasetSplitConfig(name="train", num_samples=7_740)],
+)
+
+CV_TR_CONFIG = types.DatasetConfig(
+    name="commonvoice-tr",
+    base="commonvoice",
+    subset="tr",
+    splits=[types.DatasetSplitConfig(name="train", num_samples=35_100)],
+)
+
+CV_UK_CONFIG = types.DatasetConfig(
+    name="commonvoice-uk",
+    base="commonvoice",
+    subset="uk",
+    splits=[types.DatasetSplitConfig(name="train", num_samples=25_100)],
+)
+
 GS_XL_CONFIG = types.DatasetConfig(
     name="gigaspeech",
     path="speechcolab/gigaspeech",
