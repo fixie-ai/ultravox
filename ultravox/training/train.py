@@ -27,8 +27,10 @@ from ultravox.model import ultravox_processing
 from ultravox.model import wandb_utils
 from ultravox.training import config_base
 from ultravox.training import ddp_utils
-from ultravox.training.helpers import prefetch_weights
+from ultravox.training.helpers import prefetch_weights, hf_hub_patch
 
+# Patching HF Hub to avoid throwing an error on 500 dataset errors
+hf_hub_patch.monkey_patch_fetch_range()
 
 def prepare_dataset(
     train_args: config_base.TrainConfig,
