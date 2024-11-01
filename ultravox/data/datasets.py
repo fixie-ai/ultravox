@@ -118,6 +118,9 @@ class VoiceDataset(SizedIterableDataset):
 
     def __len__(self):
         return self._length
+    
+    def __str__(self):
+        return f"VoiceDataset(unamed)"
 
     def _load_hf_dataset(
         self,
@@ -284,6 +287,9 @@ class GenericDataset(VoiceDataset):
         ), f"The {config.name} dataset has no {self._args.split} splits."
         dataset = ds if len(dsets) == 1 else hf_datasets.concatenate_datasets(dsets)
         super()._init_dataset(dataset, total_samples)
+
+    def __str__(self):
+        return f"GenericDataset({self._config.path}/{self._config.name}/{":".join(self._config.splits)})"
 
     def _get_sample(self, row) -> Optional[data_sample.VoiceSample]:
         assert self._config.user_template is not None
