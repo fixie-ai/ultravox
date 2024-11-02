@@ -1,7 +1,8 @@
 import dataclasses
 from typing import Dict, List, Optional
 
-from ultravox.data import datasets, types
+from ultravox.data import datasets
+from ultravox.data import types
 from ultravox.data.configs import datasets_boolq
 from ultravox.data.configs import datasets_commonvoice
 from ultravox.data.configs import datasets_covost2
