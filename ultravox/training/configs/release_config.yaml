@@ -12,52 +12,13 @@ loss_config:
 train_sets:
   - name: librispeech-clean-continuation
   - name: librispeech-other-continuation
-  - name: peoplespeech-clean-continuation
-    weight: 8
   - name: commonvoice-en-continuation
-    weight: 8
-  - name: commonvoice-ar-continuation
-    weight: 0.2
-  - name: commonvoice-de-continuation
-    weight: 4
-  - name: commonvoice-es-continuation
-    weight: 3
-  - name: commonvoice-fr-continuation
-    weight: 4
-  - name: commonvoice-it-continuation
-    weight: 1.2
-  - name: commonvoice-ja-continuation
-    weight: 0.1
-  - name: commonvoice-pt-continuation
-    weight: 0.2
-  - name: commonvoice-ru-continuation
-    weight: 0.2
-  - name: librispeech-clean-transcription
-  - name: librispeech-other-transcription
-  - name: peoplespeech-clean-transcription
-    weight: 0.8
-  - name: commonvoice-en-transcription
-    weight: 0.8
-  - name: commonvoice-ar-transcription
-    weight: 0.02
-  - name: commonvoice-de-transcription
-    weight: 0.4
-  - name: commonvoice-es-transcription
-    weight: 0.3
-  - name: commonvoice-fr-transcription
-    weight: 0.4
-  - name: commonvoice-it-transcription
-    weight: 0.12
-  - name: commonvoice-ja-transcription
-    weight: 0.01
-  - name: commonvoice-pt-transcription
-    weight: 0.02
-  - name: commonvoice-ru-transcription
-    weight: 0.02
 
 # Temporarily remove heysquad_human from val_sets as it causes the training to fail.
 val_sets:
-  - name: peoplespeech
+  - name: covost2-en-de
+  - name: covost2-zh-en
+  - name: commonvoice-ru-continuation
 
 batch_size: 24
 max_steps: 14400 # x8x24 = 2,764,800

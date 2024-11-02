@@ -18,8 +18,9 @@ eval_max_new_tokens: 32
 eval_num_procs: 16
 
 optimizer: "adamw_torch" # options: adamw_torch, adamw_bnb_8bit
-lr_scheduler: "cosine" # options: linear, cosine, cosine_with_restarts, etc.
+lr_scheduler: "cosine_with_min_lr" # options: linear, cosine, cosine_with_restarts, etc.
 lr: 2.e-3
+min_lr_ratio: 0.1
 grad_accum_steps: 1
 lr_warmup_steps: 1000
 max_steps: 10_000

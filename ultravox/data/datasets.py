@@ -118,7 +118,7 @@ class VoiceDataset(SizedIterableDataset):
 
     def __len__(self):
         return self._length
-
+    
     def _load_hf_dataset(
         self,
         path: str,
@@ -187,10 +187,10 @@ class VoiceDataset(SizedIterableDataset):
                     raise ValueError(f"Audio length is 0 for sample {sample}")
                 if (
                     self._args.max_audio_duration_secs is not None
-                    and sample.audio.shape[-1] / types.SAMPLE_RATE
+                    and sample.audio.shape[-1] / data_sample.SAMPLE_RATE
                     > self._args.max_audio_duration_secs
                 ):
-                    duration = sample.audio.shape[-1] / types.SAMPLE_RATE
+                    duration = sample.audio.shape[-1] / data_sample.SAMPLE_RATE
                     warnings.warn(
                         f"Audio length ({duration}s) exceeds max audio duration ({self._args.max_audio_duration_secs}s), skipping sample."
                     )

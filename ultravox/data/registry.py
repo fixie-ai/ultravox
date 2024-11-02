@@ -3,11 +3,12 @@ from typing import Dict, List, Optional
 
 from ultravox.data import datasets
 from ultravox.data import types
+from ultravox.data import datasets_boolq, datasets_commonvoice, datasets_covost2, \
+    datasets_gigaspeech, datasets_librispeech, datasets_multilingual_librispeech, \
+    datasets_peoplespeech, datasets_voxpopuli,datasets_wenetspeech
 
-CONTINUATION_USER_TEMPLATE = f"Continue the following text using less than 50 words:\n\n{types.AUDIO_PLACEHOLDER}"
-CONTINUATION_ASSISTANT_TEMPLATE = "{{continuation}}"
-TRANSCRIPTION_USER_TEMPLATE = f"Transcribe\n{types.AUDIO_PLACEHOLDER}"
 
+<<<<<<< HEAD
 BOOLQ_CONFIG = types.DatasetConfig(
     name="boolq",
     path="fixie-ai/boolq-audio",
@@ -377,6 +378,8 @@ INTERNAL_DATASETS = [
     PS_CLEAN_CONT_CONFIG,
     VP_EN_CONFIG,
 ]
+=======
+>>>>>>> upstream/zhuang.2024-10-09-v0_4_1.stacking-4b
 DATASET_MAP: Dict[str, types.DatasetConfig] = {}
 
 
@@ -427,4 +430,12 @@ def create_dataset(
     return datasets.GenericDataset(args, merged_config)
 
 
-register_datasets(INTERNAL_DATASETS)
+register_datasets(datasets_boolq.configs)
+register_datasets(datasets_commonvoice.configs)
+register_datasets(datasets_covost2.configs)
+register_datasets(datasets_gigaspeech.configs)
+register_datasets(datasets_librispeech.configs)
+register_datasets(datasets_multilingual_librispeech.configs)
+register_datasets(datasets_peoplespeech.configs)
+register_datasets(datasets_voxpopuli.configs)
+register_datasets(datasets_wenetspeech.configs)
