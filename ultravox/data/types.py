@@ -6,6 +6,10 @@ from simple_parsing import helpers
 
 AUDIO_PLACEHOLDER = "<|audio|>"
 
+TRANSLATION_USER_TEMPLATE =  f"Please translate the text to {{{{target}}}}. Your response should only include the {{{{target}}}} translation, without any additional words:\n\n{AUDIO_PLACEHOLDER}"
+CONTINUATION_USER_TEMPLATE = f"Continue the following text using less than 50 words:\n\n{AUDIO_PLACEHOLDER}"
+CONTINUATION_ASSISTANT_TEMPLATE = "{{continuation}}"
+TRANSCRIPTION_USER_TEMPLATE = f"Transcribe\n{AUDIO_PLACEHOLDER}"
 
 class DatasetSplit(str, enum.Enum):
     TRAIN = "train"

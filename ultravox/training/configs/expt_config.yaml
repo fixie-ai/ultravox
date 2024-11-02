@@ -1,7 +1,7 @@
 # Make sure to accept the license agreement on huggingface hub
 text_model: "meta-llama/Meta-Llama-3.1-8B-Instruct"
 audio_model: "openai/whisper-large-v3-turbo"
-model_load_dir: "wandb://fixie/ultravox/model-zhuang.2024-10-09-v0_4_1.stacking-1c.3709b1b:v4"
+model_load_dir: "wandb://fixie/ultravox/model-zhuang.2024-10-09-v0_4_1.stacking-4a.389464d:v11"
 
 loss_config:
   # Choose from ["KL_Divergence", "CrossEntropy"], default is "KL_Divergence"
@@ -79,6 +79,42 @@ train_sets:
     weight: 0.1
   - name: multilingual_librispeech-pt-transcription
     weight: 0.5
+  - name: covost2-ar-en
+  - name: covost2-ca-en
+  - name: covost2-cy-en
+  - name: covost2-de-en
+  - name: covost2-en-ar
+  - name: covost2-en-ca
+  - name: covost2-en-cy
+  - name: covost2-en-de
+  - name: covost2-en-et
+  - name: covost2-en-fa
+  - name: covost2-en-id
+  - name: covost2-en-ja
+  - name: covost2-en-lv
+  - name: covost2-en-mn
+  - name: covost2-en-sl
+  - name: covost2-en-sv
+  - name: covost2-en-ta
+  - name: covost2-en-tr
+  - name: covost2-en-zh
+  - name: covost2-es-en
+  - name: covost2-et-en
+  - name: covost2-fa-en
+  - name: covost2-fr-en
+  - name: covost2-id-en
+  - name: covost2-it-en
+  - name: covost2-ja-en
+  - name: covost2-lv-en
+  - name: covost2-mn-en
+  - name: covost2-nl-en
+  - name: covost2-pt-en
+  - name: covost2-ru-en
+  - name: covost2-sl-en
+  - name: covost2-sv-en
+  - name: covost2-ta-en
+  - name: covost2-tr-en
+  - name: covost2-zh-en
 
 # Temporarily remove heysquad_human from val_sets as it causes the training to fail.
 val_sets:
@@ -90,7 +126,8 @@ val_sets:
 # batch_size: 24
 lr: 5e-4
 batch_size: 20
-max_steps: 21600
+# max_steps: 21600
+num_epochs: 1
 val_num_samples: 200
 save_steps: 0.1
 
