@@ -1,4 +1,3 @@
-
 from ultravox.data import types
 
 VP_EN_CONFIG = types.DatasetConfig(

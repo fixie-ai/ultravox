@@ -118,7 +118,7 @@ class VoiceDataset(SizedIterableDataset):
 
     def __len__(self):
         return self._length
-    
+
     def _load_hf_dataset(
         self,
         path: str,

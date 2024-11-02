@@ -1,4 +1,3 @@
-
 from ultravox.data import types
 
 BOOLQ_CONFIG = types.DatasetConfig(

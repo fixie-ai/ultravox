@@ -1,4 +1,3 @@
-
 from ultravox.data import types
 
 GS_XL_CONFIG = types.DatasetConfig(
@@ -25,8 +24,4 @@ GS_XL_CONT_CONFIG = types.DatasetConfig(
     assistant_template=types.CONTINUATION_ASSISTANT_TEMPLATE,
 )
 
-configs = [
-    GS_XL_CONFIG,
-    GS_XL_TRANS_CONFIG,
-    GS_XL_CONT_CONFIG
-]
+configs = [GS_XL_CONFIG, GS_XL_TRANS_CONFIG, GS_XL_CONT_CONFIG]

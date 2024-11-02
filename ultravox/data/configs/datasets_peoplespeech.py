@@ -1,4 +1,3 @@
-
 from ultravox.data import types
 
 PS_BASE_CONFIG = types.DatasetConfig(
@@ -7,7 +6,9 @@ PS_BASE_CONFIG = types.DatasetConfig(
     subset="clean",
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=1_501_271),
-        types.DatasetSplitConfig(name="test", num_samples=34_898, split_type=types.DatasetSplit.VALIDATION),
+        types.DatasetSplitConfig(
+            name="test", num_samples=34_898, split_type=types.DatasetSplit.VALIDATION
+        ),
     ],
     assistant_template="{{text_proc.format_asr_text(text)}}",
     transcript_template="{{text_proc.format_asr_text(text)}}",

@@ -1,4 +1,3 @@
-
 from ultravox.data import types
 
 LS_BASE_CONFIG = types.DatasetConfig(
