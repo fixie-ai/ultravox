@@ -3,15 +3,15 @@ from typing import Dict, List, Optional
 
 from ultravox.data import datasets
 from ultravox.data import types
-from ultravox.data.configs import datasets_boolq
-from ultravox.data.configs import datasets_commonvoice
-from ultravox.data.configs import datasets_covost2
-from ultravox.data.configs import datasets_gigaspeech
-from ultravox.data.configs import datasets_librispeech
-from ultravox.data.configs import datasets_multilingual_librispeech
-from ultravox.data.configs import datasets_peoplespeech
-from ultravox.data.configs import datasets_voxpopuli
-from ultravox.data.configs import datasets_wenetspeech
+from ultravox.data.configs import boolq
+from ultravox.data.configs import commonvoice
+from ultravox.data.configs import covost2
+from ultravox.data.configs import gigaspeech
+from ultravox.data.configs import librispeech
+from ultravox.data.configs import multilingual_librispeech
+from ultravox.data.configs import peoplespeech
+from ultravox.data.configs import voxpopuli
+from ultravox.data.configs import wenetspeech
 
 DATASET_MAP: Dict[str, types.DatasetConfig] = {}
 
@@ -63,12 +63,12 @@ def create_dataset(
     return datasets.GenericDataset(args, merged_config)
 
 
-register_datasets(datasets_boolq.configs)
-register_datasets(datasets_commonvoice.configs)
-register_datasets(datasets_covost2.configs)
-register_datasets(datasets_gigaspeech.configs)
-register_datasets(datasets_librispeech.configs)
-register_datasets(datasets_multilingual_librispeech.configs)
-register_datasets(datasets_peoplespeech.configs)
-register_datasets(datasets_voxpopuli.configs)
-register_datasets(datasets_wenetspeech.configs)
+register_datasets(boolq.configs)
+register_datasets(commonvoice.configs)
+register_datasets(covost2.configs)
+register_datasets(gigaspeech.configs)
+register_datasets(librispeech.configs)
+register_datasets(multilingual_librispeech.configs)
+register_datasets(peoplespeech.configs)
+register_datasets(voxpopuli.configs)
+register_datasets(wenetspeech.configs)
