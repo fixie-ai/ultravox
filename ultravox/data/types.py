@@ -54,12 +54,12 @@ class DatasetSplitConfig(helpers.Serializable):
     def __post_init__(self):
         """Automatically set split type based on split name"""
         if self.split_type is None:
-            if self.name == "test":
-                self.split_type = DatasetSplit.TEST
-            elif self.name == "validation":
-                self.split_type = DatasetSplit.VALIDATION
-            else:
-                self.split_type = DatasetSplit.TRAIN
+            try:
+                self.split_type = DatasetSplit(self.name)
+            except ValueError:
+                raise ValueError(
+                    f"Could not automatically determine split type for '{self.name}'. Please explicitly specify split_type for splits that are not named 'train', 'validation', or 'test'."
+                )
 
 
 @dataclasses.dataclass
