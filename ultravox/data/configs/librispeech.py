@@ -12,8 +12,12 @@ LS_CLEAN_CONFIG = types.DatasetConfig(
     base="librispeech",
     subset="clean",
     splits=[
-        types.DatasetSplitConfig(name="train.100", num_samples=28_539, split_type=types.DatasetSplit.TRAIN),
-        types.DatasetSplitConfig(name="train.360", num_samples=104_014, split_type=types.DatasetSplit.TRAIN),
+        types.DatasetSplitConfig(
+            name="train.100", num_samples=28_539, split_type=types.DatasetSplit.TRAIN
+        ),
+        types.DatasetSplitConfig(
+            name="train.360", num_samples=104_014, split_type=types.DatasetSplit.TRAIN
+        ),
     ],
 )
 
@@ -22,7 +26,9 @@ LS_OTHER_CONFIG = types.DatasetConfig(
     base="librispeech",
     subset="other",
     splits=[
-        types.DatasetSplitConfig(name="train.500", num_samples=148_688, split_type=types.DatasetSplit.TRAIN),
+        types.DatasetSplitConfig(
+            name="train.500", num_samples=148_688, split_type=types.DatasetSplit.TRAIN
+        ),
     ],
 )
 
