@@ -27,8 +27,10 @@ from ultravox.model import ultravox_processing
 from ultravox.model import wandb_utils
 from ultravox.training import config_base
 from ultravox.training import ddp_utils
-from ultravox.training.helpers import prefetch_weights
+from ultravox.training.helpers import prefetch_weights, hf_hub_patch
 
+# Patching HF Hub to avoid throwing an error on 500 dataset errors
+hf_hub_patch.monkey_patch_fetch_range()
 
 def prepare_dataset(
     train_args: config_base.TrainConfig,
@@ -138,9 +140,9 @@ def train(args: config_base.TrainConfig):
     with model_load_context:
         model = ultravox_model.UltravoxModel(config)
 
-    assert model.get_input_embeddings().num_embeddings == len(
+    assert model.get_input_embeddings().num_embeddings >= len(
         text_tokenizer
-    ), f"Model and tokenizer mismatch: {model.get_input_embeddings().num_embeddings} != {len(text_tokenizer)}"
+    ), f"Model and tokenizer mismatch: {model.get_input_embeddings().num_embeddings} < {len(text_tokenizer)}"
 
     model.language_model.config.use_cache = False
     if args.disable_layerdrop and hasattr(model.audio_tower.config, "layerdrop"):
@@ -278,6 +280,7 @@ def train(args: config_base.TrainConfig):
             ddp_find_unused_parameters=False,
             learning_rate=args.lr,
             lr_scheduler_type=args.lr_scheduler,
+            lr_scheduler_kwargs={"min_lr": args.lr * args.min_lr_ratio} if "min_lr" in args.lr_scheduler else {},
             warmup_steps=args.lr_warmup_steps,
             weight_decay=args.weight_decay,
             # fp16=dtype == torch.float16,

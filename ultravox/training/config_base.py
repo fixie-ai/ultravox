@@ -93,8 +93,9 @@ class TrainConfig:
     val_accum_steps: int = 1
     batch_size: int = 2
     lr: float = 1e-5
-    lr_scheduler: str = "cosine"
+    lr_scheduler: str = "cosine_with_min_lr"
     lr_warmup_steps: int = 0
+    min_lr_ratio: float = 0.1
     weight_decay: float = 0.0
     seed: int = 42
     shuffle_seed: int = 42
