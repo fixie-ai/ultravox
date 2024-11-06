@@ -57,7 +57,7 @@ train_sets:
 
 # Temporarily remove heysquad_human from val_sets as it causes the training to fail.
 val_sets:
-  - name: peoplespeech
+  - name: peoplespeech-clean-transcription
 
 batch_size: 24
 max_steps: 14400 # x8x24 = 2,764,800

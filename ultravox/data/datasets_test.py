@@ -169,8 +169,12 @@ def test_dataset_config():
         name="fake_dataset",
         path="mock_path",
         splits=[
-            types.DatasetSplitConfig(name="clean", num_samples=5000),
-            types.DatasetSplitConfig(name="other", num_samples=10000),
+            types.DatasetSplitConfig(
+                name="clean", num_samples=5000, split_type=types.DatasetSplit.TRAIN
+            ),
+            types.DatasetSplitConfig(
+                name="other", num_samples=10000, split_type=types.DatasetSplit.TRAIN
+            ),
             types.DatasetSplitConfig(name="validation", num_samples=1000),
             types.DatasetSplitConfig(
                 name="another_validation",
@@ -201,8 +205,12 @@ def test_dataset_config_serialization():
         name="fake_dataset",
         path="fake_path",
         splits=[
-            types.DatasetSplitConfig(name="clean", num_samples=5000),
-            types.DatasetSplitConfig(name="other", num_samples=10000),
+            types.DatasetSplitConfig(
+                name="clean", num_samples=5000, split_type=types.DatasetSplit.TRAIN
+            ),
+            types.DatasetSplitConfig(
+                name="other", num_samples=10000, split_type=types.DatasetSplit.TRAIN
+            ),
         ],
     )
     serialized = config.dumps_yaml()
@@ -221,7 +229,11 @@ def test_generic_dataset():
     config = types.DatasetConfig(
         name="fake_dataset",
         path="fake_path",
-        splits=[types.DatasetSplitConfig(name="fake", num_samples=5)],
+        splits=[
+            types.DatasetSplitConfig(
+                name="fake", num_samples=5, split_type=types.DatasetSplit.TRAIN
+            )
+        ],
     )
     ds = FakeGenericDataset(5, config)
     assert len(ds) == 5
@@ -240,7 +252,11 @@ def test_generic_dataset_custom_templates():
     config = types.DatasetConfig(
         name="fake_dataset",
         path="fake_path",
-        splits=[types.DatasetSplitConfig(name="fake", num_samples=5)],
+        splits=[
+            types.DatasetSplitConfig(
+                name="fake", num_samples=5, split_type=types.DatasetSplit.TRAIN
+            )
+        ],
         user_template="Listen to the following and respond with 'xyzzy':\n<|audio|>",
         assistant_template="xyzzy",
         transcript_template="{{text}}",
@@ -265,7 +281,11 @@ def test_generic_dataset_text_only():
     config = types.DatasetConfig(
         name="fake_dataset",
         path="fake_path",
-        splits=[types.DatasetSplitConfig(name="fake", num_samples=5)],
+        splits=[
+            types.DatasetSplitConfig(
+                name="fake", num_samples=5, split_type=types.DatasetSplit.TRAIN
+            )
+        ],
         user_template="Transcribe\n<|audio|>",
     )
     ds = FakeGenericDataset(5, config, types.VoiceDatasetArgs(include_audio=False))
@@ -283,7 +303,11 @@ def test_generic_dataset_merge_configs():
     base_config = types.DatasetConfig(
         name="fake_base",
         path="fake_path",
-        splits=[types.DatasetSplitConfig(name="fake", num_samples=5)],
+        splits=[
+            types.DatasetSplitConfig(
+                name="fake", num_samples=5, split_type=types.DatasetSplit.TRAIN
+            )
+        ],
     )
     mid_config = types.DatasetConfig(
         name="fake_mid",
@@ -315,7 +339,11 @@ def test_generic_dataset_length_mismatch():
     config = types.DatasetConfig(
         name="fake_dataset",
         path="fake_path",
-        splits=[types.DatasetSplitConfig(name="fake", num_samples=5)],
+        splits=[
+            types.DatasetSplitConfig(
+                name="fake", num_samples=5, split_type=types.DatasetSplit.TRAIN
+            )
+        ],
     )
     ds = FakeGenericDataset(10, config)
     assert len(ds) == 5
@@ -327,7 +355,11 @@ def test_generic_dataset_length_mismatch():
     config = types.DatasetConfig(
         name="fake_dataset",
         path="fake_path",
-        splits=[types.DatasetSplitConfig(name="fake", num_samples=10)],
+        splits=[
+            types.DatasetSplitConfig(
+                name="fake", num_samples=10, split_type=types.DatasetSplit.TRAIN
+            )
+        ],
     )
     ds = FakeGenericDataset(5, config)
     assert len(ds) == 10

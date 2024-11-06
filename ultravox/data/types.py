@@ -6,10 +6,18 @@ from simple_parsing import helpers
 
 AUDIO_PLACEHOLDER = "<|audio|>"
 
+TRANSLATION_USER_TEMPLATE = f"Please translate the text to {{{{target}}}}. Your response should only include the {{{{target}}}} translation, without any additional words:\n\n{AUDIO_PLACEHOLDER}"
+CONTINUATION_USER_TEMPLATE = (
+    f"Continue the following text using less than 50 words:\n\n{AUDIO_PLACEHOLDER}"
+)
+CONTINUATION_ASSISTANT_TEMPLATE = "{{continuation}}"
+TRANSCRIPTION_USER_TEMPLATE = f"Transcribe\n{AUDIO_PLACEHOLDER}"
+
 
 class DatasetSplit(str, enum.Enum):
     TRAIN = "train"
     VALIDATION = "validation"
+    TEST = "test"
 
 
 @dataclasses.dataclass
@@ -40,15 +48,18 @@ class DatasetSplitConfig(helpers.Serializable):
     """Name of the split."""
     num_samples: int
     """Number of samples in the split"""
-    split_type: DatasetSplit = DatasetSplit.TRAIN
-    """Type of split, i.e., train or validation."""
+    split_type: Optional[DatasetSplit] = None
+    """Type of split, i.e., train, test, or validation."""
 
     def __post_init__(self):
-        """Automatically set is_validation if it's a validation split."""
-        if self.name == "test":
-            self.split_type = DatasetSplit.TEST
-        elif self.name == "validation":
-            self.split_type = DatasetSplit.VALIDATION
+        """Automatically set split type based on split name"""
+        if self.split_type is None:
+            try:
+                self.split_type = DatasetSplit(self.name.lower())
+            except ValueError:
+                raise ValueError(
+                    f"Could not automatically determine split type from split name '{self.name}'. Please explicitly specify split_type for splits that are not named 'train', 'validation', or 'test'."
+                )
 
 
 @dataclasses.dataclass
