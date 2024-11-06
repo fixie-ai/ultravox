@@ -58,7 +58,7 @@ class DatasetSplitConfig(helpers.Serializable):
                 self.split_type = DatasetSplit(self.name.lower())
             except ValueError:
                 raise ValueError(
-                    f"Could not automatically determine split type for '{self.name}'. Please explicitly specify split_type for splits that are not named 'train', 'validation', or 'test'."
+                    f"Could not automatically determine split type from split name '{self.name}'. Please explicitly specify split_type for splits that are not named 'train', 'validation', or 'test'."
                 )
 
 
