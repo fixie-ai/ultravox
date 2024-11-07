@@ -27,10 +27,8 @@ from ultravox.model import ultravox_processing
 from ultravox.model import wandb_utils
 from ultravox.training import config_base
 from ultravox.training import ddp_utils
-from ultravox.training.helpers import prefetch_weights, hf_hub_patch
+from ultravox.training.helpers import prefetch_weights
 
-# Patching HF Hub to avoid throwing an error on 500 dataset errors
-hf_hub_patch.monkey_patch_fetch_range()
 
 def prepare_dataset(
     train_args: config_base.TrainConfig,
@@ -280,7 +278,11 @@ def train(args: config_base.TrainConfig):
             ddp_find_unused_parameters=False,
             learning_rate=args.lr,
             lr_scheduler_type=args.lr_scheduler,
-            lr_scheduler_kwargs={"min_lr": args.lr * args.min_lr_ratio} if "min_lr" in args.lr_scheduler else {},
+            lr_scheduler_kwargs=(
+                {"min_lr": args.lr * args.min_lr_ratio}
+                if "min_lr" in args.lr_scheduler
+                else {}
+            ),
             warmup_steps=args.lr_warmup_steps,
             weight_decay=args.weight_decay,
             # fp16=dtype == torch.float16,

@@ -190,8 +190,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
 
             # B x A/3200 x D
             audio_tower_output = self.audio_tower.forward(
-                audio_values.to(self.audio_tower.dtype),
-                audio_len = audio_len
+                audio_values.to(self.audio_tower.dtype), audio_len=audio_len
             ).last_hidden_state
             audio_tower_output = audio_tower_output.to(inputs_embeds.dtype)
 
@@ -512,7 +511,9 @@ class UltravoxProjector(nn.Sequential):
         return hidden_states
 
 
-class ModifiedWhisperEncoder(whisper.WhisperEncoder, transformers.modeling_utils.ModuleUtilsMixin):
+class ModifiedWhisperEncoder(
+    whisper.WhisperEncoder, transformers.modeling_utils.ModuleUtilsMixin
+):
     """
     Encoder portion of OpenAI's Whisper model.
 
