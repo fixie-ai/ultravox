@@ -31,6 +31,7 @@ def fake_process(text, audio, return_tensors="pt", sampling_rate=16000):
         "audio_values": torch.tensor([[[0.1, 0.2, 0.3]]]),
         "audio_token_start_idx": torch.tensor([1]),
         "audio_token_len": torch.tensor([2]),
+        "audio_len": torch.tensor([10]),
     }
 
 

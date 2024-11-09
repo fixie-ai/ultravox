@@ -154,12 +154,23 @@ class UltravoxProcessor(transformers.ProcessorMixin):
                 sampling_rate=sampling_rate,
                 padding="longest",
                 max_length=audio_len,
+                return_attention_mask=True,
                 **kwargs,
             )
             if "input_features" in x:
                 data["audio_values"] = x.input_features
             else:
                 data["audio_values"] = x.input_values
+
+            # data["audio_len"] is the number of frames in the audio, used for creating attention masks in whisper encoder
+            if (
+                self.audio_padding == "max_length"
+            ):  # audio is padded to max length, so we rely on the attention mask to determine audio_len
+                data["audio_len"] = (
+                    x.attention_mask.sum(-1) - 1
+                )  # Whisper attention mask includes an extra 1 at the end that needs to be subtracted
+            else:  # audio is not padded, so we can directly use the audio length
+                data["audio_len"] = [torch.as_tensor(data["audio_values"]).shape[-1]]
 
         if text is not None:
             assert isinstance(

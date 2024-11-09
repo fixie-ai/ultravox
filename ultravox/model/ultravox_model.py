@@ -148,6 +148,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         labels: Optional[torch.Tensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
         audio_token_start_idx: Optional[torch.Tensor] = None,
+        audio_len: Optional[torch.Tensor] = None,
         audio_token_len: Optional[torch.Tensor] = None,
         past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
         # the alt_* fields are needed for KL divergence loss
@@ -189,7 +190,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
 
             # B x A/3200 x D
             audio_tower_output = self.audio_tower.forward(
-                audio_values.to(self.audio_tower.dtype)
+                audio_values.to(self.audio_tower.dtype), audio_len=audio_len
             ).last_hidden_state
             audio_tower_output = audio_tower_output.to(inputs_embeds.dtype)
 
@@ -235,6 +236,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         audio_values: Optional[torch.FloatTensor] = None,
         audio_token_start_idx: Optional[torch.Tensor] = None,
         audio_token_len: Optional[torch.Tensor] = None,
+        audio_len: Optional[torch.Tensor] = None,
         past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
         attention_mask: Optional[torch.Tensor] = None,
         inputs_embeds: Optional[torch.Tensor] = None,
@@ -263,6 +265,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
                 audio_token_start_idx - prefill_start_idx
             )
             model_input["audio_token_len"] = audio_token_len
+            model_input["audio_len"] = audio_len
 
         return model_input
 
@@ -508,7 +511,9 @@ class UltravoxProjector(nn.Sequential):
         return hidden_states
 
 
-class ModifiedWhisperEncoder(whisper.WhisperEncoder):
+class ModifiedWhisperEncoder(
+    whisper.WhisperEncoder, transformers.modeling_utils.ModuleUtilsMixin
+):
     """
     Encoder portion of OpenAI's Whisper model.
 
@@ -527,7 +532,7 @@ class ModifiedWhisperEncoder(whisper.WhisperEncoder):
     def forward(
         self,
         input_features,
-        attention_mask=None,
+        audio_len=None,
         head_mask=None,
         output_attentions=None,
         output_hidden_states=None,
@@ -570,6 +575,31 @@ class ModifiedWhisperEncoder(whisper.WhisperEncoder):
         encoder_states = () if output_hidden_states else None
         all_attentions = () if output_attentions else None
 
+        # Create attention mask based on audio lengths to mask out padding tokens
+        # For each sample in batch:
+        # - Convert raw audio length to feature length after convolutions
+        # - Create boolean mask that is True for valid positions and False for padding
+        # - Convert to extended attention mask format expected by transformer layers
+        #   (1.0 for positions to attend to, large negative for positions to ignore)
+        # This masking ensures consistent behavior between training and inference
+        # by preventing the model from attending to padding tokens in both cases
+        attention_mask = None
+        if audio_len != None:
+            audio_feature_len = self._get_feat_extract_output_lengths(audio_len)
+            batch_size = hidden_states.shape[0]
+            max_seq_len = hidden_states.shape[1]
+            attention_mask = (
+                torch.arange(max_seq_len, device=hidden_states.device)[None, :]
+                .expand(batch_size, -1)
+                .lt(audio_feature_len.view(batch_size, 1))
+            )
+            attention_mask = self.get_extended_attention_mask(
+                attention_mask,
+                None,
+                device=hidden_states.device,
+                dtype=hidden_states.dtype,
+            )
+
         # check if head_mask has a correct number of layers specified if desired
         if head_mask is not None:
             assert head_mask.size()[0] == (
@@ -593,14 +623,14 @@ class ModifiedWhisperEncoder(whisper.WhisperEncoder):
                     layer_outputs = self._gradient_checkpointing_func(
                         encoder_layer.__call__,
                         hidden_states,
-                        None,
+                        attention_mask,
                         (head_mask[idx] if head_mask is not None else None),
                         output_attentions,
                     )
                 else:
                     layer_outputs = encoder_layer(
                         hidden_states,
-                        None,
+                        attention_mask,
                         layer_head_mask=(
                             head_mask[idx] if head_mask is not None else None
                         ),
