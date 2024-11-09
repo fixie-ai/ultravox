@@ -123,6 +123,7 @@ def train(args: config_base.TrainConfig):
         audio_model_lora_config=args.audio_model_lora_config,
         torch_dtype=args.data_type,
         pad_token_id=text_tokenizer.eos_token_id,
+        audio_latency_bsize=args.audio_latency_bsize,
     )
 
     logging.info("Instantiating model...")
