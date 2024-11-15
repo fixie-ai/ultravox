@@ -1,0 +1,6 @@
+gradio_webrtc[vad]==0.0.12
+numba==0.60.0
+twilio
+transformers
+accelerate
+peft

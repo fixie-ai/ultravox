@@ -27,6 +27,8 @@ Ultravox currently takes in audio and emits streaming text. As we evolve the mod
 
 See Ultravox in action on our [demo page](https://demo.ultravox.ai).
 
+You can run the Gradio demo locally with `python demo/app.py`. Make sure you have installed the dependencies in `requirements.txt` beforehand.
+
 ### Discord
 
 Join us on our Discord server [here](https://discord.gg/Qw6KHxv8YB).
