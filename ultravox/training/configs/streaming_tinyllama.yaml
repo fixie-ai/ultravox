@@ -23,4 +23,4 @@ val_sets:
   - name: peoplespeech
 batch_size: 24
 max_steps: 10000 # x8x24 = 2,764,800
-audio_latency_bsize: 50 # -1 for non-causal, 50 for 1s, 100 for 2s, and so on.
+audio_latency_block_size: null # None for non-causal, 50 for 1s, 100 for 2s, and so on.
