@@ -106,7 +106,7 @@ class TrainConfig:
     # loss function to use
     loss_config: Optional[ultravox_config.LossConfig] = None
 
-    # To simulate audio streaming with masking. None for non-causal, 50 for 1s, 100 for 2s, and so on.
+    # To simulate audio streaming with masking. None for non-causal, 100 for 1s, 200 for 2s, and so on.
     audio_latency_block_size: int = None
 
     def __post_init__(self):

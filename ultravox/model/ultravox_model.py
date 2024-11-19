@@ -290,14 +290,19 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
                 audio_tower.init_latency_mask(
                     config.audio_latency_block_size, dtype=config.torch_dtype)
             else:
+                assert config.audio_latency_block_size not in (None, 0), \
+                    "only whisper audio tower supports audio latency masking, got non-zero value for 'audio_latency_block_size'"
                 audio_tower = transformers.AutoModel.from_pretrained(
                     config.audio_model_id, torch_dtype=config.torch_dtype
                 )
         else:
             if "whisper" in config.audio_config._name_or_path:
                 audio_tower = ModifiedWhisperEncoder(config.audio_config)
-                audio_tower.init_latency_mask(config.audio_latency_block_size, dtype=config.torch_dtype)
+                audio_tower.init_latency_mask(
+                    config.audio_latency_block_size, dtype=config.torch_dtype)
             else:
+                assert config.audio_latency_block_size not in (None, 0), \
+                    "only whisper audio tower supports audio latency masking, got non-zero value for 'audio_latency_block_size'"
                 with transformers.modeling_utils.no_init_weights():
                     # we only ever use from_config if the weights are retrained, hence initializing is not
                     # required. This makes the model quite creation faster since init on CPU is quite slow.
@@ -539,28 +544,24 @@ class ModifiedWhisperEncoder(
             return
         audio_streaming_mask = None
         # maximum sequence length
-        audio_latency_nblocks = (self.config.max_source_positions
+        max_seqlen = (self.config.max_source_positions
             * self.conv1.stride[0]
             * self.conv2.stride[0]
         )
-
-        assert audio_latency_nblocks > 0, f"total sequence length must be positive, got {audio_latency_nblocks}"
-
-        assert audio_latency_nblocks % (2 * audio_latency_block_size) == 0, (
-            f"audio_latency_block_size {audio_latency_block_size} must divide {audio_latency_nblocks} evenly. "
+        assert max_seqlen > 0, f"maximum sequence length must be positive, got {max_seqlen}"
+        assert max_seqlen % audio_latency_block_size == 0, (
+            f"audio_latency_block_size {audio_latency_block_size} must divide {max_seqlen} evenly."
         )
-
-        audio_latency_nblocks //=  2 * audio_latency_block_size
+        # Given the block size, we calculate number of blocks.
+        audio_latency_nblocks = max_seqlen // audio_latency_block_size
         audio_streaming_mask = torch.tril(
             torch.ones(
                 audio_latency_nblocks, audio_latency_nblocks),
                 diagonal=0,
             ).repeat_interleave(audio_latency_block_size, dim=0).repeat_interleave(audio_latency_block_size, dim=1)
         audio_streaming_mask = (1.0 - audio_streaming_mask) * torch.finfo(dtype).min
-        # audio_streaming_mask[audio_streaming_mask == 0] = float('-inf')
-        # audio_streaming_mask[audio_streaming_mask == 1] = 0
         audio_streaming_mask = audio_streaming_mask[None, None, :, :]
-        self.register_buffer('audio_streaming_mask', audio_streaming_mask, persistent=False)
+        self.register_buffer("audio_streaming_mask", audio_streaming_mask, persistent=False)
 
     def forward(
         self,
