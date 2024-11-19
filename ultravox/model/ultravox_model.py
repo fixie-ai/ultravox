@@ -538,7 +538,7 @@ class ModifiedWhisperEncoder(
             self.audio_streaming_mask = None
             return
         audio_streaming_mask = None
-        # total sequence length
+        # maximum sequence length
         audio_latency_nblocks = (self.config.max_source_positions
             * self.conv1.stride[0]
             * self.conv2.stride[0]
