@@ -544,7 +544,7 @@ class ModifiedWhisperEncoder(
     base_model_prefix = "model.encoder"
     _no_split_modules = ["WhisperEncoderLayer"]
 
-    def init_latency_mask(self, audio_latency_block_size: int, dtype: torch.float):
+    def init_latency_mask(self, audio_latency_block_size: int, dtype: torch.dtype):
         if audio_latency_block_size is None:
             self.audio_streaming_mask = None
             return
