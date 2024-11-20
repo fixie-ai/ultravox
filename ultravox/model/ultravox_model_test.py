@@ -31,7 +31,7 @@ def test_init_latency_mask_valid(encoder):
     assert encoder.audio_streaming_mask.shape[1] == 1
 
     mask = encoder.audio_streaming_mask[0, 0]
-    # 50x60=3000
+    # 100*30=3000
     source_mask = (
         torch.tril(torch.ones(30, 30), diagonal=0)
         .repeat_interleave(block_size, dim=0)
