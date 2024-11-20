@@ -106,6 +106,9 @@ class TrainConfig:
     # loss function to use
     loss_config: Optional[ultravox_config.LossConfig] = None
 
+    # To simulate audio streaming with masking. None for non-causal, 100 for 1s, 200 for 2s, and so on.
+    audio_latency_block_size: Optional[int] = None
+
     def __post_init__(self):
         assert self.data_type in ["bfloat16", "float16", "float32"]
         if self.device == "cuda" and not torch.cuda.is_available():

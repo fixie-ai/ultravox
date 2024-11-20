@@ -31,3 +31,5 @@ batch_size: 4
 data_type: "bfloat16"
 
 report_logs_to: ["tensorboard", "wandb"]
+
+audio_latency_block_size: null # null for non-causal, 100 for 1s, 200 for 2s, and so on.
