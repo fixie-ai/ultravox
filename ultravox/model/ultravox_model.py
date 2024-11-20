@@ -548,7 +548,7 @@ class ModifiedWhisperEncoder(
         if audio_latency_block_size is None:
             self.audio_streaming_mask = None
             return
-        audio_streaming_mask = None
+
         # maximum sequence length
         max_seqlen = (
             self.config.max_source_positions
