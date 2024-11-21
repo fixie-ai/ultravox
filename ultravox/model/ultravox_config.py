@@ -63,6 +63,8 @@ class UltravoxConfig(transformers.PretrainedConfig):
             The LoRA configuration for finetuning the text model.
         audio_model_lora_config (`LoraConfigSimplified`, *optional*):
             The LoRA configuration for finetuning the audio model.
+        audio_latency_block_size (`int`, *optional*, defaults to `None`):
+            The latency block size for simulating audio streaming.
 
 
     Example:
@@ -105,6 +107,7 @@ class UltravoxConfig(transformers.PretrainedConfig):
         projector_act: str = "swiglu",
         text_model_lora_config: Optional[LoraConfigSimplified] = None,
         audio_model_lora_config: Optional[LoraConfigSimplified] = None,
+        audio_latency_block_size: Optional[int] = None,
         **kwargs,
     ):
         self.ignore_index = ignore_index
@@ -147,6 +150,7 @@ class UltravoxConfig(transformers.PretrainedConfig):
             if isinstance(audio_model_lora_config, dict)
             else dataclasses.asdict(audio_model_lora_config or LoraConfigSimplified())
         )
+        self.audio_latency_block_size = audio_latency_block_size
 
         self.vocab_size = self.text_config.vocab_size
 
