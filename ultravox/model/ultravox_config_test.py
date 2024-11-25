@@ -39,7 +39,7 @@ def test_can_load_release(model_id: str):
         **config_from_dict.to_diff_dict()
     )
     assert (
-        exclude_key(config_reloaded.to_dict(), keys_to_ignore) == orig_config.to_dict()
+        config_reloaded.to_dict() == {**{k: None for k in keys_to_ignore}, **orig_config.to_dict()}
     )
     assert (
         exclude_key(config_reloaded_diff.to_dict(), keys_to_ignore)
