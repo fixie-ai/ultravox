@@ -291,7 +291,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
                     config.audio_latency_block_size, dtype=config.torch_dtype
                 )
             else:
-                assert config.audio_latency_block_size not in (
+                assert config.audio_latency_block_size in (
                     None,
                     0,
                 ), "only whisper audio tower supports audio latency masking, got non-zero value for 'audio_latency_block_size'"
@@ -305,7 +305,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
                     config.audio_latency_block_size, dtype=config.torch_dtype
                 )
             else:
-                assert config.audio_latency_block_size not in (
+                assert config.audio_latency_block_size in (
                     None,
                     0,
                 ), "only whisper audio tower supports audio latency masking, got non-zero value for 'audio_latency_block_size'"
