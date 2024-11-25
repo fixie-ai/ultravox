@@ -1,14 +1,7 @@
-from typing import Dict, Tuple
-
 import pytest
 import transformers
 
 from ultravox.model import ultravox_config
-
-
-def exclude_key(d: Dict, key_to_exclude: Tuple) -> Dict:
-    """Exclude a specific key from a dictionary."""
-    return {k: v for k, v in d.items() if k not in key_to_exclude}
 
 
 @pytest.mark.parametrize(
@@ -21,6 +14,7 @@ def test_can_load_release(model_id: str):
     )
     config_from_dict = ultravox_config.UltravoxConfig(**orig_config.to_dict())
     config_from_diff_dict = ultravox_config.UltravoxConfig(**orig_config.to_diff_dict())
+    # To not inadvertently ignore other keys, we explicitly define keys we require to ignore.
     keys_to_ignore = ("audio_latency_block_size",)
     orig_values = {
         **{k: None for k in keys_to_ignore},
