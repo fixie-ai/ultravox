@@ -29,7 +29,7 @@ tensorboardx = "~2.6.2.2"
 wandb = "~0.17.1"
 sacrebleu = "^2.4.2"
 tenacity = "^9.0.0"
-evals = {git = "https://github.com/fixie-ai/evals", rev = "0c66bf85df7a4b903ecb202b23c2a826b749fd71"}
+evals = {git = "https://github.com/fixie-ai/evals", rev = "a56dfebc69b8817322943b6e2ff936bd98d25be2"}
 praatio = "^6.2.0"
 
 [tool.poetry.group.dev.dependencies]
