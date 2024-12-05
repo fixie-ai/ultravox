@@ -3,16 +3,13 @@ import argparse
 import librosa
 import sounddevice as sd
 
-from ultravox.data import datasets
+from ultravox import data as datasets
 
 parser = argparse.ArgumentParser()
 parser.add_argument("data_sets", nargs="*", help="List of datasets to use")
 parser.add_argument("--data-split", default="train", help="Which split of data to use.")
 parser.add_argument(
     "--num-samples", "-n", type=int, default=5, help="Number of samples to display"
-)
-parser.add_argument(
-    "--num-prompts", type=int, default=1, help="Number of prompts to use"
 )
 parser.add_argument("--play", "-p", action="store_true", help="Play the audio samples")
 parser.add_argument(
@@ -21,14 +18,11 @@ parser.add_argument(
 parser.add_argument("--playback-rate", "-r", type=float, help="Playback rate")
 parser.add_argument("--shuffle", "-s", action="store_true", help="Shuffle the samples")
 parser.add_argument("--seed", type=int, help="Shuffle seed")
-parser.add_argument("--mds", action="store_true", help="Use MDS datasets")
 
 
 def main(args: argparse.Namespace):
     data_args = datasets.VoiceDatasetArgs(
-        num_prompts=args.num_prompts,
         shuffle=args.shuffle,
-        use_mds=args.mds,
         split=args.data_split,
     )
     if args.seed is not None:
@@ -41,8 +35,8 @@ def main(args: argparse.Namespace):
         assert len(messages) >= 2, f"Bad sample (messages) {len(messages)}"
         assert messages[-2]["role"] == "user", f"Bad sample (Q role): {messages}"
         assert messages[-1]["role"] == "assistant", f"Bad sample (A role): {messages}"
-        answer = messages[-2]["content"].replace("\n", "\\n")
-        print(f"Q: {messages[-1]['content']} [\"{sample.audio_transcript}\"]")
+        answer = messages[-1]["content"].replace("\n", "\\n")
+        print(f"Q: {messages[-2]['content']} [\"{sample.audio_transcript}\"]")
         print(f"A: {answer}")
         if args.play:
             audio = sample.audio

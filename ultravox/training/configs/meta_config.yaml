@@ -2,9 +2,11 @@ model_type: "ultravox"
 text_model: "meta-llama/Meta-Llama-3-8B-Instruct"
 audio_model: "facebook/wav2vec2-base-960h"
 
-data_sets: ["gigaspeech"]
-val_sets: ["heysquad_human", "anyinstruct", "soda", "peoplespeech"]
-stop_strategy: "LAST_EXHAUSTED"
+train_sets:
+  - name: gigaspeech
+val_sets:
+  - name: gigaspeech
+  - weight: 0.01
 
 train_on_inputs: False
 shuffle_data: True
@@ -16,9 +18,9 @@ eval_num_samples: 2000
 eval_max_new_tokens: 32
 eval_num_procs: 16
 
-optimizer: "adamw_torch"  # options: adamw_torch, adamw_bnb_8bit
-lr_scheduler: "cosine"  # options: linear, cosine, cosine_with_restarts, etc.
-lr:  2.e-3
+optimizer: "adamw_torch" # options: adamw_torch, adamw_bnb_8bit
+lr_scheduler: "cosine" # options: linear, cosine, cosine_with_restarts, etc.
+lr: 2.e-3
 grad_accum_steps: 1
 lr_warmup_steps: 1000
 max_steps: 10_000
@@ -30,3 +32,5 @@ batch_size: 4
 data_type: "bfloat16"
 
 report_logs_to: ["tensorboard", "wandb"]
+
+audio_latency_block_size: null # null for non-causal, 100 for 1s, 200 for 2s, and so on.

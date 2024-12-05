@@ -7,7 +7,7 @@ import numpy as np
 import torch
 import transformers
 
-from ultravox.data import datasets
+from ultravox.data import data_sample
 
 SAMPLE_RATE_LS = 24000
 TOKEN_FREQ_LS = 40
@@ -15,7 +15,7 @@ HOP_LENGTH_LS = SAMPLE_RATE_LS // TOKEN_FREQ_LS
 
 
 class UltravoxLSProcessor:
-    def dataproc(self, sample: datasets.VoiceSample):
+    def dataproc(self, sample: data_sample.VoiceSample):
         if sample.audio is not None:
             audio = sample.audio
             sample_rate = sample.sample_rate

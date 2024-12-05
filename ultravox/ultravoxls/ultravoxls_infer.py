@@ -3,7 +3,7 @@ from typing import Optional, Tuple, Union
 import torch
 import transformers
 
-from ultravox.data import datasets
+from ultravox.data import data_sample
 from ultravox.inference import base
 from ultravox.inference import utils
 from ultravox.model import wandb_utils
@@ -27,7 +27,7 @@ class LocalLSInference(base.VoiceInference):
 
     def infer(
         self,
-        sample: datasets.VoiceSample,
+        sample: data_sample.VoiceSample,
         max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
     ) -> base.VoiceOutput:

@@ -4,7 +4,7 @@ from typing import Optional
 import gradio as gr
 import simple_parsing
 
-from ultravox.data import datasets
+from ultravox import data as datasets
 from ultravox.inference import base as infer_base
 from ultravox.tools import gradio_helper
 

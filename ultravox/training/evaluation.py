@@ -8,7 +8,7 @@ from typing import List, Optional
 import numpy as np
 from torch.utils import data
 
-from ultravox.data import datasets
+from ultravox import data as datasets
 from ultravox.evaluation import eval
 from ultravox.evaluation import eval_types
 from ultravox.inference import infer
@@ -109,7 +109,6 @@ EVAL_SCENARIOS = [
 
 def evaluate(
     inference: infer.LocalInference,
-    data_dir: Optional[str] = None,
     num_samples: int = 200,
     num_procs: int = 8,
     max_new_tokens: Optional[int] = None,
@@ -127,10 +126,8 @@ def evaluate(
 
     for task in EVAL_SCENARIOS:
         ds_args = datasets.VoiceDatasetArgs(
-            data_dir=data_dir,
             split=datasets.DatasetSplit.VALIDATION,
             include_audio=task.include_audio,
-            include_context=task.include_context,
         )
 
         ds = datasets.Range(datasets.create_dataset(task.dataset, ds_args), num_samples)

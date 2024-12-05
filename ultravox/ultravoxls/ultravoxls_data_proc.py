@@ -4,7 +4,7 @@ import datasets
 import librosa
 from torch.utils import data
 
-from ultravox.data import datasets
+from ultravox import data as datasets
 from ultravox.ultravoxls import ultravoxls_processing
 
 

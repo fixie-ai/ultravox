@@ -1,5 +1,4 @@
 import contextlib
-import copy
 import dataclasses
 import gc
 import glob
@@ -18,28 +17,25 @@ import torch.distributed
 import transformers
 import wandb
 import wandb.sdk
-from torch.utils import data
 
-from ultravox.data import datasets
+from ultravox import data as datasets
 from ultravox.model import wandb_utils
 from ultravox.training import config_base
 from ultravox.training import ddp_utils
 from ultravox.training import model_types
 from ultravox.training.helpers import prefetch_weights
 
-INPUT_EXAMPLE = {"text": "Transcribe\n<|audio|>", "audio": b"\x00\x00" * 16000}
-OUTPUT_EXAMPLE = {"text": "Hello, world!"}
-
 
 def prepare_dataset(
     train_args: config_base.TrainConfig,
     model_pack: model_types.ModelPack,
-    dataset_names: List[str],
+    data_opts: List[config_base.DatasetOptions],
     data_args: datasets.VoiceDatasetArgs,
-    stop_strategy: datasets.StopStrategy,
     num_samples: Optional[int] = None,
 ) -> datasets.SizedIterableDataset:
-    data_sets = [datasets.create_dataset(ds, data_args) for ds in dataset_names]
+    data_names = [ds.name for ds in data_opts]
+    data_weights = [ds.weight for ds in data_opts]
+    data_sets = [datasets.create_dataset(ds, data_args) for ds in data_names]
     # If we're using epochs to train, validate the dataset length is appropriate.
     if train_args.max_steps == 0:
         for ds in data_sets:
@@ -47,7 +43,7 @@ def prepare_dataset(
                 len(ds) > 1
             ), f"Dataset {ds} has length {len(ds)} which is too short for epoch training"
 
-    interleave = datasets.InterleaveDataset(data_sets, stop_strategy=stop_strategy)
+    interleave = datasets.InterleaveDataset(data_sets, data_weights)
     ds_with_proc = model_pack.wrap_with_data_proc(interleave)
     limited_ds = datasets.Range(ds_with_proc, num_samples=num_samples)
     return limited_ds
@@ -154,65 +150,49 @@ def train(args: config_base.TrainConfig):
         model.to(device=torch.device(args.device, index=local_rank))
         logging.info(f"Using device (world_size): {model.device} ({world_size})")
 
+    # Register custom datasets
+    datasets.register_datasets(args.get_data_sets())
+
     # Prepare dataset, subsetting if needed
-    train_dataset: data.IterableDataset
-    val_datasets: Dict[str, data.IterableDataset]
-    # We use multiple validation sets here so that the results are comparable even when training set changes
-    # To make sure we can compare training and validation loss (e.g. for fine-tuning), we keep a special set
-    # called "matchtrain" that uses the same data as the training set.
-    val_sets = dict(
-        # [("matchtrain", args.data_sets)]  # FIXME: see issue https://github.com/fixie-ai/ultravox/issues/58
-        [(x, [x]) for x in args.val_sets]
-        + [(f"text_{x}", [x]) for x in args.val_sets]
-    )
+    train_dataset: datasets.SizedIterableDataset
+    val_datasets: Dict[str, datasets.SizedIterableDataset] = {}
+
     train_dataset = prepare_dataset(
         train_args=args,
         model_pack=model_pack,
-        dataset_names=args.data_sets,
-        stop_strategy=args.stop_strategy,
+        data_opts=args.get_train_sets(),
         num_samples=args.num_samples,
         data_args=datasets.VoiceDatasetArgs(
-            num_prompts=args.num_prompts,
-            data_dir=args.data_dir,
             shuffle=args.shuffle_data,
             shuffle_seed=args.shuffle_seed,
             max_audio_duration_secs=args.max_audio_duration_secs,
-            use_mds=args.mds,
-            mds_batch_size=args.batch_size,
         ),
     )
     if is_master:
         val_ds_args = datasets.VoiceDatasetArgs(
-            num_prompts=1,
             split=datasets.DatasetSplit.VALIDATION,
-            data_dir=args.data_dir,
             shuffle=False,
             max_audio_duration_secs=16,
-            use_mds=args.mds,
-            mds_batch_size=args.batch_size,
         )
-        val_ds_args_text = copy.copy(val_ds_args)
-        val_ds_args_text.include_audio = False
-        val_datasets = {
-            k: prepare_dataset(
+        for val_opt in args.get_val_sets():
+            val_dataset = prepare_dataset(
                 train_args=args,
                 model_pack=model_pack,
-                dataset_names=val_sets[k],
-                stop_strategy=args.stop_strategy,
+                data_opts=[val_opt],
                 num_samples=args.val_num_samples,
-                data_args=val_ds_args_text if k.startswith("text_") else val_ds_args,
+                data_args=val_ds_args,
             )
-            for k in val_sets
-        }
+            val_datasets[val_opt.name] = val_dataset
         logging.info(
-            f"Loaded {args.data_sets} data sets, sample limit: {args.num_samples} (val sample limit: {args.val_num_samples})"
+            f"Loaded {len(args.train_sets)}) data sets, sample limit: {args.num_samples} (val sample limit: {args.val_num_samples})"
         )
     else:
         # When using DDP with split_batches=True, the primary process will distribute the batches to the workers
         # The point of this is to avoid unnecessary data processing/downloading in the workers.
         # When using epochs to train, emptydataset must have a length equal to the training set
         train_dataset = datasets.EmptyDataset(len(train_dataset))
-        val_datasets = {k: datasets.EmptyDataset() for k in val_sets}
+        for val_opts in args.get_val_sets():
+            val_datasets[val_opts.name] = datasets.EmptyDataset()
 
     logging.info(f"Config Params: {args}")
     trainer = transformers.Seq2SeqTrainer(

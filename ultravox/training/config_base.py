@@ -10,47 +10,55 @@ from typing import Any, Dict, List, Optional
 import simple_parsing
 import torch
 
-from ultravox.data import dataset_config
-from ultravox.data import datasets
+from ultravox import data as datasets
 from ultravox.model import ultravox_config
 
 
 @dataclasses.dataclass
-class TrainConfig:
-    data_sets: List[str]
-    val_sets: List[str]
+class DatasetOptions:
+    name: str
+    weight: float = 1.0
+    include_audio: bool = True
 
+
+@dataclasses.dataclass
+class TrainConfig:
     # language model to use
     text_model: str
-    # audio encoder model to use
+    # Audio encoder model to use
     audio_model: str
 
     model_type: str = simple_parsing.choice("ultravox", "lsm")
     expected_audio_length_seconds: float = 10
 
-    # The data_dicts field complements data_sets, allowing for the inclusion of
-    # new datasets in the config.
-    #
-    # Due to simple_parsing's lack of support for containers of dataclass types,
-    # we first parse the data_dicts as a list of dictionaries. After parsing,
-    # we convert these dictionaries to DataDictConfig objects using Pydantic
-    # to enforce type constraints and validation, in the __post_init__ method.
-    data_dicts: Optional[List[Dict[str, Any]]] = None
+    # Workaround for simple_parsing not supporting lists of dataclasses; we need to
+    # define these as lists of dicts and convert them manually in helpers.
+
+    # Data-defined datasets (datasets.DatasetConfig)
+    data_sets: List[Dict[str, Any]] = simple_parsing.list_field()
+    # Training sets and weights (DatasetOptions)
+    train_sets: List[Dict[str, Any]] = simple_parsing.list_field()
+    # Validation sets and weights (DatasetOptions)
+    val_sets: List[Dict[str, Any]] = simple_parsing.list_field()
+
+    def get_data_sets(self) -> List[datasets.DatasetConfig]:
+        return [datasets.DatasetConfig.from_dict(ds) for ds in self.data_sets]
+
+    def get_train_sets(self) -> List[DatasetOptions]:
+        return [DatasetOptions(**ds) for ds in self.train_sets]
+
+    def get_val_sets(self) -> List[DatasetOptions]:
+        return [DatasetOptions(**ds) for ds in self.val_sets]
 
     do_train: bool = True
     do_eval: bool = True
 
-    # In InterleaveDataset, when to stop interleave: choose from last_exhausted (default), first_exhausted, or never_stop
-    stop_strategy: datasets.StopStrategy = datasets.StopStrategy.LAST_EXHAUSTED
-    data_dir: Optional[str] = None
-    mds: bool = False
     num_samples: Optional[int] = None
     val_num_samples: int = 100
     eval_num_samples: int = 100
     eval_max_new_tokens: Optional[int] = None
     eval_num_procs: int = 8
     eval_text_only: bool = False
-    num_prompts: int = 1
     # number of data loader workers
     num_workers: int = 8 if torch.cuda.is_available() else 1
     train_on_inputs: bool = False
@@ -101,17 +109,10 @@ class TrainConfig:
     # loss function to use
     loss_config: Optional[ultravox_config.LossConfig] = None
 
-    def __post_init__(self):
-        if self.data_dicts:
-            self.data_dicts = [
-                dataset_config.DataDictConfig(**data_dict)
-                for data_dict in self.data_dicts
-            ]
-            # For now, self.data_dicts is a hack to allow for the inclusion of new datasets using the
-            # GenericVoiceDataset class, without changing how existing datasets are specified in
-            # self.data_sets. In the future, all datasets will be updated to use the DataDictConfig class.
-            self.data_sets.extend(self.data_dicts)
+    # To simulate audio streaming with masking. None for non-causal, 100 for 1s, 200 for 2s, and so on.
+    audio_latency_block_size: Optional[int] = None
 
+    def __post_init__(self):
         assert self.data_type in ["bfloat16", "float16", "float32"]
         if self.device == "cuda" and not torch.cuda.is_available():
             self.device = "mps" if torch.backends.mps.is_available() else "cpu"
@@ -163,7 +164,9 @@ def fix_hyphens(arg: str):
     return re.sub(r"^--([^=]+)", lambda m: "--" + m.group(1).replace("-", "_"), arg)
 
 
-def get_train_args(override_sys_args: Optional[List[str]] = None) -> TrainConfig:
+def get_train_args(
+    override_sys_args: Optional[List[str]] = None, config_file="meta_config.yaml"
+) -> TrainConfig:
     """
     Parse the command line arguments and return a TrainConfig object.
 
@@ -175,7 +178,7 @@ def get_train_args(override_sys_args: Optional[List[str]] = None) -> TrainConfig
 
     return simple_parsing.parse(
         config_class=TrainConfig,
-        config_path=os.path.join(os.path.dirname(__file__), "configs/meta_config.yaml"),
+        config_path=os.path.join(os.path.dirname(__file__), "configs", config_file),
         add_config_path_arg=True,
         args=[fix_hyphens(arg) for arg in args],
     )

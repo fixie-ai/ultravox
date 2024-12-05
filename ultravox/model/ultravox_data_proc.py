@@ -1,17 +1,15 @@
 from typing import Any, Dict
 
-import datasets
 import numpy as np
-from torch.utils import data
 
-from ultravox.data import datasets
+from ultravox import data as datasets
 from ultravox.model import ultravox_processing
 
 
 class UltravoxDataproc(datasets.Dataproc):
     def __init__(
         self,
-        dataset: data.IterableDataset,
+        dataset: datasets.SizedIterableDataset,
         processor: ultravox_processing.UltravoxProcessor,
         train_on_inputs: bool = False,
         inference_mode: bool = False,
@@ -68,6 +66,7 @@ class UltravoxDataproc(datasets.Dataproc):
             inputs["audio_values"].squeeze_(0)
             inputs["audio_token_start_idx"].squeeze_(0)
             inputs["audio_token_len"].squeeze_(0)
+            inputs["audio_len"].squeeze_(0)
 
         # No need to shift the labels as the model does it internally
         labels = input_ids.clone()

@@ -35,14 +35,8 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
 
     config_class = UltravoxConfig
     config: UltravoxConfig  # for type hinting
-    # We minimize the weights in state_dict in order to reduce the size of the checkpoint
-    # The issue is that load_pretrained() uses state_dict() keys to know what keys are expected
-    # As such we have to tell is to ignore some keys that are not always in the model
-    _keys_to_ignore_on_load_unexpected = ["audio_tower.*", "language_model.*"]
-    # Usually we load encoder weights from a pretrained model, so we don't want to load the decoder weights
-    # Technically we never hit this issue because these keys are already removed from state_dict() however,
-    # but there's no harm in keeping it here for when we change that behavior.
-    _keys_to_ignore_on_load_missing = ["audio_tower.*"]
+    # Usually we load encoder and LLM weights from a pretrained model separately, so they are allowed to be missing
+    _keys_to_ignore_on_load_missing = ["audio_tower.*", "language_model.*"]
 
     def __init__(self, config: UltravoxConfig):
         super().__init__(config)
@@ -155,6 +149,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         labels: Optional[torch.Tensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
         audio_token_start_idx: Optional[torch.Tensor] = None,
+        audio_len: Optional[torch.Tensor] = None,
         audio_token_len: Optional[torch.Tensor] = None,
         past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
         # the alt_* fields are needed for KL divergence loss
@@ -196,7 +191,8 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
 
             # B x A/3200 x D
             audio_tower_output = self.audio_tower.forward(
-                audio_values.to(self.audio_tower.dtype)
+                audio_values.to(self.audio_tower.dtype),
+                audio_len=audio_len,
             ).last_hidden_state
             audio_tower_output = audio_tower_output.to(inputs_embeds.dtype)
 
@@ -242,6 +238,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         audio_values: Optional[torch.FloatTensor] = None,
         audio_token_start_idx: Optional[torch.Tensor] = None,
         audio_token_len: Optional[torch.Tensor] = None,
+        audio_len: Optional[torch.Tensor] = None,
         past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
         attention_mask: Optional[torch.Tensor] = None,
         inputs_embeds: Optional[torch.Tensor] = None,
@@ -270,6 +267,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
                 audio_token_start_idx - prefill_start_idx
             )
             model_input["audio_token_len"] = audio_token_len
+            model_input["audio_len"] = audio_len
 
         return model_input
 
@@ -290,14 +288,28 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
                 audio_tower = ModifiedWhisperEncoder.from_pretrained(
                     config.audio_model_id, torch_dtype=config.torch_dtype
                 )
+                audio_tower.init_latency_mask(
+                    config.audio_latency_block_size, dtype=config.torch_dtype
+                )
             else:
+                assert config.audio_latency_block_size in (
+                    None,
+                    0,
+                ), "only whisper audio tower supports audio latency masking, got non-zero value for 'audio_latency_block_size'"
                 audio_tower = transformers.AutoModel.from_pretrained(
                     config.audio_model_id, torch_dtype=config.torch_dtype
                 )
         else:
             if "whisper" in config.audio_config._name_or_path:
                 audio_tower = ModifiedWhisperEncoder(config.audio_config)
+                audio_tower.init_latency_mask(
+                    config.audio_latency_block_size, dtype=config.torch_dtype
+                )
             else:
+                assert config.audio_latency_block_size in (
+                    None,
+                    0,
+                ), "only whisper audio tower supports audio latency masking, got non-zero value for 'audio_latency_block_size'"
                 with transformers.modeling_utils.no_init_weights():
                     # we only ever use from_config if the weights are retrained, hence initializing is not
                     # required. This makes the model quite creation faster since init on CPU is quite slow.
@@ -521,7 +533,9 @@ class UltravoxProjector(nn.Sequential):
         return hidden_states
 
 
-class ModifiedWhisperEncoder(whisper.WhisperEncoder):
+class ModifiedWhisperEncoder(
+    whisper.WhisperEncoder, transformers.modeling_utils.ModuleUtilsMixin
+):
     """
     Encoder portion of OpenAI's Whisper model.
 
@@ -537,10 +551,43 @@ class ModifiedWhisperEncoder(whisper.WhisperEncoder):
     base_model_prefix = "model.encoder"
     _no_split_modules = ["WhisperEncoderLayer"]
 
+    def init_latency_mask(self, audio_latency_block_size: int, dtype: torch.dtype):
+        if audio_latency_block_size is None:
+            self.audio_streaming_mask = None
+            return
+
+        # maximum sequence length
+        max_seqlen = (
+            self.config.max_source_positions
+            * self.conv1.stride[0]
+            * self.conv2.stride[0]
+        )
+        assert (
+            max_seqlen > 0
+        ), f"maximum sequence length must be positive, got {max_seqlen}"
+        assert (
+            max_seqlen % audio_latency_block_size == 0
+        ), f"audio_latency_block_size {audio_latency_block_size} must divide {max_seqlen} evenly."
+        # Given the block size, we calculate number of blocks.
+        audio_latency_nblocks = max_seqlen // audio_latency_block_size
+        audio_streaming_mask = (
+            torch.tril(
+                torch.ones(audio_latency_nblocks, audio_latency_nblocks),
+                diagonal=0,
+            )
+            .repeat_interleave(audio_latency_block_size, dim=0)
+            .repeat_interleave(audio_latency_block_size, dim=1)
+        )
+        audio_streaming_mask = (1.0 - audio_streaming_mask) * torch.finfo(dtype).min
+        audio_streaming_mask = audio_streaming_mask[None, None, :, :]
+        self.register_buffer(
+            "audio_streaming_mask", audio_streaming_mask, persistent=False
+        )
+
     def forward(
         self,
         input_features,
-        attention_mask=None,
+        audio_len=None,
         head_mask=None,
         output_attentions=None,
         output_hidden_states=None,
@@ -583,6 +630,38 @@ class ModifiedWhisperEncoder(whisper.WhisperEncoder):
         encoder_states = () if output_hidden_states else None
         all_attentions = () if output_attentions else None
 
+        # Create attention mask based on audio lengths to mask out padding tokens
+        # For each sample in batch:
+        # - Convert raw audio length to feature length after convolutions
+        # - Create boolean mask that is True for valid positions and False for padding
+        # - Convert to extended attention mask format expected by transformer layers
+        #   (1.0 for positions to attend to, large negative for positions to ignore)
+        # This masking ensures consistent behavior between training and inference
+        # by preventing the model from attending to padding tokens in both cases
+        attention_mask = None
+        if audio_len != None:
+            audio_feature_len = self._get_feat_extract_output_lengths(audio_len)
+            max_seq_len = hidden_states.shape[1]
+            attention_mask = torch.arange(max_seq_len, device=hidden_states.device)[
+                None, :
+            ].lt(audio_feature_len.view(-1, 1))
+            attention_mask = self.get_extended_attention_mask(
+                attention_mask,
+                None,
+                device=hidden_states.device,
+                dtype=hidden_states.dtype,
+            )
+
+        if self.audio_streaming_mask is not None:
+            seqlen = hidden_states.size(-2)
+            if attention_mask is not None:
+                attention_mask = torch.minimum(
+                    self.audio_streaming_mask[:, :, :seqlen, :seqlen], attention_mask
+                )  # merge
+            else:
+                attention_mask = self.audio_streaming_mask[:, :, :seqlen, :seqlen]
+            attention_mask = attention_mask.to(hidden_states.dtype)
+
         # check if head_mask has a correct number of layers specified if desired
         if head_mask is not None:
             assert head_mask.size()[0] == (
@@ -606,14 +685,14 @@ class ModifiedWhisperEncoder(whisper.WhisperEncoder):
                     layer_outputs = self._gradient_checkpointing_func(
                         encoder_layer.__call__,
                         hidden_states,
-                        None,
+                        attention_mask,
                         (head_mask[idx] if head_mask is not None else None),
                         output_attentions,
                     )
                 else:
                     layer_outputs = encoder_layer(
                         hidden_states,
-                        None,
+                        attention_mask,
                         layer_head_mask=(
                             head_mask[idx] if head_mask is not None else None
                         ),

@@ -7,7 +7,7 @@ import simple_parsing
 import torch
 import torchaudio
 
-from ultravox.data import datasets
+from ultravox.data import data_sample
 from ultravox.inference import base
 from ultravox.ultravoxls import ultravoxls_infer
 
@@ -31,7 +31,7 @@ class InferArgs:
 
 def run_infer(
     inference: base.VoiceInference,
-    sample: datasets.VoiceSample,
+    sample: data_sample.VoiceSample,
     temperature: float = 1.0,
     max_tokens: int = 160,
 ):
@@ -55,7 +55,7 @@ def oneshot_infer(
     **kwargs,
 ):
     with open(audio_file, "rb") as file:
-        sample = datasets.VoiceSample.from_prompt_and_buf("", file.read())
+        sample = data_sample.VoiceSample.from_prompt_and_buf("", file.read())
 
     if crop_input_audio_secs and sample.audio is not None:
         sample.audio = sample.audio[: int(crop_input_audio_secs * sample.sample_rate)]

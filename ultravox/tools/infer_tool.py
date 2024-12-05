@@ -10,7 +10,7 @@ import numpy as np
 import simple_parsing
 from torch.utils import data as data_utils
 
-from ultravox.data import datasets
+from ultravox import data as datasets
 from ultravox.evaluation import eval
 from ultravox.evaluation import eval_types
 from ultravox.inference import base
@@ -51,12 +51,6 @@ class InferArgs:
     data_split: datasets.DatasetSplit = simple_parsing.field(
         default=datasets.DatasetSplit.VALIDATION, alias="-s"
     )
-    # Directory for existing data
-    data_dir: Optional[str] = None
-    # Use dataset context
-    context: bool = False
-    # Load datasets using MDS
-    mds: bool = False
     # Number of dataset samples to process
     num_samples: int = simple_parsing.field(default=1, alias="-n")
     # Shuffle the dataset
@@ -181,12 +175,8 @@ def oneshot_infer(inference: base.VoiceInference, args: InferArgs):
 def dataset_infer(inference: base.VoiceInference, args: InferArgs):
     assert args.data_sets, "At least one data set must be provided"
     ds_args = datasets.VoiceDatasetArgs(
-        data_dir=args.data_dir,
-        prompt=args.prompt,
         include_audio=not args.text_only,
-        include_context=args.context,
         shuffle=args.shuffle,
-        use_mds=args.mds,
         split=args.data_split,
     )
     if args.seed is not None:

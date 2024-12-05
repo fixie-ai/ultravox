@@ -6,7 +6,7 @@ from typing import Optional
 import simple_parsing
 import transformers
 
-from ultravox.data import datasets
+from ultravox import data as datasets
 from ultravox.inference import ultravox_infer
 from ultravox.model import ultravox_pipeline
 
@@ -52,7 +52,7 @@ def main(args: UploadToHubArgs):
         loaded_pipe = transformers.pipeline(
             model=args.hf_upload_model, trust_remote_code=True
         )
-        ds = datasets.BoolQDataset(datasets.VoiceDatasetArgs())
+        ds = datasets.create_dataset("boolq", datasets.VoiceDatasetArgs())
         sample = next(iter(ds))
         generated = loaded_pipe(
             {"audio": sample.audio, "turns": sample.messages[:-1]}, max_new_tokens=10

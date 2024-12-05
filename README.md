@@ -9,6 +9,7 @@ A fast multimodal LLM for real-time voice
 </h3>
 
 _Latest News_
+* 2024/11 — [Ultravox 0.4.1](https://github.com/fixie-ai/ultravox/releases/tag/v0.4.1) available
 * 2024/08 — [Ultravox 0.4](https://github.com/fixie-ai/ultravox/releases/tag/v0.4) available
 * 2024/08 — [Ultravox 0.3](https://github.com/fixie-ai/ultravox/releases/tag/v0.3) available
 * 2024/08 — Preview of Ultravox APIs available, more information [here](https://fixie-ai.github.io/ultradox/)
@@ -17,16 +18,15 @@ _Latest News_
 
 # About
 
-Ultravox is a new kind of multimodal LLM that can understand text as well as human speech, without the need for a separate Audio Speech Recognition (ASR) stage. Building on research like [AudioLM](https://arxiv.org/abs/2209.03143), [SeamlessM4T](https://ai.meta.com/blog/seamless-m4t/), [Gazelle](https://tincans.ai/slm), [SpeechGPT](https://github.com/0nutation/SpeechGPT/tree/main/speechgpt), and others, we've extended Meta's [Llama 3 model](https://llama.meta.com/) with a multimodal projector that converts audio directly into the high-dimensional space used by Llama 3. This direct coupling allows Ultravox to respond much more quickly than systems that combine separate ASR and LLM components. In the future this will also allow Ultravox to natively understand the paralinguistic cues of timing and emotion that are omnipresent in human speech.
+Ultravox is a new kind of multimodal LLM that can understand text as well as human speech, without the need for a separate Audio Speech Recognition (ASR) stage. Building on research like [AudioLM](https://arxiv.org/abs/2209.03143), [SeamlessM4T](https://ai.meta.com/blog/seamless-m4t/), [Gazelle](https://tincans.ai/slm), [SpeechGPT](https://github.com/0nutation/SpeechGPT/tree/main/speechgpt), and others, Ultravox is able to extend any open-weight LLM with a multimodal projector that converts audio directly into the high-dimensional space used by LLM. We've trained versions on Llama 3, Mistral, and Gemma. This direct coupling allows Ultravox to respond much more quickly than systems that combine separate ASR and LLM components. In the future this will also allow Ultravox to natively understand the paralinguistic cues of timing and emotion that are omnipresent in human speech.
 
-The current version of Ultravox (v0.3), when invoked with audio content, has a time-to-first-token (TTFT) of approximately 150ms, and a tokens-per-second rate of ~60, all using a Llama 3.1 8B backbone. While quite fast, we believe there is considerable room for improvement in these numbers. We look forward to working with LLM hosting providers to deliver state-of-the-art performance for Ultravox.
+The current version of Ultravox (v0.4), when invoked with audio content, has a time-to-first-token (TTFT) of approximately 150ms, and a tokens-per-second rate of ~60 using a Llama 3.1 8B backbone. While quite fast, we believe there is considerable room for improvement in these numbers.
 
-Ultravox currently takes in audio and emits streaming text. As we evolve the model, we'll train it to be able to emit a stream of speech tokens that can then be converted directly into raw audio by an appropriate unit vocoder. We're interested in working with interested parties to build this functionality!
+Ultravox currently takes in audio and emits streaming text. As we evolve the model, we'll train it to be able to emit a stream of speech tokens that can then be converted directly into raw audio by an appropriate unit vocoder.
 
 ### Demo
 
-See Ultravox in action via a [voice call](https://www.ai.town/characters/a90fcca3-53c0-4111-b30a-4984883a23ef) with an AI in our app, [ai.town](https://ai.town).
-(*Note: there's been a lot of traffic to our inference server and we've hit a few bugs. If the demo seems to be erroring out please try again in a bit.*)
+See Ultravox in action on our [demo page](https://demo.ultravox.ai).
 
 ### Discord
 
@@ -34,17 +34,17 @@ Join us on our Discord server [here](https://discord.gg/Qw6KHxv8YB).
 
 ### Jobs
 
-If you're interested in working on Ultravox fulltime, we're hiring! Check out our jobs page [here](https://www.notion.so/fixieai/Careers-at-Fixie-fc1a7ace4c1e42a8886065bc397aba2d).
+If you're interested in working on Ultravox fulltime, we're hiring! Check out our jobs page [here](https://careers.fixie.ai).
 
 ### Inference Server
 
 You can try out Ultravox using your own audio content (as a WAV file) by spinning up an Ultravox instance on our partner, BaseTen: [https://www.baseten.co/library/ultravox/](https://www.baseten.co/library/ultravox/). They offer free credits to get started.
 
-If you're interested in running Ultravox in a real-time capacity, we offer a set of managed APIs as well. You can learn more about getting access to those [here](https://fixie-ai.github.io/ultradox/).
+If you're interested in running Ultravox in a real-time capacity, we offer a set of managed APIs as well. You can learn more about getting access to those [here](https://docs.ultravox.ai).
 
 ### Model
 
-You can download the latest weights from the [Ultravox Hugging Face page](https://huggingface.co/fixie-ai/ultravox-v0_4).
+You can download the latest weights from the [Ultravox Hugging Face page](https://huggingface.co/fixie-ai/).
 
 ### Architecture
 
@@ -77,7 +77,7 @@ We're using Poetry to manage the Python virtual environment.
 
 ### Mosaic Environment Setup (Fixie Internal)
 
-If you want to use [Mosaic](https://docs.mosaicml.com/projects/mcli/en/latest/quick_start/getting_started.html) for trainig , you need to setup a few things to run on the Mosaic Platform.
+If you want to use [Mosaic](https://docs.mosaicml.com/projects/mcli/en/latest/quick_start/getting_started.html) for training, you need to setup a few things to run on the Mosaic Platform.
 
 1. Install & login to the Mosaic CLI
 

@@ -8,7 +8,7 @@ import numpy as np
 import torch
 import transformers
 
-from ultravox.data import datasets
+from ultravox import data as datasets
 from ultravox.inference import base
 from ultravox.model import ultravox_processing
 
