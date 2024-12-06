@@ -14,32 +14,35 @@ if  get_space():
     rtc_configuration = get_turn_credentials(method="twilio")
 
 
-def transcribe(
-    audio: tuple[int, np.ndarray],
-    conversation: list[dict],
-    max_new_tokens: int = 200,
-    temperature: float = 0,
-):
-
-    conversation.append({"role": "user", "content": gr.Audio(value=audio)})
-    yield AdditionalOutputs(conversation)
-    
-    audio_rs = audio_to_float32(audio)
-    sample = datasets.VoiceSample.from_prompt_and_raw("<|audio|>", audio_rs, audio[0])
-
-    output = cast(ultravox_infer.UltravoxInference, inference).infer_stream(
-        sample,
-        max_tokens=max_new_tokens,
-        temperature=temperature,
-    )
-    conversation.append({"role": "assistant", "content": ""})
-    for chunk in output:
-        if isinstance(chunk, infer_base.InferenceChunk):
-            conversation[-1]["content"] += chunk.text
-            yield AdditionalOutputs(conversation)
 
 
-def make_demo(args):
+
+def make_demo(args, inference):
+
+    def transcribe(
+        audio: tuple[int, np.ndarray],
+        conversation: list[dict],
+        max_new_tokens: int = 200,
+        temperature: float = 0,
+    ):
+
+        sampling_rate, audio_array= audio
+
+        conversation.append({"role": "user", "content": gr.Audio(value=(sampling_rate, audio_array.squeeze()))})
+        yield AdditionalOutputs(conversation)
+        
+        sample = datasets.VoiceSample.from_prompt_and_raw("<|audio|>", audio_array.squeeze(), sampling_rate)
+
+        output = cast(ultravox_infer.UltravoxInference, inference).infer_stream(
+            sample,
+            max_tokens=max_new_tokens,
+            temperature=temperature,
+        )
+        conversation.append({"role": "assistant", "content": ""})
+        for chunk in output:
+            if isinstance(chunk, infer_base.InferenceChunk):
+                conversation[-1]["content"] += chunk.text
+                yield AdditionalOutputs(conversation)
 
     with gr.Blocks() as voice_demo:
         

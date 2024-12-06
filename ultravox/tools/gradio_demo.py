@@ -156,7 +156,7 @@ with gr.Blocks() as demo:
 
 
 if args.voice_mode:
-    demo = make_demo(args)
+    demo = make_demo(args, inference)
 
 if __name__ == "__main__":
     demo.launch(share=True)
