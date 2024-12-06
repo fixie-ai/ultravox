@@ -11,7 +11,7 @@ from ultravox.inference import ultravox_infer
 
 rtc_configuration = None
 if  get_space():
-    rtc_configuration = get_turn_credentials()
+    rtc_configuration = get_turn_credentials(method="twilio")
 
 
 def transcribe(
@@ -44,17 +44,17 @@ def make_demo(args):
     with gr.Blocks() as voice_demo:
         
         placeholder = """
-        <h1 style='text-align: center'>
-        Talk to Ultravox Llama 3.1 8b (Powered by WebRTC ⚡️)
-        </h1>
-        <p style='text-align: center'>
-        Once you grant access to your microphone, you can talk naturally to Ultravox.
-        When you stop talking, the audio will be sent for processing.
-        </p>
-        <p style='text-align: center'>
-        Each conversation is limited to 90 seconds. Once the time limit is up you can rejoin the conversation.
-        </p>
-        """
+<h1 style='text-align: center'>
+    Talk to Ultravox Llama 3.1 8b (Powered by WebRTC ⚡️)
+</h1>
+<p style='text-align: center'>
+    Once you grant access to your microphone, you can talk naturally to Ultravox.
+    When you stop talking, the audio will be sent for processing.
+</p>
+<p style='text-align: center'>
+    Each conversation is limited to 90 seconds. Once the time limit is up you can rejoin the conversation.
+</p>
+"""
         with gr.Row():
             conversation = gr.Chatbot(label="transcript",
                                       placeholder=placeholder,
