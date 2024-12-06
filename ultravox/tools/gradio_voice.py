@@ -21,10 +21,10 @@ def transcribe(
     temperature: float = 0,
 ):
 
-    audio_rs = audio_to_float32(audio)
-    conversation.append({"role": "user", "content": gr.Audio(value=(audio[0], audio_rs))})
+    conversation.append({"role": "user", "content": gr.Audio(value=audio)})
     yield AdditionalOutputs(conversation)
-
+    
+    audio_rs = audio_to_float32(audio)
     sample = datasets.VoiceSample.from_prompt_and_raw("<|audio|>", audio_rs, audio[0])
 
     output = cast(ultravox_infer.UltravoxInference, inference).infer_stream(
