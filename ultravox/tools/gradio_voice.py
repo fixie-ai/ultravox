@@ -1,20 +1,20 @@
-import gradio as gr
 from typing import cast
-from gradio.utils import get_space
-from gradio_webrtc import WebRTC, ReplyOnPause, AdditionalOutputs, get_turn_credentials, audio_to_float32
+
+import gradio as gr
 import numpy as np
+from gradio.utils import get_space
+from gradio_webrtc import AdditionalOutputs
+from gradio_webrtc import ReplyOnPause
+from gradio_webrtc import WebRTC
+from gradio_webrtc import get_turn_credentials
+
 from ultravox import data as datasets
 from ultravox.inference import base as infer_base
 from ultravox.inference import ultravox_infer
 
-
-
 rtc_configuration = None
-if  get_space():
+if get_space():
     rtc_configuration = get_turn_credentials(method="twilio")
-
-
-
 
 
 def make_demo(args, inference):
@@ -26,12 +26,19 @@ def make_demo(args, inference):
         temperature: float = 0,
     ):
 
-        sampling_rate, audio_array= audio
+        sampling_rate, audio_array = audio
 
-        conversation.append({"role": "user", "content": gr.Audio(value=(sampling_rate, audio_array.squeeze()))})
+        conversation.append(
+            {
+                "role": "user",
+                "content": gr.Audio(value=(sampling_rate, audio_array.squeeze())),
+            }
+        )
         yield AdditionalOutputs(conversation)
-        
-        sample = datasets.VoiceSample.from_prompt_and_raw("<|audio|>", audio_array.squeeze(), sampling_rate)
+
+        sample = datasets.VoiceSample.from_prompt_and_raw(
+            "<|audio|>", audio_array.squeeze(), sampling_rate
+        )
 
         output = cast(ultravox_infer.UltravoxInference, inference).infer_stream(
             sample,
@@ -45,7 +52,7 @@ def make_demo(args, inference):
                 yield AdditionalOutputs(conversation)
 
     with gr.Blocks() as voice_demo:
-        
+
         placeholder = """
 <h1 style='text-align: center'>
     Talk to Ultravox Llama 3.1 8b (Powered by WebRTC ⚡️)
@@ -59,16 +66,16 @@ def make_demo(args, inference):
 </p>
 """
         with gr.Row():
-            conversation = gr.Chatbot(label="transcript",
-                                      placeholder=placeholder,
-                                      type="messages")
+            conversation = gr.Chatbot(
+                label="transcript", placeholder=placeholder, type="messages"
+            )
         with gr.Row():
             with gr.Column(scale=4):
                 audio = WebRTC(
                     rtc_configuration=rtc_configuration,
                     label="Stream",
                     mode="send",
-                    modality="audio"
+                    modality="audio",
                 )
             with gr.Column(scale=1):
                 max_new_tokens = gr.Slider(
@@ -100,14 +107,5 @@ def make_demo(args, inference):
             queue=False,
             show_progress="hidden",
         )
-    
+
     return voice_demo
-
-
-if __name__ == "__main__":
-
-    class Args:
-        max_new_tokens = 512
-        temperature = 0
-
-    make_demo(Args()).launch()
