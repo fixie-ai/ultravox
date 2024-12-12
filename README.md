@@ -28,6 +28,8 @@ Ultravox currently takes in audio and emits streaming text. As we evolve the mod
 
 See Ultravox in action on our [demo page](https://demo.ultravox.ai).
 
+You can run the Gradio demo locally with `just gradio`. You can run the demo in "voice mode" which allows natural audio conversations with ultravox by running `just gradio --voice_mode=True`
+
 ### Discord
 
 Join us on our Discord server [here](https://discord.gg/Qw6KHxv8YB).

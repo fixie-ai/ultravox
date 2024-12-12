@@ -7,6 +7,7 @@ import simple_parsing
 from ultravox import data as datasets
 from ultravox.inference import base as infer_base
 from ultravox.tools import gradio_helper
+from ultravox.tools.gradio_voice import make_demo
 
 DEMO_INSTRUCTION: str = """Enter your prompt here (audio will be inserted at the end or at <|audio|>).
 
@@ -27,6 +28,7 @@ class DemoConfig:
     default_prompt: str = ""
     max_new_tokens: int = 200
     temperature: float = 0
+    voice_mode: bool = False
 
 
 args = simple_parsing.parse(config_class=DemoConfig)
@@ -153,6 +155,8 @@ with gr.Blocks() as demo:
     demo.load(gradio_reset, [], [chatbot, prompt, audio], queue=False)
 
 
+if args.voice_mode:
+    demo = make_demo(args, inference)
+
 if __name__ == "__main__":
-    demo.queue()
     demo.launch(share=True)
