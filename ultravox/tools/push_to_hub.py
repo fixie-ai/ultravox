@@ -43,6 +43,7 @@ def main(args: UploadToHubArgs):
         model=inference.model,
         tokenizer=inference.tokenizer,
         audio_processor=inference.processor.audio_processor,
+        device=args.device,
     )
     print("Uploading model to HuggingFace Hub...")
     pipe.push_to_hub(args.hf_upload_model, private=args.private)
