@@ -2,8 +2,8 @@ from datetime import datetime
 from typing import List, Optional
 
 import huggingface_hub
-import transformers
 
+from ultravox.model import hf_hub_utils
 from ultravox.model import wandb_utils
 from ultravox.training import config_base
 
@@ -55,13 +55,15 @@ def download_weights(
                     if key in run_config:
                         model_ids.append(run_config[key])
 
+    if model_load_dir and hf_hub_utils.is_hf_model(model_load_dir):
+        model_ids.append(hf_hub_utils.get_hf_model_id(model_load_dir))
+
     for model_id in model_ids:
         try:
             # Download all model files that match ALLOW_PATTERNS
             # This is faster than .from_pretrained due to parallel downloads
-            huggingface_hub.snapshot_download(
-                repo_id=model_id, allow_patterns=ALLOW_PATTERNS
-            )
+            # We can also use hf-transfer to download the files which is faster on fast internet connections
+            hf_hub_utils.download_hf_model(model_id)
         except huggingface_hub.utils.GatedRepoError as e:
             raise e
         except huggingface_hub.utils.RepositoryNotFoundError as e:
@@ -70,12 +72,6 @@ def download_weights(
             print(
                 f"Model {model_id} not found on HF Hub. Skipping download. Error: {e}"
             )
-
-        # A backstop to make sure the model is fully downloaded. Scenarios to consider:
-        # - ALLOW_PATTERNS is not enough to download all files needed
-        # - The model is local, this will verify that everything is in order
-        # Using `device_map="meta"` to avoid loading the weights into memory or device
-        transformers.AutoModel.from_pretrained(model_id, device_map="meta")
 
     return model_path
 

@@ -19,6 +19,7 @@ import wandb
 import wandb.sdk
 
 from ultravox import data as datasets
+from ultravox.model import hf_hub_utils
 from ultravox.model import wandb_utils
 from ultravox.training import config_base
 from ultravox.training import ddp_utils
@@ -131,11 +132,13 @@ def train(args: config_base.TrainConfig):
             # and hence this is just resolving the path. If the weights are not downloaded,
             # we might see a race condition here when using DDP.
             load_path = wandb_utils.download_model_from_wandb(load_path)
+        elif hf_hub_utils.is_hf_model(load_path):
+            load_path = hf_hub_utils.download_hf_model(load_path)
         if os.path.isdir(load_path):
             load_path = os.path.join(load_path, "model*.safetensors")
         paths = glob.glob(load_path)
         assert len(paths) > 0, f"No model files found at {load_path}"
-        for path in glob.glob(load_path):
+        for path in paths:
             state_dict = safetensors.torch.load_file(path)
             mismatch = model.load_state_dict(state_dict, strict=False)
             if mismatch.unexpected_keys:

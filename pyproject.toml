@@ -34,6 +34,7 @@ torchaudio = "^2.4.1"
 scipy = "^1.14.1"
 einops = "^0.8.0"
 praatio = "^6.2.0"
+hf-transfer = "^0.1.8"
 
 [tool.poetry.group.dev.dependencies]
 black = "~24.4.2"

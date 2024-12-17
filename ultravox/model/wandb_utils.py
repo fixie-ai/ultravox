@@ -21,10 +21,16 @@ def get_artifact(model_url: str) -> wandb.Artifact:
 def download_model_from_wandb(model_url: str) -> str:
     artifact = get_artifact(model_url)
 
-    for file in artifact.files():
-        if not any(file.name.endswith(path) for path in IGNORE_PATHS):
-            print("downloading", file.name)
-            model_path = artifact.download(path_prefix=file.name)
+    if any(
+        file.name.endswith(path) for file in artifact.files() for path in IGNORE_PATHS
+    ):
+        # downloading one by one to avoid downloading the ignored files
+        for file in artifact.files():
+            if not any(file.name.endswith(path) for path in IGNORE_PATHS):
+                print("downloading", file.name)
+                model_path = artifact.download(path_prefix=file.name)
+    else:
+        model_path = artifact.download()
 
     if model_path is None:
         raise ValueError(f"No files to be downloaded.")
