@@ -509,7 +509,7 @@ class SwiGLU(nn.Module):
         return F.silu(gate) * x
 
 
-class UltravoxProjector(nn.Sequential):
+class UltravoxProjector(nn.Module):
     def __init__(self, config: UltravoxConfig):
         super().__init__()
         self.hidden_dim = config.hidden_size
@@ -520,8 +520,13 @@ class UltravoxProjector(nn.Sequential):
         dim = self.hidden_dim
         self.act = transformers.activations.get_activation(config.projector_act)
         dim = dim // 2 if config.projector_act == "swiglu" else dim
-        self.linear_2 = nn.Linear(dim, config.text_config.hidden_size, bias=False)
-        self.ln_post = RMSNorm(config.text_config.hidden_size, init=config.norm_init)
+        dim_out = config.text_config.hidden_size
+        self.linear_2 = nn.Linear(dim, dim_out, bias=False)
+        self.ln_post: Union[RMSNorm, nn.Identity] = (
+            RMSNorm(dim_out, init=config.norm_init)
+            if config.last_layer_norm
+            else nn.Identity()
+        )
 
     def forward(self, audio_features: torch.Tensor) -> torch.Tensor:
         audio_features = self._pad_and_stack(audio_features)

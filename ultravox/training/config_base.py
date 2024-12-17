@@ -31,6 +31,11 @@ class TrainConfig:
     model_type: str = simple_parsing.choice("ultravox", "lsm")
     expected_audio_length_seconds: float = 10
 
+    # Whether to apply layer normalization to the final layer of the projector.
+    # Ultravox up to v0.4.1 had a final projection layer, but this will be removed going forward
+    # to allow for seamlessly merging a small-to-big projection layer.
+    last_layer_norm: bool = False
+
     # Workaround for simple_parsing not supporting lists of dataclasses; we need to
     # define these as lists of dicts and convert them manually in helpers.
 
