@@ -102,6 +102,7 @@ class TrainConfig:
     batch_size: int = 2
     lr: float = 1e-5
     lr_scheduler: str = "cosine"
+    lr_scheduler_kwargs: Dict[str, Any] = simple_parsing.field(default_factory=dict)
     lr_warmup_steps: int = 0
     weight_decay: float = 0.0
     seed: int = 42
