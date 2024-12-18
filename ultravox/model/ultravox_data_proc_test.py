@@ -60,8 +60,7 @@ def test_process(mock_processor, fake_dataset):
 
     assert processed["input_ids"].shape == torch.Size([10])
     assert processed["attention_mask"].shape == torch.Size([10])
-    assert processed["labels"].shape == torch.Size([10])
-    assert processed["labels"].equal(
+    assert torch.tensor(processed["labels"]).equal(
         torch.tensor([-100, -100, -100, -100, -100, 5, 6, 7, 8, 9])
     )
     assert processed["audio_values"].shape == torch.Size([1, 3])

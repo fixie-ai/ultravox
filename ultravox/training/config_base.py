@@ -18,7 +18,6 @@ from ultravox.model import ultravox_config
 class DatasetOptions:
     name: str
     weight: float = 1.0
-    include_audio: bool = True
 
 
 @dataclasses.dataclass

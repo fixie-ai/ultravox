@@ -1,5 +1,4 @@
 import abc
-import dataclasses
 import logging
 import os
 import tempfile
@@ -10,8 +9,6 @@ import datasets as hf_datasets
 import jinja2
 import numpy as np
 import streaming as mds
-import torch
-import torch.nn.functional as F
 import transformers
 from torch.utils import data
 
@@ -25,46 +22,6 @@ os.environ["GOOGLE_CLOUD_PROJECT"] = "fixie-training"
 
 # Silence the spurious warnings coming from the MosaicML streaming library.
 logging.getLogger("streaming.base.dataset").setLevel(logging.ERROR)
-
-
-@dataclasses.dataclass
-class DataCollatorForSeq2SeqWithAudio(transformers.DataCollatorForSeq2Seq):
-    # when enabled, the alt_input_ids, alt_attention_mask, and alt_labels fields are used for computing the KL loss in UltravoxModel
-    include_alt_fields: bool = False
-
-    def __call__(self, features, *args, **kwargs):
-        audio_values = [f.pop("audio_values", None) for f in features]
-        if self.include_alt_fields:
-            # these fields are hard-coded in the transformer data collator, so they need special handling before calling the super method
-            alt_features = [
-                {
-                    "input_ids": f.pop("alt_input_ids"),
-                    "attention_mask": f.pop("alt_attention_mask"),
-                    "labels": f.pop("alt_labels"),
-                }
-                for f in features
-            ]
-        input_ids_lens = torch.LongTensor([f["input_ids"].shape[-1] for f in features])
-        batch = super().__call__(features, *args, **kwargs)
-        if self.include_alt_fields:
-            alt_batch = super().__call__(alt_features, *args, **kwargs)
-            batch["alt_input_ids"] = alt_batch["input_ids"]
-            batch["alt_attention_mask"] = alt_batch["attention_mask"]
-            batch["alt_labels"] = alt_batch["labels"]
-
-        # Pad the last dimension of all audio_values to the same length, with 0s on the right.
-        if audio_values and audio_values[0] is not None:
-            max_len = max([x.shape[-1] for x in audio_values])
-            batch["audio_values"] = torch.stack(
-                [F.pad(x, (0, max_len - x.shape[-1])) for x in audio_values]
-            )
-            if self.tokenizer.padding_side == "left":
-                displacement = batch["input_ids"].shape[-1] - input_ids_lens
-                batch["audio_token_start_idx"] += displacement.to(
-                    batch["audio_token_start_idx"].device
-                )
-
-        return batch
 
 
 def _get_messages(
@@ -100,6 +57,14 @@ class SizedIterableDataset(abc.ABC, data.IterableDataset):
     def __len__(self):
         pass
 
+    @abc.abstractmethod
+    def __str__(self):
+        pass
+
+    @abc.abstractmethod
+    def __name__(self):
+        pass
+
 
 class VoiceDataset(SizedIterableDataset):
     """
@@ -112,12 +77,22 @@ class VoiceDataset(SizedIterableDataset):
         self._args = args
         self._rng = np.random.default_rng(self._args.shuffle_seed)
 
-    def _init_dataset(self, dataset: data.Dataset, num_samples: int) -> None:
+    # num_samples is the total number of samples in the dataset
+    def _init_dataset(
+        self,
+        dataset: data.Dataset,
+        name: str,
+        num_samples: int,
+    ) -> None:
         self._dataset = dataset
+        self._name = name
         self._length = num_samples
 
     def __len__(self):
         return self._length
+
+    def __name__(self):
+        return self._name
 
     def _load_hf_dataset(
         self,
@@ -172,40 +147,62 @@ class VoiceDataset(SizedIterableDataset):
 
     def __iter__(self):
         actual_length = 0
-        for _, row in enumerate(self._dataset):
-            sample = self._get_sample(row)
-            if sample is None:
-                raise ValueError(
-                    f"Sample is None in dataset {self._config.alias} for row {row}"
-                )
+        skipped_samples = 0
+        bad_samples = 0
+        dataset_iter = iter(self._dataset)
+        while True:
+            try:
+                row = next(dataset_iter)
+                actual_length += 1
+            except StopIteration:
+                break
+            except Exception as e:
+                print(f"Error iterating over dataset: {e}")
+                actual_length += 1
+                bad_samples += 1
+                continue  # Skip this iteration and proceed to the next
+            try:
+                sample = self._get_sample(row)
+                if sample is None:
+                    print(
+                        f"Sample is None in dataset {self._config.alias} for row {row}"
+                    )
+                    bad_samples += 1
+                    continue  # Skip this sample and proceed to the next
+            except Exception as e:
+                print(f"Error processing row: {e}")
+                bad_samples += 1
+                continue  # Skip this sample and proceed to the next
 
             if self._args.include_audio:
-                # If audio_field is set, make sure the sample has audio data.
                 if sample.audio is None:
-                    raise ValueError(f"Audio is None for sample {sample}")
+                    print(f"Audio is None for sample {sample}")
+                    bad_samples += 1
+                    continue  # Skip this sample
                 if sample.audio.shape[-1] == 0:
-                    raise ValueError(f"Audio length is 0 for sample {sample}")
+                    print(f"Audio length is 0 for sample {sample}")
+                    bad_samples += 1
+                    continue  # Skip this sample
                 if (
                     self._args.max_audio_duration_secs is not None
                     and sample.audio.shape[-1] / data_sample.SAMPLE_RATE
                     > self._args.max_audio_duration_secs
                 ):
-                    duration = sample.audio.shape[-1] / data_sample.SAMPLE_RATE
-                    warnings.warn(
-                        f"Audio length ({duration}s) exceeds max audio duration ({self._args.max_audio_duration_secs}s), skipping sample."
-                    )
-                    continue
+                    skipped_samples += 1
+                    continue  # Skip this sample
 
             yield sample
-            actual_length += 1
-            if actual_length == len(self) + 1:
-                warnings.warn(
-                    f"The presumed length {self._length} has been exceeded for {self._config.name}:{self._args.split.value}. Make sure to update."
-                )
+
         if actual_length != len(self):
             warnings.warn(
-                f"Mismatch between presumed length ({self._length}) and actual length ({actual_length}) for {self._config.name}:{self._args.split.value}. Make sure to update."
+                f"Mismatch between presumed length ({len(self)}) and actual length ({actual_length}) for {self._name}. Make sure to update."
             )
+        if skipped_samples > 0:
+            warnings.warn(
+                f"Number of skipped samples: {skipped_samples}, from {str(self)} for exceeding max audio duration ({self._args.max_audio_duration_secs}s)."
+            )
+        if bad_samples > 0:
+            warnings.warn(f"Number of bad samples: {bad_samples}, from {str(self)}.")
 
     @abc.abstractmethod
     def _get_sample(
@@ -283,7 +280,13 @@ class GenericDataset(VoiceDataset):
             len(dsets) > 0
         ), f"The {config.name} dataset has no {self._args.split} splits."
         dataset = ds if len(dsets) == 1 else hf_datasets.concatenate_datasets(dsets)
-        super()._init_dataset(dataset, total_samples)
+
+        dataset_name = f"{config.name}:{self._args.split}"
+
+        super()._init_dataset(dataset, dataset_name, total_samples)
+
+    def __str__(self):
+        return f"GenericDataset({self._config})"
 
     def _get_sample(self, row) -> Optional[data_sample.VoiceSample]:
         assert self._config.user_template is not None
@@ -322,10 +325,13 @@ class GenericDataset(VoiceDataset):
         audio = self._get_audio(row, self._config.audio_field)
         return self._make_sample(messages, audio, audio_transcript=transcript)
 
+    def get_config(self):
+        return self._config
 
-class LibriSpeechDummyDataset(VoiceDataset):
+
+class LibriSpeechDummyDataset(GenericDataset):
     def __init__(self, args: types.VoiceDatasetArgs) -> None:
-        super().__init__(args)
+        VoiceDataset.__init__(self, args)
         # This dataset doesn't support streaming.
         dataset = self._load_hf_dataset(
             "hf-internal-testing/librispeech_asr_dummy",
@@ -333,7 +339,13 @@ class LibriSpeechDummyDataset(VoiceDataset):
             split="validation",
             streaming=False,
         )
-        self._init_dataset(dataset, 73)
+        self._init_dataset(dataset, "dummy", 73)
+
+    def __str__(self):
+        return "LibriSpeechDummyDataset"
+
+    def __name__(self):
+        return "dummy"
 
     def _get_sample(
         self, row: transformers.BatchFeature
@@ -360,6 +372,12 @@ class EmptyDataset(SizedIterableDataset):
     def __len__(self):
         return self._length
 
+    def __str__(self):
+        return f"EmptyDataset(length={self._length})"
+
+    def __name__(self):
+        return "empty"
+
 
 class InterleaveDataset(SizedIterableDataset):
     """Interleaves multiple SizedIterableDataset objects based on normalized weights."""
@@ -380,6 +398,7 @@ class InterleaveDataset(SizedIterableDataset):
             assert len(weights) == len(datasets)
         else:
             weights = [1.0] * len(datasets)
+        self._weights = weights
         self._weighted_samples = [int(w * len(d)) for w, d in zip(weights, datasets)]
         self._total_samples = sum(self._weighted_samples)
 
@@ -404,6 +423,12 @@ class InterleaveDataset(SizedIterableDataset):
     def __len__(self):
         return self._total_samples
 
+    def __str__(self):
+        return "+".join([f"{d}:{w:.2f}" for w, d in zip(self._weights, self._datasets)])
+
+    def __name__(self):
+        return "+".join([ds.__name__() for ds in self._datasets])
+
 
 class Dataproc(SizedIterableDataset):
     """Base class to preprocess a dataset of VoiceSamples."""
@@ -421,6 +446,12 @@ class Dataproc(SizedIterableDataset):
     def __len__(self):
         return len(self._dataset)
 
+    def __str__(self):
+        return f"Dataproc({self._dataset})"
+
+    def __name__(self):
+        return self._dataset.__name__
+
 
 class Range(SizedIterableDataset):
     """Limits the number of samples from another dataset."""
@@ -432,12 +463,19 @@ class Range(SizedIterableDataset):
         self._length = num_samples or len(dataset)
         if self._length > len(dataset):
             raise ValueError("num_samples exceeds dataset length.")
+        self._name = f"{dataset.__name__()}[:{self._length}]"
 
     def __iter__(self):
         for i, sample in enumerate(self._dataset):
             if i >= self._length:
                 break
             yield sample
+
+    def __str__(self):
+        return f"Range({self._dataset}%{len(self)})"
+
+    def __name__(self):
+        return self._name
 
     def __len__(self):
         return self._length

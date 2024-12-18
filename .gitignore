@@ -192,4 +192,4 @@ mlruns/
 output/
 
 saved_tokenizer/
-data/
+.run_configs/

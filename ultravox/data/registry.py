@@ -3,6 +3,7 @@ from typing import Dict, List, Optional
 
 from ultravox.data import datasets
 from ultravox.data import types
+from ultravox.data.configs import alpaca
 from ultravox.data.configs import boolq
 from ultravox.data.configs import commonvoice
 from ultravox.data.configs import covost2
@@ -60,7 +61,11 @@ def create_dataset(
         raise ValueError(f"Dataset {name} has no path")
     if not merged_config.splits:
         raise ValueError(f"Dataset {name} has no splits")
-    return datasets.GenericDataset(args, merged_config)
+    dataset = datasets.GenericDataset(args, merged_config)
+    if args.max_samples:
+        return datasets.Range(dataset, args.max_samples)
+    else:
+        return dataset
 
 
 register_datasets(boolq.configs)
@@ -72,3 +77,4 @@ register_datasets(multilingual_librispeech.configs)
 register_datasets(peoplespeech.configs)
 register_datasets(voxpopuli.configs)
 register_datasets(wenetspeech.configs)
+register_datasets(alpaca.configs)

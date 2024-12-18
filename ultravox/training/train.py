@@ -32,7 +32,6 @@ def prepare_dataset(
     model_pack: model_types.ModelPack,
     data_opts: List[config_base.DatasetOptions],
     data_args: datasets.VoiceDatasetArgs,
-    num_samples: Optional[int] = None,
 ) -> datasets.SizedIterableDataset:
     data_names = [ds.name for ds in data_opts]
     data_weights = [ds.weight for ds in data_opts]
@@ -46,8 +45,7 @@ def prepare_dataset(
 
     interleave = datasets.InterleaveDataset(data_sets, data_weights)
     ds_with_proc = model_pack.wrap_with_data_proc(interleave)
-    limited_ds = datasets.Range(ds_with_proc, num_samples=num_samples)
-    return limited_ds
+    return ds_with_proc
 
 
 def main() -> None:
@@ -73,7 +71,7 @@ def main() -> None:
         evaluate(args)
 
 
-def train(args: config_base.TrainConfig):
+def train(config: config_base.TrainConfig):
     world_size = int(os.environ.get("WORLD_SIZE", 1))
     local_rank = int(os.environ.get("LOCAL_RANK", 0))
     is_master = local_rank == 0
@@ -93,40 +91,40 @@ def train(args: config_base.TrainConfig):
         # Otherwise the barrier call can timeout.
         # This call is only here as a backstop in case prefetch_weights.py was not run, for example in a local/test run.
         prefetch_weights.download_weights(
-            [args.text_model, args.audio_model], args.model_load_dir
+            [config.text_model, config.audio_model], config.model_load_dir
         )
 
     logging.info("Instantiating model and processor...")
 
     model_load_context = (
         accelerate.init_empty_weights()
-        if args.use_fsdp and not is_master
+        if config.use_fsdp and not is_master
         else contextlib.nullcontext()
     )
     # If we're using FSDP, we can just initialize the model on the main process
     # and use sync_model_states to distribute the weights to the other processes.
     # Otherwise we'd be loading the model on every process, which uses too much CPU memory.
     with model_load_context:
-        model_pack = model_types.create_model_pack(args)
+        model_pack = model_types.create_model_pack(config)
         model = model_pack.model
 
     logging.info("Model and processor instantiated.")
 
     # Starting W&B. HF Trainer can also do this, but this way we can include the config.
     # Initializing sooner also means more of the stdout logs are captured by W&B.
-    if "wandb" in args.report_logs_to and is_master:
+    if "wandb" in config.report_logs_to and is_master:
         wandb.init(
             project=os.getenv("WANDB_PROJECT", "ultravox"),
-            config=dataclasses.asdict(args),
-            name=args.exp_name,
+            config=dataclasses.asdict(config),
+            name=config.exp_name,
             dir="runs",
-            tags=args.run_tags,
+            tags=config.run_tags,
             save_code=True,
         )
 
-    if args.model_load_dir:
-        logging.info(f"Loading model state dict from {args.model_load_dir}")
-        load_path = args.model_load_dir
+    if config.model_load_dir:
+        logging.info(f"Loading model state dict from {config.model_load_dir}")
+        load_path = config.model_load_dir
         if wandb_utils.is_wandb_url(load_path):
             # We assume that the weights are already downloaded via prefetch_weights.py
             # and hence this is just resolving the path. If the weights are not downloaded,
@@ -148,27 +146,27 @@ def train(args: config_base.TrainConfig):
 
     model.print_trainable_parameters()
 
-    if not args.use_fsdp:
+    if not config.use_fsdp:
         # Moving to device in FSDP is handled by the Trainer
-        model.to(device=torch.device(args.device, index=local_rank))
+        model.to(device=torch.device(config.device, index=local_rank))
         logging.info(f"Using device (world_size): {model.device} ({world_size})")
 
     # Register custom datasets
-    datasets.register_datasets(args.get_data_sets())
+    datasets.register_datasets(config.get_data_sets())
 
     # Prepare dataset, subsetting if needed
     train_dataset: datasets.SizedIterableDataset
     val_datasets: Dict[str, datasets.SizedIterableDataset] = {}
 
     train_dataset = prepare_dataset(
-        train_args=args,
+        train_args=config,
         model_pack=model_pack,
-        data_opts=args.get_train_sets(),
-        num_samples=args.num_samples,
+        data_opts=config.get_train_sets(),
         data_args=datasets.VoiceDatasetArgs(
-            shuffle=args.shuffle_data,
-            shuffle_seed=args.shuffle_seed,
-            max_audio_duration_secs=args.max_audio_duration_secs,
+            shuffle=config.shuffle_data,
+            shuffle_seed=config.shuffle_seed,
+            max_audio_duration_secs=config.max_audio_duration_secs,
+            max_samples=config.num_samples,
         ),
     )
     if is_master:
@@ -176,28 +174,28 @@ def train(args: config_base.TrainConfig):
             split=datasets.DatasetSplit.VALIDATION,
             shuffle=False,
             max_audio_duration_secs=16,
+            max_samples=config.val_num_samples,
         )
-        for val_opt in args.get_val_sets():
+        for val_opt in config.get_val_sets():
             val_dataset = prepare_dataset(
-                train_args=args,
+                train_args=config,
                 model_pack=model_pack,
                 data_opts=[val_opt],
-                num_samples=args.val_num_samples,
                 data_args=val_ds_args,
             )
             val_datasets[val_opt.name] = val_dataset
         logging.info(
-            f"Loaded {len(args.train_sets)}) data sets, sample limit: {args.num_samples} (val sample limit: {args.val_num_samples})"
+            f"Loaded {len(config.train_sets)}) data sets, sample limit: {config.num_samples} (val sample limit: {config.val_num_samples})"
         )
     else:
         # When using DDP with split_batches=True, the primary process will distribute the batches to the workers
         # The point of this is to avoid unnecessary data processing/downloading in the workers.
         # When using epochs to train, emptydataset must have a length equal to the training set
         train_dataset = datasets.EmptyDataset(len(train_dataset))
-        for val_opts in args.get_val_sets():
+        for val_opts in config.get_val_sets():
             val_datasets[val_opts.name] = datasets.EmptyDataset()
 
-    logging.info(f"Config Params: {args}")
+    logging.info(f"Config Params: {config}")
     trainer = transformers.Seq2SeqTrainer(
         model,
         train_dataset=train_dataset,
@@ -205,39 +203,39 @@ def train(args: config_base.TrainConfig):
         data_collator=model_pack.data_collator,
         tokenizer=getattr(model_pack, "text_tokenizer", None),
         args=transformers.Seq2SeqTrainingArguments(
-            dataloader_num_workers=args.num_workers if is_master else 0,
-            output_dir=args.output_dir,
-            run_name=args.exp_name,
-            optim=args.optimizer,
-            num_train_epochs=args.num_epochs,
-            max_steps=args.max_steps,
-            eval_strategy="steps" if args.val_steps else "no",
-            eval_steps=args.val_steps,
-            save_strategy="steps" if args.save_steps else "no",
-            save_steps=args.save_steps,
+            dataloader_num_workers=config.num_workers if is_master else 0,
+            output_dir=config.output_dir,
+            run_name=config.exp_name,
+            optim=config.optimizer,
+            num_train_epochs=config.num_epochs,
+            max_steps=config.max_steps,
+            eval_strategy="steps" if config.val_steps else "no",
+            eval_steps=config.val_steps,
+            save_strategy="steps" if config.save_steps else "no",
+            save_steps=config.save_steps,
             logging_first_step=True,
-            logging_dir=args.logs_dir,
-            logging_steps=args.logging_steps,
+            logging_dir=config.logs_dir,
+            logging_steps=config.logging_steps,
             # TODO (Farzad): reconsider for multi-node
             # In DDP world_size is set to num_gpus and we want process-0 to split the batches
-            per_device_train_batch_size=args.batch_size * world_size,
+            per_device_train_batch_size=config.batch_size * world_size,
             accelerator_config={"split_batches": True},
-            gradient_accumulation_steps=args.grad_accum_steps,
-            eval_accumulation_steps=args.val_accum_steps,
+            gradient_accumulation_steps=config.grad_accum_steps,
+            eval_accumulation_steps=config.val_accum_steps,
             # tf32=dtype == torch.float32 and device.type == "cuda",  # TODO: check for Ampere GPU not just CUDA
             ddp_find_unused_parameters=False,
-            learning_rate=args.lr,
-            lr_scheduler_type=args.lr_scheduler,
-            lr_scheduler_kwargs=args.lr_scheduler_kwargs,
-            warmup_steps=args.lr_warmup_steps,
-            weight_decay=args.weight_decay,
+            learning_rate=config.lr,
+            lr_scheduler_type=config.lr_scheduler,
+            lr_scheduler_kwargs=config.lr_scheduler_kwargs,
+            warmup_steps=config.lr_warmup_steps,
+            weight_decay=config.weight_decay,
             # fp16=dtype == torch.float16,
             # bf16=dtype == torch.bfloat16,
-            use_cpu=args.device == "cpu",
-            seed=args.seed + local_rank,
-            report_to=args.report_logs_to,
+            use_cpu=config.device == "cpu",
+            seed=config.seed + local_rank,
+            report_to=config.report_logs_to,
             # torch_compile=True,
-            fsdp="full_shard auto_wrap" if args.use_fsdp else "",
+            fsdp="full_shard auto_wrap" if config.use_fsdp else "",
             fsdp_config={
                 "backward_prefetch": "backward_pre",
                 "auto_wrap_policy": "TRANSFORMER_BASED_WRAP",
@@ -247,14 +245,14 @@ def train(args: config_base.TrainConfig):
         ),
     )
 
-    if args.do_train:
+    if config.do_train:
         # Training loop
         logging.info("Starting training...")
         t_start = datetime.now()
         logging.info(f"train start time: {t_start}")
 
-        if args.val_steps:
-            if args.use_fsdp:
+        if config.val_steps:
+            if config.use_fsdp:
                 logging.warning(
                     "FSDP is enabled: Skipping initial validation since model is not initialized."
                 )
@@ -266,7 +264,7 @@ def train(args: config_base.TrainConfig):
         logging.info(f"train end time: {t_end}")
         logging.info(f"elapsed: {t_end - t_start}")
 
-    if args.use_fsdp:
+    if config.use_fsdp:
         # For training checkpoints, we want to use SHARDED_STATE_DICT which should be faster,
         # but for the final save we want FULL_STATE_DICT so it can be serialized properly.
         trainer.accelerator.state.fsdp_plugin.set_state_dict_type("FULL_STATE_DICT")
@@ -280,11 +278,11 @@ def train(args: config_base.TrainConfig):
     old_save_pretrained = model.save_pretrained
     model.save_pretrained = lambda *_, **__: None  # type: ignore[method-assign]
     # saves the pipeline code and populates the config
-    pipeline.save_pretrained(args.output_dir)
+    pipeline.save_pretrained(config.output_dir)
     model.save_pretrained = old_save_pretrained  # type: ignore[method-assign]
 
     # saves the model weights correctly (FSDP or otherwise)
-    trainer.save_model(args.output_dir)
+    trainer.save_model(config.output_dir)
 
 
 def evaluate(args: config_base.TrainConfig):

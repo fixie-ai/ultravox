@@ -68,7 +68,7 @@ class UltravoxModelPack(ModelPack):
             self.model.set_loss_config(args.loss_config)
 
         # Set up the data loader
-        self.data_collator = datasets.DataCollatorForSeq2SeqWithAudio(
+        self.data_collator = ultravox_processing.DataCollatorForSeq2SeqWithAudio(
             tokenizer=self.text_tokenizer,
             include_alt_fields=self.model.loss_config.requires_alt_fields,
         )

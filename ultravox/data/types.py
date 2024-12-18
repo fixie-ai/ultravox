@@ -34,6 +34,8 @@ class VoiceDatasetArgs:
     """Seed for shuffling the dataset."""
     max_audio_duration_secs: Optional[float] = None
     """Whether to skip samples with audio longer than this duration."""
+    max_samples: Optional[int] = None
+    """max number of samples to use per dataset"""
     split: DatasetSplit = DatasetSplit.TRAIN
     """Which split of the dataset to use."""
 

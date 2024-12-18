@@ -36,7 +36,7 @@ class LocalInference(base.VoiceInference):
         self.past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = (
             None
         )
-        self.data_collator = datasets.DataCollatorForSeq2SeqWithAudio(
+        self.data_collator = ultravox_processing.DataCollatorForSeq2SeqWithAudio(
             tokenizer=self.tokenizer,
             include_alt_fields=False,
         )

@@ -27,6 +27,12 @@ class FakeSizedIterableDataset(datasets.SizedIterableDataset):
     def __len__(self):
         return self._length
 
+    def __str__(self):
+        return "FakeSizedIterableDataset"
+
+    def __name__(self):
+        return "fake"
+
 
 class FakeHuggingFaceIterableDataset(hf_datasets.IterableDataset):
     """Fake version of an ASR Hugging Face IterableDataset."""
@@ -50,11 +56,17 @@ class FakeTranscribeDataset(datasets.VoiceDataset):
 
     def __init__(self, n: int, args: Optional[types.VoiceDatasetArgs] = None):
         super().__init__(args or types.VoiceDatasetArgs())
-        self._init_dataset(FakeHuggingFaceIterableDataset(n), n)
+        self._init_dataset(FakeHuggingFaceIterableDataset(n), "fake", n)
 
     def _get_sample(self, row: BatchFeature) -> Optional[data_sample.VoiceSample]:
         messages = self._make_messages("<|audio|>", row["text"])
         return self._make_sample(messages, np.zeros(256), row["text"])
+
+    def __str__(self):
+        return "FakeTranscribeDataset"
+
+    def __name__(self):
+        return "fake_transcribe"
 
 
 class FakeGenericDataset(datasets.GenericDataset):

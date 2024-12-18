@@ -116,11 +116,11 @@ class UltravoxDataproc(datasets.Dataproc):
 
             inputs["alt_input_ids"] = alt_input_ids
             inputs["alt_attention_mask"] = alt_inputs["attention_mask"]
-            inputs["alt_labels"] = alt_labels
+            inputs["alt_labels"] = alt_labels.tolist()
 
         return {
             # input_ids, attention_mask, audio_values, audio_token_start_idx, audio_token_len
             # if include_alt_fields is True, also include alt_input_ids, alt_attention_mask, alt_labels
             **inputs,
-            "labels": labels,
+            "labels": labels.tolist(),  # Handle excessive warnings from HF
         }
