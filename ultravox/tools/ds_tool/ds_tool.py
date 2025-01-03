@@ -11,6 +11,7 @@ from tenacity import stop_after_attempt
 from tenacity import wait_fixed
 
 import ultravox.tools.ds_tool.chunked_dataset as chunked_dataset
+from ultravox.tools.ds_tool.tasks import dedup_task
 from ultravox.tools.ds_tool.tasks import text_gen_task
 from ultravox.tools.ds_tool.tasks import timestamp_gen_task
 from ultravox.tools.ds_tool.tasks import tts_task
@@ -26,6 +27,7 @@ from ultravox.tools.ds_tool.tasks import tts_task
 #        --template @ultravox/tools/ds_tool/continuation.jinja --max_tokens 64 --num_workers 30 --writer_batch_size 30
 #   just ds_tool timestamp -d fixie-ai/common_voice_17_0 -S en --upload_name fixie-ai/cv_ts  \
 #        -m english_mfa -T "\"{{text_proc.format_asr_text(sentence)}}\""
+#   just ds_tool dedup -d fixie-ai/proper-noun-challenge -T "\"{{user}}\"" -t 0.6 -u fixie-ai/proper-noun-challenge-filtered --check_empty_columns --chunk_split_threshold 1000000
 @dataclasses.dataclass
 class DatasetToolArgs:
     # HF source dataset parameters
@@ -65,8 +67,14 @@ class DatasetToolArgs:
         tts_task.TtsTask,
         text_gen_task.TextGenerationTask,
         timestamp_gen_task.TimestampGenerationTask,
+        dedup_task.DeduplicationTask,
     ] = simple_parsing.subgroups(
-        {"tts": tts_task.TtsTask, "textgen": text_gen_task.TextGenerationTask, "timestamp": timestamp_gen_task.TimestampGenerationTask},  # type: ignore
+        {
+            "tts": tts_task.TtsTask,
+            "textgen": text_gen_task.TextGenerationTask,
+            "timestamp": timestamp_gen_task.TimestampGenerationTask,
+            "dedup": dedup_task.DeduplicationTask,
+        },  # type: ignore
         default_factory=tts_task.TtsTask,
         positional=True,
     )
