@@ -117,9 +117,9 @@ Why would you want to (re-) train Ultravox? Here are a few scenarios:
 
     a. In this case you need to re-train the adapter. You can use `release_config.yaml`, which contains our config for our latest release, and you should be able to simply change the base LLM or encoder by specifying `--text-model <hf-model-id-for-llm>` and/or `--audio-model <hf-model-id-for-encoder>`.
 
-2. You want to improve the knowledge of the model --> NO NEED TO TRAIN ULTRAVOX!
+2. You want to improve the knowledge of the model
 
-    a. We suggest to either use RAG on the fly (no training needed), or fine-tune the LLM backbone instead. You might need to re-train Ultravox if you fine-tune the LLM.
+    a. We suggest to either use RAG on the fly (no training needed), or fine-tune the LLM backbone instead. Fine-tuning the LLM backbone does not require re-training Ultravox (i.e., the existing adapter will work).
 
 3. You want to use your own audio data, for example to add support for a new language.
 
