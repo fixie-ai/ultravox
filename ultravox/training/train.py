@@ -1,16 +1,13 @@
 import contextlib
 import dataclasses
-import gc
 import glob
 import logging
 import os
-import subprocess
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import accelerate
 import datasets as hf_datasets
-import pandas as pd
 import safetensors.torch
 import torch
 import torch.distributed
@@ -19,23 +16,29 @@ import wandb
 import wandb.sdk
 
 from ultravox import data as datasets
+from ultravox.evaluation import eval
+from ultravox.inference import infer
 from ultravox.model import hf_hub_utils
 from ultravox.model import wandb_utils
 from ultravox.training import config_base
 from ultravox.training import ddp_utils
 from ultravox.training import model_types
 from ultravox.training.helpers import prefetch_weights
+from ultravox.utils import device_helpers
 
 
 def prepare_dataset(
     train_args: config_base.TrainConfig,
     model_pack: model_types.ModelPack,
-    data_opts: List[config_base.DatasetOptions],
+    data_opts: List[datasets.DatasetOptions],
     data_args: datasets.VoiceDatasetArgs,
+    verbose: bool = False,
 ) -> datasets.SizedIterableDataset:
     data_names = [ds.name for ds in data_opts]
     data_weights = [ds.weight for ds in data_opts]
-    data_sets = [datasets.create_dataset(ds, data_args) for ds in data_names]
+    data_sets = [
+        datasets.create_dataset(ds, data_args, verbose=verbose) for ds in data_names
+    ]
     # If we're using epochs to train, validate the dataset length is appropriate.
     if train_args.max_steps == 0:
         for ds in data_sets:
@@ -56,19 +59,11 @@ def main() -> None:
     os.environ["WANDB_LOG_MODEL"] = "checkpoint"
     os.environ["WANDB_PROJECT"] = "ultravox"
 
-    args = config_base.get_train_args()
+    config = config_base.get_train_config()
 
-    transformers.set_seed(args.seed)
+    transformers.set_seed(config.seed)
 
-    local_rank = int(os.environ.get("LOCAL_RANK", 0))
-    is_master = local_rank == 0
-
-    train(args)
-
-    if args.do_eval and is_master:
-        gc.collect()
-        torch.cuda.empty_cache()
-        evaluate(args)
+    train(config)
 
 
 def train(config: config_base.TrainConfig):
@@ -162,30 +157,21 @@ def train(config: config_base.TrainConfig):
         train_args=config,
         model_pack=model_pack,
         data_opts=config.get_train_sets(),
-        data_args=datasets.VoiceDatasetArgs(
-            shuffle=config.shuffle_data,
-            shuffle_seed=config.shuffle_seed,
-            max_audio_duration_secs=config.max_audio_duration_secs,
-            max_samples=config.num_samples,
-        ),
+        data_args=config.train_dataset_args,
+        verbose=is_master,
     )
     if is_master:
-        val_ds_args = datasets.VoiceDatasetArgs(
-            split=datasets.DatasetSplit.VALIDATION,
-            shuffle=False,
-            max_audio_duration_secs=16,
-            max_samples=config.val_num_samples,
-        )
         for val_opt in config.get_val_sets():
             val_dataset = prepare_dataset(
                 train_args=config,
                 model_pack=model_pack,
                 data_opts=[val_opt],
-                data_args=val_ds_args,
+                data_args=config.val_dataset_args,
+                verbose=is_master,
             )
             val_datasets[val_opt.name] = val_dataset
         logging.info(
-            f"Loaded {len(config.train_sets)}) data sets, sample limit: {config.num_samples} (val sample limit: {config.val_num_samples})"
+            f"Loaded {len(config.train_sets)}) data sets, sample limit: {config.train_dataset_args.max_samples} (val sample limit: {config.val_dataset_args.max_samples})"
         )
     else:
         # When using DDP with split_batches=True, the primary process will distribute the batches to the workers
@@ -264,6 +250,46 @@ def train(config: config_base.TrainConfig):
         logging.info(f"train end time: {t_end}")
         logging.info(f"elapsed: {t_end - t_start}")
 
+    # use fixie-ai/evals for evaluation if in use_fsdp mode
+    if config.do_eval:
+        if config.use_fsdp:
+            logging.warning("Evaluation is not supported in FSDP mode, skipping")
+        else:
+            logging.info("Starting evaluation...")
+            t_start = datetime.now()
+            logging.info(f"eval start time: {t_start}")
+
+            # Merge LoRA weights for better inference performance.
+            # Note: this is irreversible and changes model saving format
+            model.merge_and_unload()
+            # changing padding side to left for inference
+            model_pack.change_text_padding_side("left")
+            inference = infer.LocalInference(
+                model=model,
+                processor=model_pack.processor,
+                tokenizer=model_pack.get_text_tokenizer(),
+                device=(
+                    f"{config.device}:{local_rank}" if world_size > 1 else config.device
+                ),
+                dtype=device_helpers.get_dtype(config.data_type),
+            )
+
+            metrics, output_files = eval.eval_datasets(
+                inference,
+                config.get_eval_sets(),
+                config.eval_dataset_args,
+                config.eval_batch_size,
+                config.eval_max_tokens,
+                config.eval_temperature,
+                config.output_dir,
+            )
+            if is_master:
+                eval.print_results(metrics, output_files)
+
+            t_end = datetime.now()
+            logging.info(f"eval end time: {t_end}")
+            logging.info(f"elapsed: {t_end - t_start}")
+
     if config.use_fsdp:
         # For training checkpoints, we want to use SHARDED_STATE_DICT which should be faster,
         # but for the final save we want FULL_STATE_DICT so it can be serialized properly.
@@ -284,94 +310,12 @@ def train(config: config_base.TrainConfig):
     # saves the model weights correctly (FSDP or otherwise)
     trainer.save_model(config.output_dir)
 
-
-def evaluate(args: config_base.TrainConfig):
-    """
-    Evaluate the model on the audio and text datasets.
-
-    NOTE: This function must be run only on the primary process.
-    """
-    logging.info("Starting evaluation...")
-    t_start = datetime.now()
-    logging.info(f"eval start time: {t_start}")
-
-    if args.text_model_lora_config and args.text_model_lora_config.r:
-        logging.warn(
-            "Model has unmerged LoRA config. This can lead to slower inference."
-        )
-
-    logs_dir = wandb.run.dir if wandb.run else str(args.logs_dir)
-
-    # Run audio-based evaluations and log to W&B
-    audio_metrics_df = run_oaievalset(
-        log_dir=os.path.join(logs_dir, "oaieval/audio"),
-        model_dir=str(args.output_dir),
-        eval_set="audio-core",
-        num_samples=args.eval_num_samples,
-    )
-    # TODO: it would be best to do trainer.log, but then we'd risk keeping parts of the model
-    # in GPU memory, which could cause OOM errors.
+    # finish wandb run if it exists
     if wandb.run:
-        wandb.run.log({"eval_audio": wandb.Table(data=audio_metrics_df)})
-
-    if args.eval_text_only:
-        # Run text-only evaluations and log to W&B
-        text_metrics_df = run_oaievalset(
-            log_dir=os.path.join(logs_dir, "oaieval/text"),
-            model_dir=str(args.output_dir),
-            eval_set="transcript-core",
-            num_samples=args.eval_num_samples,
-        )
-        if wandb.run:
-            wandb.run.log({"eval_text": wandb.Table(data=text_metrics_df)})
-
-    t_end = datetime.now()
-    logging.info(f"eval end time: {t_end}")
-    logging.info(f"elapsed: {t_end - t_start}")
-
-
-def run_oaievalset(
-    log_dir: str, model_dir: str, eval_set: str, num_samples: Optional[int] = None
-) -> pd.DataFrame:
-    env = os.environ.copy()
-
-    # num_gpus = max(1, torch.cuda.device_count())
-    env["EVALS_THREADS"] = "64"
-
-    # TODO: currently running this on a single GPU is faster than multiple GPUs :facepalm:
-    env["CUDA_VISIBLE_DEVICES"] = "0"
-
-    command = [
-        "oaievalset",
-        "--record_dir",
-        log_dir,
-        "generation/gpu/ultravox-dev",
-        eval_set,
-        f"--completion_args=model={model_dir}",
-    ]
-    if num_samples:
-        command.append(f"--max_samples={num_samples}")
-
-    # Run the evaluation set
-    subprocess.run(command, check=True, env=env)
-
-    # Extract the results from the log directory
-    subprocess.run(
-        [
-            "python",
-            "-m",
-            "evals.elsuite.audio.make_table",
-            "--out_dir",
-            log_dir,
-            "--log_dir",
-            log_dir,
-        ],
-        check=True,
-    )
-
-    df = pd.read_csv(os.path.join(log_dir, "results.csv"))
-
-    return df
+        wandb.run.finish()
+    # destroy process group if distributed training
+    if world_size > 1:
+        torch.distributed.destroy_process_group()
 
 
 if __name__ == "__main__":

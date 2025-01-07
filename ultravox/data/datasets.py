@@ -54,15 +54,16 @@ class SizedIterableDataset(abc.ABC, data.IterableDataset):
     """
 
     @abc.abstractmethod
-    def __len__(self):
+    def __len__(self) -> int:
         pass
 
     @abc.abstractmethod
-    def __str__(self):
+    def __str__(self) -> str:
         pass
 
+    @property
     @abc.abstractmethod
-    def __name__(self):
+    def name(self) -> str:
         pass
 
 
@@ -76,6 +77,8 @@ class VoiceDataset(SizedIterableDataset):
         super().__init__()
         self._args = args
         self._rng = np.random.default_rng(self._args.shuffle_seed)
+        self._name = "[unset]"
+        self._length = -1
 
     # num_samples is the total number of samples in the dataset
     def _init_dataset(
@@ -91,7 +94,8 @@ class VoiceDataset(SizedIterableDataset):
     def __len__(self):
         return self._length
 
-    def __name__(self):
+    @property
+    def name(self):
         return self._name
 
     def _load_hf_dataset(
@@ -195,14 +199,14 @@ class VoiceDataset(SizedIterableDataset):
 
         if actual_length != len(self):
             warnings.warn(
-                f"Mismatch between presumed length ({len(self)}) and actual length ({actual_length}) for {self._name}. Make sure to update."
+                f"Mismatch between presumed length ({len(self)}) and actual length ({actual_length}) for {self.name }. Make sure to update."
             )
         if skipped_samples > 0:
             warnings.warn(
-                f"Number of skipped samples: {skipped_samples}, from {str(self)} for exceeding max audio duration ({self._args.max_audio_duration_secs}s)."
+                f"Number of skipped samples: {skipped_samples}, from {self.name} for exceeding max audio duration ({self._args.max_audio_duration_secs}s)."
             )
         if bad_samples > 0:
-            warnings.warn(f"Number of bad samples: {bad_samples}, from {str(self)}.")
+            warnings.warn(f"Number of bad samples: {bad_samples}, from {self.name }.")
 
     @abc.abstractmethod
     def _get_sample(
@@ -259,7 +263,7 @@ class GenericDataset(VoiceDataset):
         dsets = []
         total_samples = 0
         for split in config.splits:
-            if split.split_type == self._args.split:
+            if split.split == self._args.split:
                 if not config.use_mds:
                     ds = self._load_hf_dataset(
                         config.path,
@@ -281,7 +285,7 @@ class GenericDataset(VoiceDataset):
         ), f"The {config.name} dataset has no {self._args.split} splits."
         dataset = ds if len(dsets) == 1 else hf_datasets.concatenate_datasets(dsets)
 
-        dataset_name = f"{config.name}:{self._args.split}"
+        dataset_name = f"{config.name}.{self._args.split}"
 
         super()._init_dataset(dataset, dataset_name, total_samples)
 
@@ -344,7 +348,8 @@ class LibriSpeechDummyDataset(GenericDataset):
     def __str__(self):
         return "LibriSpeechDummyDataset"
 
-    def __name__(self):
+    @property
+    def name(self):
         return "dummy"
 
     def _get_sample(
@@ -375,7 +380,8 @@ class EmptyDataset(SizedIterableDataset):
     def __str__(self):
         return f"EmptyDataset(length={self._length})"
 
-    def __name__(self):
+    @property
+    def name(self):
         return "empty"
 
 
@@ -426,8 +432,9 @@ class InterleaveDataset(SizedIterableDataset):
     def __str__(self):
         return "+".join([f"{d}:{w:.2f}" for w, d in zip(self._weights, self._datasets)])
 
-    def __name__(self):
-        return "+".join([ds.__name__() for ds in self._datasets])
+    @property
+    def name(self):
+        return "+".join([ds.name for ds in self._datasets])
 
 
 class Dataproc(SizedIterableDataset):
@@ -449,8 +456,9 @@ class Dataproc(SizedIterableDataset):
     def __str__(self):
         return f"Dataproc({self._dataset})"
 
-    def __name__(self):
-        return self._dataset.__name__
+    @property
+    def name(self):
+        return self._dataset.name
 
 
 class Range(SizedIterableDataset):
@@ -463,7 +471,7 @@ class Range(SizedIterableDataset):
         self._length = num_samples or len(dataset)
         if self._length > len(dataset):
             raise ValueError("num_samples exceeds dataset length.")
-        self._name = f"{dataset.__name__()}[:{self._length}]"
+        self._name = f"{dataset.name}.{self._length}"
 
     def __iter__(self):
         for i, sample in enumerate(self._dataset):
@@ -474,8 +482,15 @@ class Range(SizedIterableDataset):
     def __str__(self):
         return f"Range({self._dataset}%{len(self)})"
 
-    def __name__(self):
-        return self._name
-
     def __len__(self):
         return self._length
+
+    @property
+    def name(self):
+        return self._name
+
+    def get_config(self):
+        if isinstance(self._dataset, GenericDataset):
+            return self._dataset.get_config()
+        else:
+            raise ValueError("Cannot get config for non-GenericDataset")

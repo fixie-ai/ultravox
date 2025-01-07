@@ -8,10 +8,10 @@ ALPACA_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation",
             num_samples=1024,
-            split_type=types.DatasetSplit.VALIDATION,
+            split=types.DatasetSplit.VALIDATION,
         ),
         types.DatasetSplitConfig(
-            name="validation", num_samples=1024, split_type=types.DatasetSplit.TEST
+            name="validation", num_samples=1024, split=types.DatasetSplit.TEST
         ),  # reuse the validation set for testing
     ],
     user_template=f"{types.AUDIO_PLACEHOLDER}",

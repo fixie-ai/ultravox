@@ -33,6 +33,14 @@ class ModelPack(abc.ABC):
     def get_pipeline(self) -> transformers.Pipeline:
         pass
 
+    @abc.abstractmethod
+    def get_text_tokenizer(self) -> transformers.PreTrainedTokenizerFast:
+        pass
+
+    @abc.abstractmethod
+    def change_text_padding_side(self, padding_side: str):
+        pass
+
 
 class UltravoxModelPack(ModelPack):
     def __init__(self, args: config_base.TrainConfig):
@@ -98,6 +106,12 @@ class UltravoxModelPack(ModelPack):
             self.model, tokenizer=self.text_tokenizer, device=self.model.device
         )
 
+    def get_text_tokenizer(self) -> transformers.PreTrainedTokenizerFast:
+        return self.text_tokenizer
+
+    def change_text_padding_side(self, padding_side: str):
+        self.text_tokenizer.padding_side = padding_side
+
 
 class LSModelPack(ModelPack):
     def __init__(self, args: config_base.TrainConfig):
@@ -127,6 +141,12 @@ class LSModelPack(ModelPack):
 
     def get_pipeline(self):
         return ultravoxls_pipeline.UltravoxLSPipeline(self.model)
+
+    def get_text_tokenizer(self) -> transformers.PreTrainedTokenizerFast:
+        raise NotImplementedError("LSM does not have a text tokenizer")
+
+    def change_text_padding_side(self, padding_side: str):
+        raise NotImplementedError("LSM does not have a text tokenizer")
 
 
 def create_model_pack(args: config_base.TrainConfig) -> ModelPack:

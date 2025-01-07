@@ -9,6 +9,7 @@ from ultravox.evaluation import gpt_eval_conv
 def test_evaluate_conversation():
     gpt_eval.client = mock.MagicMock()
     sample = eval_types.Sample(
+        index=0,
         history=[
             {"role": "system", "content": "Blah blah blah"},
             {"role": "user", "content": "T1"},

@@ -5,10 +5,10 @@ import transformers
 
 from ultravox.data import data_sample
 from ultravox.inference import base
-from ultravox.inference import utils
 from ultravox.model import wandb_utils
 from ultravox.ultravoxls import ultravoxls_model
 from ultravox.ultravoxls import ultravoxls_processing
+from ultravox.utils import device_helpers
 
 MAX_NEW_TOKENS = 1024
 
@@ -78,7 +78,7 @@ class UltravoxLSInference(LocalLSInference):
             device: where to put the model and data
             data_type: data type to use for the model
         """
-        device = device or utils.default_device()
+        device = device or device_helpers.default_device()
         if wandb_utils.is_wandb_url(model_path):
             model_path = wandb_utils.download_model_from_wandb(model_path)
 

@@ -1,5 +1,5 @@
 # Ultravox eval with vllm configuration
-name: ultravox-vllm-eval
+name: ultravox-eval
 image: mosaicml/composer:latest
 compute:
   gpus: 8
@@ -14,13 +14,9 @@ scheduling:
 command: >-
   cd ultravox-omni &&
   poetry install --no-dev &&
-  poetry run pip install vllm &&
-  HF_TOKEN=$HF_WRITE_TOKEN poetry run python -m ultravox.inference.run_vllm_inference $EVAL_ARGS
-
-# Potentially prefetch weights. The code tries to find the right weights, but if parent job is not found (e.g. deleted), loading weights for a 70B model can be slow.
-# poetry run python -m ultravox.training.helpers.prefetch_weights --text_model meta-llama/Meta-Llama-3.1-70B-Instruct &&
+  poetry run torchrun --nproc_per_node=8 -m ultravox.evaluation.eval $EVAL_ARGS
 env_variables:
   MLFLOW_TRACKING_URI: databricks
   UV_BRANCH: main
-  # TODO: the right model path and evalset need to be set below
-  EVAL_ARGS: --evalset audio-core --model wandb://fixie/ultravox/model-70B-bs6-ga1-cont:v6
+  EVAL_ARGS: --config_path ultravox/evaluation/configs/eval_config.yaml
+  HF_HUB_ENABLE_HF_TRANSFER: 1

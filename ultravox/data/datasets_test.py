@@ -30,7 +30,8 @@ class FakeSizedIterableDataset(datasets.SizedIterableDataset):
     def __str__(self):
         return "FakeSizedIterableDataset"
 
-    def __name__(self):
+    @property
+    def name(self):
         return "fake"
 
 
@@ -65,7 +66,8 @@ class FakeTranscribeDataset(datasets.VoiceDataset):
     def __str__(self):
         return "FakeTranscribeDataset"
 
-    def __name__(self):
+    @property
+    def name(self):
         return "fake_transcribe"
 
 
@@ -182,16 +184,16 @@ def test_dataset_config():
         path="mock_path",
         splits=[
             types.DatasetSplitConfig(
-                name="clean", num_samples=5000, split_type=types.DatasetSplit.TRAIN
+                name="clean", num_samples=5000, split=types.DatasetSplit.TRAIN
             ),
             types.DatasetSplitConfig(
-                name="other", num_samples=10000, split_type=types.DatasetSplit.TRAIN
+                name="other", num_samples=10000, split=types.DatasetSplit.TRAIN
             ),
             types.DatasetSplitConfig(name="validation", num_samples=1000),
             types.DatasetSplitConfig(
                 name="another_validation",
                 num_samples=1000,
-                split_type=types.DatasetSplit.VALIDATION,
+                split=types.DatasetSplit.VALIDATION,
             ),
         ],
     )
@@ -200,16 +202,16 @@ def test_dataset_config():
     assert len(config.splits) == 4
     assert config.splits[0].name == "clean"
     assert config.splits[0].num_samples == 5000
-    assert config.splits[0].split_type == types.DatasetSplit.TRAIN
+    assert config.splits[0].split == types.DatasetSplit.TRAIN
     assert config.splits[1].name == "other"
     assert config.splits[1].num_samples == 10000
-    assert config.splits[1].split_type == types.DatasetSplit.TRAIN
+    assert config.splits[1].split == types.DatasetSplit.TRAIN
     assert config.splits[2].name == "validation"
     assert config.splits[2].num_samples == 1000
-    assert config.splits[2].split_type == types.DatasetSplit.VALIDATION
+    assert config.splits[2].split == types.DatasetSplit.VALIDATION
     assert config.splits[3].name == "another_validation"
     assert config.splits[3].num_samples == 1000
-    assert config.splits[3].split_type == types.DatasetSplit.VALIDATION
+    assert config.splits[3].split == types.DatasetSplit.VALIDATION
 
 
 def test_dataset_config_serialization():
@@ -218,10 +220,10 @@ def test_dataset_config_serialization():
         path="fake_path",
         splits=[
             types.DatasetSplitConfig(
-                name="clean", num_samples=5000, split_type=types.DatasetSplit.TRAIN
+                name="clean", num_samples=5000, split=types.DatasetSplit.TRAIN
             ),
             types.DatasetSplitConfig(
-                name="other", num_samples=10000, split_type=types.DatasetSplit.TRAIN
+                name="other", num_samples=10000, split=types.DatasetSplit.TRAIN
             ),
         ],
     )
@@ -243,7 +245,7 @@ def test_generic_dataset():
         path="fake_path",
         splits=[
             types.DatasetSplitConfig(
-                name="fake", num_samples=5, split_type=types.DatasetSplit.TRAIN
+                name="fake", num_samples=5, split=types.DatasetSplit.TRAIN
             )
         ],
     )
@@ -266,7 +268,7 @@ def test_generic_dataset_custom_templates():
         path="fake_path",
         splits=[
             types.DatasetSplitConfig(
-                name="fake", num_samples=5, split_type=types.DatasetSplit.TRAIN
+                name="fake", num_samples=5, split=types.DatasetSplit.TRAIN
             )
         ],
         user_template="Listen to the following and respond with 'xyzzy':\n<|audio|>",
@@ -295,7 +297,7 @@ def test_generic_dataset_text_only():
         path="fake_path",
         splits=[
             types.DatasetSplitConfig(
-                name="fake", num_samples=5, split_type=types.DatasetSplit.TRAIN
+                name="fake", num_samples=5, split=types.DatasetSplit.TRAIN
             )
         ],
         user_template="Transcribe\n<|audio|>",
@@ -317,7 +319,7 @@ def test_generic_dataset_merge_configs():
         path="fake_path",
         splits=[
             types.DatasetSplitConfig(
-                name="fake", num_samples=5, split_type=types.DatasetSplit.TRAIN
+                name="fake", num_samples=5, split=types.DatasetSplit.TRAIN
             )
         ],
     )
@@ -339,7 +341,7 @@ def test_generic_dataset_merge_configs():
     assert config.path == "fake_path"
     assert config.splits[0].name == "fake"
     assert config.splits[0].num_samples == 5
-    assert config.splits[0].split_type == types.DatasetSplit.TRAIN
+    assert config.splits[0].split == types.DatasetSplit.TRAIN
     assert config.user_template == "fake_user_template"
     assert config.user_template_args == {"a": 1}
     assert config.assistant_template == "{{text}}"  # the default
@@ -353,7 +355,7 @@ def test_generic_dataset_length_mismatch():
         path="fake_path",
         splits=[
             types.DatasetSplitConfig(
-                name="fake", num_samples=5, split_type=types.DatasetSplit.TRAIN
+                name="fake", num_samples=5, split=types.DatasetSplit.TRAIN
             )
         ],
     )
@@ -369,7 +371,7 @@ def test_generic_dataset_length_mismatch():
         path="fake_path",
         splits=[
             types.DatasetSplitConfig(
-                name="fake", num_samples=10, split_type=types.DatasetSplit.TRAIN
+                name="fake", num_samples=10, split=types.DatasetSplit.TRAIN
             )
         ],
     )

@@ -14,7 +14,7 @@ def main(override_sys_args: Optional[List[str]] = None):
     start = datetime.now()
     print("Downloading weights ...")
 
-    args = config_base.get_train_args(override_sys_args)
+    args = config_base.get_train_config(override_sys_args)
 
     download_weights([args.text_model, args.audio_model], args.model_load_dir)
 

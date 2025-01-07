@@ -3,21 +3,28 @@
 text_model: "meta-llama/Llama-3.2-1B-Instruct"
 audio_model: "openai/whisper-small"
 
-loss_config:
-  loss_function: "KL_Divergence"
-
 train_sets:
   - name: librispeech-clean-continuation
 
 val_sets:
   - name: covost2-en-de
 
-num_samples: 1000
-batch_size: 10
+eval_sets:
+  - name: covost2-en-de
 
-lr: 1e-3
-lr_warmup_steps: 1000
+train_dataset_args:
+  max_samples: 2000
+
+val_dataset_args:
+  max_samples: 10
+
+eval_dataset_args:
+  max_samples: 10
+
+
+lr: 2e-3
+lr_warmup_steps: 0
 max_steps: -1
-num_epochs: 2
+num_epochs: 1
 
 

@@ -1,0 +1,16 @@
+model: "fixie-ai/ultravox-v0_4_1-llama-3_1-8b"
+
+report_logs_to: ["wandb"]
+output_dir: "./output"
+
+eval_sets:
+  - name: covost2-en-de
+  - name: covost2-en-zh
+  - name: covost2-es-en
+  - name: covost2-zh-en
+
+eval_dataset_args:
+  max_samples: 2000
+  
+eval_batch_size: 60
+

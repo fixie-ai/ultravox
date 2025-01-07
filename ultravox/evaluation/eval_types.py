@@ -6,6 +6,7 @@ import dataclasses_json
 
 @dataclasses.dataclass
 class Sample(dataclasses_json.DataClassJsonMixin):
+    index: int  # index of the sample in the dataset, used for preserving order after ddp all_gather
     question: str
     generated_answer: str
     expected_answer: str
@@ -45,4 +46,4 @@ class BleuResult:
     score: float
 
 
-Result = Union[InstructResult, WerResult, ExactMatchResult]
+Result = Union[InstructResult, WerResult, ExactMatchResult, BleuResult]
