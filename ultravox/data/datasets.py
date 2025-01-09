@@ -470,7 +470,10 @@ class Range(SizedIterableDataset):
         self._dataset = dataset
         self._length = num_samples or len(dataset)
         if self._length > len(dataset):
-            raise ValueError("num_samples exceeds dataset length.")
+            warnings.warn(
+                f"num_samples ({self._length}) exceeds dataset length ({len(dataset)}). Truncating to {len(dataset)}."
+            )
+            self._length = len(dataset)
         self._name = f"{dataset.name}.{self._length}"
 
     def __iter__(self):

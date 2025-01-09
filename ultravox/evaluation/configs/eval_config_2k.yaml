@@ -8,9 +8,9 @@ eval_sets:
   - name: covost2-en-zh
   - name: covost2-es-en
   - name: covost2-zh-en
+  - name: alpaca-tts-llama
 
 eval_dataset_args:
   max_samples: 2000
   
 eval_batch_size: 60
-

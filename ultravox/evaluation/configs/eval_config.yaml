@@ -12,5 +12,6 @@ eval_sets:
   - name: covost2-ru-en
   - name: covost2-tr-en
   - name: covost2-zh-en
+  - name: alpaca-tts-llama
 
 eval_batch_size: 60

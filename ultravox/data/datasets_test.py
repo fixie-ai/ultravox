@@ -155,7 +155,7 @@ def test_range():
     s = datasets.Range(ds, 5)
     assert len(s) == 5
     assert list(s) == [0, 1, 2, 3, 4]
-    with pytest.raises(ValueError, match="exceeds dataset length"):
+    with pytest.warns(UserWarning, match="exceeds dataset length"):
         s = datasets.Range(ds, 100)
     s = datasets.Range(ds, 10)
     assert list(s) == [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]

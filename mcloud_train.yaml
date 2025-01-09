@@ -1,9 +1,9 @@
 # Ultravox training configuration
-name: ultravox
+name: ultravox-train
 image: mosaicml/composer:latest
 compute:
   gpus: 8
-  cluster: r8z12p1
+  cluster: r15z1p1
 integrations:
   - integration_type: git_repo
     git_repo: fixie-ai/ultravox-omni
@@ -14,9 +14,10 @@ scheduling:
 command: >-
   cd ultravox-omni &&
   poetry install --no-dev &&
-  poetry run python -m ultravox.training.helpers.prefetch_weights $TRAIN_ARGS &&
   poetry run torchrun --nproc_per_node=8 -m ultravox.training.train $TRAIN_ARGS
 env_variables:
   MLFLOW_TRACKING_URI: databricks
   UV_BRANCH: main
   TRAIN_ARGS: --config_path ultravox/training/configs/release_config.yaml
+  HF_HUB_DOWNLOAD_TIMEOUT: "300"  # Set timeout to 300 seconds (5 minutes)
+  HF_HUB_ENABLE_HF_TRANSFER: 1
