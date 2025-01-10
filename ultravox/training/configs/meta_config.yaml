@@ -35,4 +35,4 @@ logging_steps: 100
 data_type: "bfloat16"
 report_logs_to: ["tensorboard", "wandb"]
 
-eval_batch_size: 4
+eval_batch_size: 60

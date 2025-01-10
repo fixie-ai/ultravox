@@ -154,27 +154,11 @@ class VoiceDataset(SizedIterableDataset):
         skipped_samples = 0
         bad_samples = 0
         dataset_iter = iter(self._dataset)
-        while True:
-            try:
-                row = next(dataset_iter)
-                actual_length += 1
-            except StopIteration:
-                break
-            except Exception as e:
-                print(f"Error iterating over dataset: {e}")
-                actual_length += 1
-                bad_samples += 1
-                continue  # Skip this iteration and proceed to the next
-            try:
-                sample = self._get_sample(row)
-                if sample is None:
-                    print(
-                        f"Sample is None in dataset {self._config.alias} for row {row}"
-                    )
-                    bad_samples += 1
-                    continue  # Skip this sample and proceed to the next
-            except Exception as e:
-                print(f"Error processing row: {e}")
+        for row in dataset_iter:
+            actual_length += 1
+            sample = self._get_sample(row)
+            if sample is None:
+                print(f"Sample is None in dataset {self._config.alias} for row {row}")
                 bad_samples += 1
                 continue  # Skip this sample and proceed to the next
 
@@ -197,16 +181,9 @@ class VoiceDataset(SizedIterableDataset):
 
             yield sample
 
-        if actual_length != len(self):
-            warnings.warn(
-                f"Mismatch between presumed length ({len(self)}) and actual length ({actual_length}) for {self.name }. Make sure to update."
-            )
-        if skipped_samples > 0:
-            warnings.warn(
-                f"Number of skipped samples: {skipped_samples}, from {self.name} for exceeding max audio duration ({self._args.max_audio_duration_secs}s)."
-            )
-        if bad_samples > 0:
-            warnings.warn(f"Number of bad samples: {bad_samples}, from {self.name }.")
+        logging.info(
+            f"Extracted {actual_length} samples from {self.name} (total: {len(self)}), removed {bad_samples} bad samples, and skipped {skipped_samples} samples for exceeding max audio duration ({self._args.max_audio_duration_secs}s)."
+        )
 
     @abc.abstractmethod
     def _get_sample(
@@ -497,3 +474,30 @@ class Range(SizedIterableDataset):
             return self._dataset.get_config()
         else:
             raise ValueError("Cannot get config for non-GenericDataset")
+
+
+def patch_audio_decoder():
+    """
+    Monkey-patch the datasets.Audio.decode_example method to handle errors gracefully.
+    When decoding fails, returns a dict with None for array and original path.
+    """
+    # Store the original decode_example method
+    original_decode_example = hf_datasets.Audio.decode_example
+
+    def safe_decode_example(self, value, token_per_repo_id=None):
+        try:
+            # Try to decode using the original method
+            return original_decode_example(self, value, token_per_repo_id)
+        except Exception as e:
+            logging.warn(f"Error decoding audio at path {value.get('path')}: {e}")
+            return {
+                "array": None,
+                "path": value.get("path", None),
+                "sampling_rate": self.sampling_rate or 16000,
+            }
+
+    # Replace the original decode_example with our safe version
+    hf_datasets.Audio.decode_example = safe_decode_example
+
+
+patch_audio_decoder()
