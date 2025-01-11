@@ -7,6 +7,7 @@ CV_BASE_CONFIG = types.DatasetConfig(
     assistant_template="{{sentence}}",
 )
 
+# English
 CV_EN_CONFIG = types.DatasetConfig(
     name="commonvoice-en",
     base="commonvoice",
@@ -19,6 +20,7 @@ CV_EN_CONFIG = types.DatasetConfig(
     assistant_template="{{text_proc.format_asr_text(sentence)}}",
 )
 
+# Arabic
 CV_AR_CONFIG = types.DatasetConfig(
     name="commonvoice-ar",
     base="commonvoice",
@@ -29,6 +31,7 @@ CV_AR_CONFIG = types.DatasetConfig(
     ],
 )
 
+# German
 CV_DE_CONFIG = types.DatasetConfig(
     name="commonvoice-de",
     base="commonvoice",
@@ -39,6 +42,7 @@ CV_DE_CONFIG = types.DatasetConfig(
     ],
 )
 
+# Spanish
 CV_ES_CONFIG = types.DatasetConfig(
     name="commonvoice-es",
     base="commonvoice",
@@ -49,6 +53,7 @@ CV_ES_CONFIG = types.DatasetConfig(
     ],
 )
 
+# French
 CV_FR_CONFIG = types.DatasetConfig(
     name="commonvoice-fr",
     base="commonvoice",
@@ -59,6 +64,7 @@ CV_FR_CONFIG = types.DatasetConfig(
     ],
 )
 
+# Italian
 CV_IT_CONFIG = types.DatasetConfig(
     name="commonvoice-it",
     base="commonvoice",
@@ -69,6 +75,7 @@ CV_IT_CONFIG = types.DatasetConfig(
     ],
 )
 
+# Japanese
 CV_JA_CONFIG = types.DatasetConfig(
     name="commonvoice-ja",
     base="commonvoice",
@@ -79,6 +86,7 @@ CV_JA_CONFIG = types.DatasetConfig(
     ],
 )
 
+# Portuguese
 CV_PT_CONFIG = types.DatasetConfig(
     name="commonvoice-pt",
     base="commonvoice",
@@ -89,6 +97,7 @@ CV_PT_CONFIG = types.DatasetConfig(
     ],
 )
 
+# Russian
 CV_RU_CONFIG = types.DatasetConfig(
     name="commonvoice-ru",
     base="commonvoice",
@@ -99,6 +108,7 @@ CV_RU_CONFIG = types.DatasetConfig(
     ],
 )
 
+# Hindi
 CV_HI_CONFIG = types.DatasetConfig(
     name="commonvoice-hi",
     base="commonvoice",
@@ -109,6 +119,7 @@ CV_HI_CONFIG = types.DatasetConfig(
     ],
 )
 
+# Turkish
 CV_TR_CONFIG = types.DatasetConfig(
     name="commonvoice-tr",
     base="commonvoice",
@@ -119,6 +130,7 @@ CV_TR_CONFIG = types.DatasetConfig(
     ],
 )
 
+# Swedish
 CV_SV_CONFIG = types.DatasetConfig(
     name="commonvoice-sv",
     base="commonvoice",
@@ -129,6 +141,7 @@ CV_SV_CONFIG = types.DatasetConfig(
     ],
 )
 
+# Ukrainian
 CV_UK_CONFIG = types.DatasetConfig(
     name="commonvoice-uk",
     base="commonvoice",
@@ -136,6 +149,437 @@ CV_UK_CONFIG = types.DatasetConfig(
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=25_137),
         types.DatasetSplitConfig(name="validation", num_samples=10_007),
+    ],
+)
+
+# Swahili
+CV_SW_CONFIG = types.DatasetConfig(
+    name="commonvoice-sw",
+    base="commonvoice",
+    subset="sw",
+    splits=[
+        types.DatasetSplitConfig(name="train", num_samples=46_494),
+        types.DatasetSplitConfig(name="validation", num_samples=12_251),
+    ],
+)
+
+# Persian
+CV_FA_CONFIG = types.DatasetConfig(
+    name="commonvoice-fa",
+    base="commonvoice",
+    subset="fa",
+    splits=[
+        types.DatasetSplitConfig(name="train", num_samples=1_000),
+        types.DatasetSplitConfig(name="validation", num_samples=1_000),
+    ],
+)
+
+# Thai
+CV_TH_CONFIG = types.DatasetConfig(
+    name="commonvoice-th",
+    base="commonvoice",
+    subset="th",
+    splits=[
+        types.DatasetSplitConfig(name="train", num_samples=7_744),
+        types.DatasetSplitConfig(name="validation", num_samples=5_210),
+    ],
+)
+
+# Belarusian
+CV_BE_CONFIG = types.DatasetConfig(
+    name="commonvoice-be",
+    base="commonvoice",
+    subset="be",
+    splits=[
+        types.DatasetSplitConfig(name="train", num_samples=347_637),
+        types.DatasetSplitConfig(name="validation", num_samples=15_880),
+    ],
+)
+
+# Tamil
+CV_TA_CONFIG = types.DatasetConfig(
+    name="commonvoice-ta",
+    base="commonvoice",
+    subset="ta",
+    splits=[
+        types.DatasetSplitConfig(name="train", num_samples=45_587),
+        types.DatasetSplitConfig(name="validation", num_samples=12_095),
+        types.DatasetSplitConfig(
+            name="other", num_samples=93_989, split=types.DatasetSplit.TRAIN
+        ),
+        # types.DatasetSplitConfig(name="validated", num_samples=135_391),
+    ],
+)
+
+# Czech
+CV_CS_CONFIG = types.DatasetConfig(
+    name="commonvoice-cs",
+    base="commonvoice",
+    subset="cs",
+    splits=[
+        types.DatasetSplitConfig(name="train", num_samples=20_144),
+        types.DatasetSplitConfig(name="validation", num_samples=9_009),
+        types.DatasetSplitConfig(
+            name="other", num_samples=148_316, split=types.DatasetSplit.TRAIN
+        ),
+        # types.DatasetSplitConfig(name="validated", num_samples=61_391),
+    ],
+)
+
+# Latvian
+CV_LV_CONFIG = types.DatasetConfig(
+    name="commonvoice-lv",
+    base="commonvoice",
+    subset="lv",
+    splits=[
+        types.DatasetSplitConfig(name="train", num_samples=11_364),
+        types.DatasetSplitConfig(name="validation", num_samples=6_752),
+        types.DatasetSplitConfig(
+            name="other", num_samples=32_248, split=types.DatasetSplit.TRAIN
+        ),
+        # types.DatasetSplitConfig(name="validated", num_samples=171_652),
+    ],
+)
+
+# Georgian
+CV_KA_CONFIG = types.DatasetConfig(
+    name="commonvoice-ka",
+    base="commonvoice",
+    subset="ka",
+    splits=[
+        types.DatasetSplitConfig(name="train", num_samples=52_321),
+        types.DatasetSplitConfig(name="validation", num_samples=12_545),
+        types.DatasetSplitConfig(
+            name="other", num_samples=48_563, split=types.DatasetSplit.TRAIN
+        ),
+        # types.DatasetSplitConfig(name="validated", num_samples=97_230),
+    ],
+)
+
+# Urdu
+CV_UR_CONFIG = types.DatasetConfig(
+    name="commonvoice-ur",
+    base="commonvoice",
+    subset="ur",
+    splits=[
+        types.DatasetSplitConfig(name="train", num_samples=5_368),
+        types.DatasetSplitConfig(name="validation", num_samples=4_057),
+        types.DatasetSplitConfig(
+            name="other", num_samples=135_861, split=types.DatasetSplit.TRAIN
+        ),
+        # types.DatasetSplitConfig(name="validated", num_samples=53_858),
+    ],
+)
+
+# Polish
+CV_PL_CONFIG = types.DatasetConfig(
+    name="commonvoice-pl",
+    base="commonvoice",
+    subset="pl",
+    splits=[
+        types.DatasetSplitConfig(name="train", num_samples=20_729),
+        types.DatasetSplitConfig(name="validation", num_samples=9_230),
+        # types.DatasetSplitConfig(name="validated", num_samples=132661),
+    ],
+)
+
+# Hungarian
+CV_HU_CONFIG = types.DatasetConfig(
+    name="commonvoice-hu",
+    base="commonvoice",
+    subset="hu",
+    splits=[
+        types.DatasetSplitConfig(name="train", num_samples=37_140),
+        types.DatasetSplitConfig(name="validation", num_samples=11_350),
+        types.DatasetSplitConfig(
+            name="other", num_samples=49_019, split=types.DatasetSplit.TRAIN
+        ),
+        # types.DatasetSplitConfig(name="validated", num_samples=60_358),
+    ],
+)
+
+# Dutch
+CV_NL_CONFIG = types.DatasetConfig(
+    name="commonvoice-nl",
+    base="commonvoice",
+    subset="nl",
+    splits=[
+        types.DatasetSplitConfig(name="train", num_samples=34_898),
+        types.DatasetSplitConfig(name="validation", num_samples=11_252),
+        # types.DatasetSplitConfig(name="validated", num_samples=90_449),
+    ],
+)
+
+# Galician
+CV_GL_CONFIG = types.DatasetConfig(
+    name="commonvoice-gl",
+    base="commonvoice",
+    subset="gl",
+    splits=[
+        types.DatasetSplitConfig(name="train", num_samples=25_159),
+        types.DatasetSplitConfig(name="validation", num_samples=9_982),
+        # types.DatasetSplitConfig(name="validated", num_samples=45_780),
+    ],
+)
+
+# Welsh
+CV_CY_CONFIG = types.DatasetConfig(
+    name="commonvoice-cy",
+    base="commonvoice",
+    subset="cy",
+    splits=[
+        types.DatasetSplitConfig(name="train", num_samples=7_960),
+        types.DatasetSplitConfig(name="validation", num_samples=5_371),
+        # types.DatasetSplitConfig(name="validated", num_samples=90_369),
+    ],
+)
+
+# Romanian
+CV_RO_CONFIG = types.DatasetConfig(
+    name="commonvoice-ro",
+    base="commonvoice",
+    subset="ro",
+    splits=[
+        types.DatasetSplitConfig(name="train", num_samples=5_141),
+        types.DatasetSplitConfig(name="validation", num_samples=3_881),
+        types.DatasetSplitConfig(
+            name="other", num_samples=23_087, split=types.DatasetSplit.TRAIN
+        ),
+        # types.DatasetSplitConfig(name="validated", num_samples=17_737),
+    ],
+)
+
+# Estonian
+CV_ET_CONFIG = types.DatasetConfig(
+    name="commonvoice-et",
+    base="commonvoice",
+    subset="et",
+    splits=[
+        types.DatasetSplitConfig(name="train", num_samples=3_157),
+        types.DatasetSplitConfig(name="validation", num_samples=2_653),
+        # types.DatasetSplitConfig(name="validated", num_samples=24_381),
+    ],
+)
+
+# Breton
+CV_BR_CONFIG = types.DatasetConfig(
+    name="commonvoice-br",
+    base="commonvoice",
+    subset="br",
+    splits=[
+        types.DatasetSplitConfig(name="train", num_samples=2_663),
+        types.DatasetSplitConfig(name="validation", num_samples=2_253),
+        types.DatasetSplitConfig(
+            name="other", num_samples=8_037, split=types.DatasetSplit.TRAIN
+        ),
+        # types.DatasetSplitConfig(name="validated", num_samples=21_007),
+    ],
+)
+
+# Lithuanian
+CV_LT_CONFIG = types.DatasetConfig(
+    name="commonvoice-lt",
+    base="commonvoice",
+    subset="lt",
+    splits=[
+        types.DatasetSplitConfig(name="train", num_samples=7_253),
+        types.DatasetSplitConfig(name="validation", num_samples=4_436),
+        # types.DatasetSplitConfig(name="validated", num_samples=16643),
+    ],
+)
+
+# Greek
+CV_EL_CONFIG = types.DatasetConfig(
+    name="commonvoice-el",
+    base="commonvoice",
+    subset="el",
+    splits=[
+        types.DatasetSplitConfig(name="train", num_samples=1_920),
+        types.DatasetSplitConfig(name="validation", num_samples=1_700),
+        types.DatasetSplitConfig(
+            name="other", num_samples=10_330, split=types.DatasetSplit.TRAIN
+        ),
+        # types.DatasetSplitConfig(name="validated", num_samples=16_199),
+    ],
+)
+
+# Slovak
+CV_SK_CONFIG = types.DatasetConfig(
+    name="commonvoice-sk",
+    base="commonvoice",
+    subset="sk",
+    splits=[
+        types.DatasetSplitConfig(name="train", num_samples=3_258),
+        types.DatasetSplitConfig(name="validation", num_samples=2_588),
+        types.DatasetSplitConfig(
+            name="other", num_samples=3_392, split=types.DatasetSplit.TRAIN
+        ),
+        # types.DatasetSplitConfig(name="validated", num_samples=19_513),
+    ],
+)
+
+# Bulgarian
+CV_BG_CONFIG = types.DatasetConfig(
+    name="commonvoice-bg",
+    base="commonvoice",
+    subset="bg",
+    splits=[
+        types.DatasetSplitConfig(name="train", num_samples=4_849),
+        types.DatasetSplitConfig(name="validation", num_samples=2_766),
+        types.DatasetSplitConfig(
+            name="other", num_samples=2_087, split=types.DatasetSplit.TRAIN
+        ),
+        # types.DatasetSplitConfig(name="validated", num_samples=10_832),
+    ],
+)
+
+# Macedonian
+CV_MK_CONFIG = types.DatasetConfig(
+    name="commonvoice-mk",
+    base="commonvoice",
+    subset="mk",
+    splits=[
+        types.DatasetSplitConfig(name="train", num_samples=1_686),
+        types.DatasetSplitConfig(name="validation", num_samples=1_289),
+        types.DatasetSplitConfig(
+            name="other", num_samples=12_289, split=types.DatasetSplit.TRAIN
+        ),
+        # types.DatasetSplitConfig(name="validated", num_samples=6_512),
+    ],
+)
+
+# Finnish
+CV_FI_CONFIG = types.DatasetConfig(
+    name="commonvoice-fi",
+    base="commonvoice",
+    subset="fi",
+    splits=[
+        types.DatasetSplitConfig(name="train", num_samples=2_076),
+        types.DatasetSplitConfig(name="validation", num_samples=1_770),
+        types.DatasetSplitConfig(
+            name="other", num_samples=6_202, split=types.DatasetSplit.TRAIN
+        ),
+        # types.DatasetSplitConfig(name="validated", num_samples=10_447),
+    ],
+)
+
+# Marathi
+CV_MR_CONFIG = types.DatasetConfig(
+    name="commonvoice-mr",
+    base="commonvoice",
+    subset="mr",
+    splits=[
+        types.DatasetSplitConfig(name="train", num_samples=2_215),
+        types.DatasetSplitConfig(name="validation", num_samples=1_780),
+        types.DatasetSplitConfig(
+            name="other", num_samples=2_805, split=types.DatasetSplit.TRAIN
+        ),
+        # types.DatasetSplitConfig(name="validated", num_samples=10_901),
+    ],
+)
+
+# Mongolian
+CV_MN_CONFIG = types.DatasetConfig(
+    name="commonvoice-mn",
+    base="commonvoice",
+    subset="mn",
+    splits=[
+        types.DatasetSplitConfig(name="train", num_samples=2_175),
+        types.DatasetSplitConfig(name="validation", num_samples=1_870),
+        types.DatasetSplitConfig(
+            name="other", num_samples=5_773, split=types.DatasetSplit.TRAIN
+        ),
+        # types.DatasetSplitConfig(name="validated", num_samples=8_757),
+    ],
+)
+
+# Vietnamese
+CV_VI_CONFIG = types.DatasetConfig(
+    name="commonvoice-vi",
+    base="commonvoice",
+    subset="vi",
+    splits=[
+        types.DatasetSplitConfig(name="train", num_samples=2_298),
+        types.DatasetSplitConfig(name="validation", num_samples=641),
+        types.DatasetSplitConfig(
+            name="other", num_samples=11_533, split=types.DatasetSplit.TRAIN
+        ),
+        # types.DatasetSplitConfig(name="validated", num_samples=5_135),
+    ],
+)
+
+# Danish
+CV_DA_CONFIG = types.DatasetConfig(
+    name="commonvoice-da",
+    base="commonvoice",
+    subset="da",
+    splits=[
+        types.DatasetSplitConfig(name="train", num_samples=3_484),
+        types.DatasetSplitConfig(name="validation", num_samples=2_105),
+        types.DatasetSplitConfig(
+            name="other", num_samples=396, split=types.DatasetSplit.TRAIN
+        ),
+        # types.DatasetSplitConfig(name="validated", num_samples=10_225),
+    ],
+)
+
+# Slovenian
+CV_SL_CONFIG = types.DatasetConfig(
+    name="commonvoice-sl",
+    base="commonvoice",
+    subset="sl",
+    splits=[
+        types.DatasetSplitConfig(name="train", num_samples=1_388),
+        types.DatasetSplitConfig(name="validation", num_samples=1_232),
+        types.DatasetSplitConfig(
+            name="other", num_samples=3_145, split=types.DatasetSplit.TRAIN
+        ),
+        # types.DatasetSplitConfig(name="validated", num_samples=10_819),
+    ],
+)
+
+# Serbian
+CV_SR_CONFIG = types.DatasetConfig(
+    name="commonvoice-sr",
+    base="commonvoice",
+    subset="sr",
+    splits=[
+        types.DatasetSplitConfig(name="train", num_samples=1_879),
+        types.DatasetSplitConfig(name="validation", num_samples=1_583),
+        types.DatasetSplitConfig(
+            name="other", num_samples=1_781, split=types.DatasetSplit.TRAIN
+        ),
+        # types.DatasetSplitConfig(name="validated", num_samples=5_970),
+    ],
+)
+
+# Malayalam
+CV_ML_CONFIG = types.DatasetConfig(
+    name="commonvoice-ml",
+    base="commonvoice",
+    subset="ml",
+    splits=[
+        types.DatasetSplitConfig(name="train", num_samples=1_259),
+        types.DatasetSplitConfig(name="validation", num_samples=764),
+        types.DatasetSplitConfig(
+            name="other", num_samples=5_621, split=types.DatasetSplit.TRAIN
+        ),
+        # types.DatasetSplitConfig(name="validated", num_samples=2_984),
+    ],
+)
+
+# Occitan
+CV_OC_CONFIG = types.DatasetConfig(
+    name="commonvoice-oc",
+    base="commonvoice",
+    subset="oc",
+    splits=[
+        types.DatasetSplitConfig(name="train", num_samples=271),
+        types.DatasetSplitConfig(name="validation", num_samples=260),
+        types.DatasetSplitConfig(
+            name="other", num_samples=7632, split=types.DatasetSplit.TRAIN
+        ),
+        # types.DatasetSplitConfig(name="validated", num_samples=1668),
     ],
 )
 
@@ -209,6 +653,193 @@ CV_UK_TRANS_CONFIG = types.DatasetConfig(
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
 )
 
+CV_SW_TRANS_CONFIG = types.DatasetConfig(
+    name="commonvoice-sw-transcription",
+    base="commonvoice-sw",
+    user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+)
+
+CV_FA_TRANS_CONFIG = types.DatasetConfig(
+    name="commonvoice-fa-transcription",
+    base="commonvoice-fa",
+    user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+)
+
+CV_TH_TRANS_CONFIG = types.DatasetConfig(
+    name="commonvoice-th-transcription",
+    base="commonvoice-th",
+    user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+)
+
+
+CV_BE_TRANS_CONFIG = types.DatasetConfig(
+    name="commonvoice-be-transcription",
+    base="commonvoice-be",
+    user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+)
+
+CV_TA_TRANS_CONFIG = types.DatasetConfig(
+    name="commonvoice-ta-transcription",
+    base="commonvoice-ta",
+    user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+)
+
+CV_CS_TRANS_CONFIG = types.DatasetConfig(
+    name="commonvoice-cs-transcription",
+    base="commonvoice-cs",
+    user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+)
+
+CV_LV_TRANS_CONFIG = types.DatasetConfig(
+    name="commonvoice-lv-transcription",
+    base="commonvoice-lv",
+    user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+)
+
+CV_KA_TRANS_CONFIG = types.DatasetConfig(
+    name="commonvoice-ka-transcription",
+    base="commonvoice-ka",
+    user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+)
+
+CV_UR_TRANS_CONFIG = types.DatasetConfig(
+    name="commonvoice-ur-transcription",
+    base="commonvoice-ur",
+    user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+)
+
+CV_PL_TRANS_CONFIG = types.DatasetConfig(
+    name="commonvoice-pl-transcription",
+    base="commonvoice-pl",
+    user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+)
+
+CV_HU_TRANS_CONFIG = types.DatasetConfig(
+    name="commonvoice-hu-transcription",
+    base="commonvoice-hu",
+    user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+)
+
+CV_NL_TRANS_CONFIG = types.DatasetConfig(
+    name="commonvoice-nl-transcription",
+    base="commonvoice-nl",
+    user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+)
+
+CV_GL_TRANS_CONFIG = types.DatasetConfig(
+    name="commonvoice-gl-transcription",
+    base="commonvoice-gl",
+    user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+)
+
+CV_CY_TRANS_CONFIG = types.DatasetConfig(
+    name="commonvoice-cy-transcription",
+    base="commonvoice-cy",
+    user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+)
+
+CV_RO_TRANS_CONFIG = types.DatasetConfig(
+    name="commonvoice-ro-transcription",
+    base="commonvoice-ro",
+    user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+)
+
+CV_ET_TRANS_CONFIG = types.DatasetConfig(
+    name="commonvoice-et-transcription",
+    base="commonvoice-et",
+    user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+)
+
+CV_BR_TRANS_CONFIG = types.DatasetConfig(
+    name="commonvoice-br-transcription",
+    base="commonvoice-br",
+    user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+)
+
+CV_LT_TRANS_CONFIG = types.DatasetConfig(
+    name="commonvoice-lt-transcription",
+    base="commonvoice-lt",
+    user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+)
+
+CV_EL_TRANS_CONFIG = types.DatasetConfig(
+    name="commonvoice-el-transcription",
+    base="commonvoice-el",
+    user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+)
+
+CV_SK_TRANS_CONFIG = types.DatasetConfig(
+    name="commonvoice-sk-transcription",
+    base="commonvoice-sk",
+    user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+)
+
+CV_BG_TRANS_CONFIG = types.DatasetConfig(
+    name="commonvoice-bg-transcription",
+    base="commonvoice-bg",
+    user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+)
+
+CV_MK_TRANS_CONFIG = types.DatasetConfig(
+    name="commonvoice-mk-transcription",
+    base="commonvoice-mk",
+    user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+)
+
+CV_FI_TRANS_CONFIG = types.DatasetConfig(
+    name="commonvoice-fi-transcription",
+    base="commonvoice-fi",
+    user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+)
+
+CV_MR_TRANS_CONFIG = types.DatasetConfig(
+    name="commonvoice-mr-transcription",
+    base="commonvoice-mr",
+    user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+)
+
+CV_MN_TRANS_CONFIG = types.DatasetConfig(
+    name="commonvoice-mn-transcription",
+    base="commonvoice-mn",
+    user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+)
+
+CV_VI_TRANS_CONFIG = types.DatasetConfig(
+    name="commonvoice-vi-transcription",
+    base="commonvoice-vi",
+    user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+)
+
+CV_DA_TRANS_CONFIG = types.DatasetConfig(
+    name="commonvoice-da-transcription",
+    base="commonvoice-da",
+    user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+)
+
+CV_SL_TRANS_CONFIG = types.DatasetConfig(
+    name="commonvoice-sl-transcription",
+    base="commonvoice-sl",
+    user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+)
+
+CV_SR_TRANS_CONFIG = types.DatasetConfig(
+    name="commonvoice-sr-transcription",
+    base="commonvoice-sr",
+    user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+)
+
+CV_ML_TRANS_CONFIG = types.DatasetConfig(
+    name="commonvoice-ml-transcription",
+    base="commonvoice-ml",
+    user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+)
+
+CV_OC_TRANS_CONFIG = types.DatasetConfig(
+    name="commonvoice-oc-transcription",
+    base="commonvoice-oc",
+    user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+)
+
 CV_EN_CONT_CONFIG = types.DatasetConfig(
     name="commonvoice-en-continuation",
     base="commonvoice-en",
@@ -264,7 +895,6 @@ CV_RU_CONT_CONFIG = types.DatasetConfig(
     assistant_template=types.CONTINUATION_ASSISTANT_TEMPLATE,
 )
 
-
 CV_HI_CONT_CONFIG = types.DatasetConfig(
     name="commonvoice-hi-continuation",
     base="commonvoice-hi",
@@ -293,6 +923,223 @@ CV_UK_CONT_CONFIG = types.DatasetConfig(
     assistant_template=types.CONTINUATION_ASSISTANT_TEMPLATE,
 )
 
+CV_SW_CONT_CONFIG = types.DatasetConfig(
+    name="commonvoice-sw-continuation",
+    base="commonvoice-sw",
+    user_template=types.CONTINUATION_USER_TEMPLATE,
+    assistant_template=types.CONTINUATION_ASSISTANT_TEMPLATE,
+)
+
+CV_FA_CONT_CONFIG = types.DatasetConfig(
+    name="commonvoice-fa-continuation",
+    base="commonvoice-fa",
+    user_template=types.CONTINUATION_USER_TEMPLATE,
+    assistant_template=types.CONTINUATION_ASSISTANT_TEMPLATE,
+)
+
+CV_TH_CONT_CONFIG = types.DatasetConfig(
+    name="commonvoice-th-continuation",
+    base="commonvoice-th",
+    user_template=types.CONTINUATION_USER_TEMPLATE,
+    assistant_template=types.CONTINUATION_ASSISTANT_TEMPLATE,
+)
+
+CV_BE_CONT_CONFIG = types.DatasetConfig(
+    name="commonvoice-be-continuation",
+    base="commonvoice-be",
+    user_template=types.CONTINUATION_USER_TEMPLATE,
+    assistant_template=types.CONTINUATION_ASSISTANT_TEMPLATE,
+)
+
+CV_TA_CONT_CONFIG = types.DatasetConfig(
+    name="commonvoice-ta-continuation",
+    base="commonvoice-ta",
+    user_template=types.CONTINUATION_USER_TEMPLATE,
+    assistant_template=types.CONTINUATION_ASSISTANT_TEMPLATE,
+)
+
+CV_CS_CONT_CONFIG = types.DatasetConfig(
+    name="commonvoice-cs-continuation",
+    base="commonvoice-cs",
+    user_template=types.CONTINUATION_USER_TEMPLATE,
+    assistant_template=types.CONTINUATION_ASSISTANT_TEMPLATE,
+)
+
+CV_LV_CONT_CONFIG = types.DatasetConfig(
+    name="commonvoice-lv-continuation",
+    base="commonvoice-lv",
+    user_template=types.CONTINUATION_USER_TEMPLATE,
+    assistant_template=types.CONTINUATION_ASSISTANT_TEMPLATE,
+)
+
+CV_KA_CONT_CONFIG = types.DatasetConfig(
+    name="commonvoice-ka-continuation",
+    base="commonvoice-ka",
+    user_template=types.CONTINUATION_USER_TEMPLATE,
+    assistant_template=types.CONTINUATION_ASSISTANT_TEMPLATE,
+)
+
+CV_UR_CONT_CONFIG = types.DatasetConfig(
+    name="commonvoice-ur-continuation",
+    base="commonvoice-ur",
+    user_template=types.CONTINUATION_USER_TEMPLATE,
+    assistant_template=types.CONTINUATION_ASSISTANT_TEMPLATE,
+)
+
+CV_PL_CONT_CONFIG = types.DatasetConfig(
+    name="commonvoice-pl-continuation",
+    base="commonvoice-pl",
+    user_template=types.CONTINUATION_USER_TEMPLATE,
+    assistant_template=types.CONTINUATION_ASSISTANT_TEMPLATE,
+)
+
+CV_HU_CONT_CONFIG = types.DatasetConfig(
+    name="commonvoice-hu-continuation",
+    base="commonvoice-hu",
+    user_template=types.CONTINUATION_USER_TEMPLATE,
+    assistant_template=types.CONTINUATION_ASSISTANT_TEMPLATE,
+)
+
+CV_NL_CONT_CONFIG = types.DatasetConfig(
+    name="commonvoice-nl-continuation",
+    base="commonvoice-nl",
+    user_template=types.CONTINUATION_USER_TEMPLATE,
+    assistant_template=types.CONTINUATION_ASSISTANT_TEMPLATE,
+)
+
+CV_GL_CONT_CONFIG = types.DatasetConfig(
+    name="commonvoice-gl-continuation",
+    base="commonvoice-gl",
+    user_template=types.CONTINUATION_USER_TEMPLATE,
+    assistant_template=types.CONTINUATION_ASSISTANT_TEMPLATE,
+)
+
+CV_CY_CONT_CONFIG = types.DatasetConfig(
+    name="commonvoice-cy-continuation",
+    base="commonvoice-cy",
+    user_template=types.CONTINUATION_USER_TEMPLATE,
+    assistant_template=types.CONTINUATION_ASSISTANT_TEMPLATE,
+)
+
+CV_RO_CONT_CONFIG = types.DatasetConfig(
+    name="commonvoice-ro-continuation",
+    base="commonvoice-ro",
+    user_template=types.CONTINUATION_USER_TEMPLATE,
+    assistant_template=types.CONTINUATION_ASSISTANT_TEMPLATE,
+)
+
+CV_ET_CONT_CONFIG = types.DatasetConfig(
+    name="commonvoice-et-continuation",
+    base="commonvoice-et",
+    user_template=types.CONTINUATION_USER_TEMPLATE,
+    assistant_template=types.CONTINUATION_ASSISTANT_TEMPLATE,
+)
+
+CV_BR_CONT_CONFIG = types.DatasetConfig(
+    name="commonvoice-br-continuation",
+    base="commonvoice-br",
+    user_template=types.CONTINUATION_USER_TEMPLATE,
+    assistant_template=types.CONTINUATION_ASSISTANT_TEMPLATE,
+)
+
+CV_LT_CONT_CONFIG = types.DatasetConfig(
+    name="commonvoice-lt-continuation",
+    base="commonvoice-lt",
+    user_template=types.CONTINUATION_USER_TEMPLATE,
+    assistant_template=types.CONTINUATION_ASSISTANT_TEMPLATE,
+)
+
+CV_EL_CONT_CONFIG = types.DatasetConfig(
+    name="commonvoice-el-continuation",
+    base="commonvoice-el",
+    user_template=types.CONTINUATION_USER_TEMPLATE,
+    assistant_template=types.CONTINUATION_ASSISTANT_TEMPLATE,
+)
+
+CV_SK_CONT_CONFIG = types.DatasetConfig(
+    name="commonvoice-sk-continuation",
+    base="commonvoice-sk",
+    user_template=types.CONTINUATION_USER_TEMPLATE,
+    assistant_template=types.CONTINUATION_ASSISTANT_TEMPLATE,
+)
+
+CV_BG_CONT_CONFIG = types.DatasetConfig(
+    name="commonvoice-bg-continuation",
+    base="commonvoice-bg",
+    user_template=types.CONTINUATION_USER_TEMPLATE,
+    assistant_template=types.CONTINUATION_ASSISTANT_TEMPLATE,
+)
+
+CV_MK_CONT_CONFIG = types.DatasetConfig(
+    name="commonvoice-mk-continuation",
+    base="commonvoice-mk",
+    user_template=types.CONTINUATION_USER_TEMPLATE,
+    assistant_template=types.CONTINUATION_ASSISTANT_TEMPLATE,
+)
+
+CV_FI_CONT_CONFIG = types.DatasetConfig(
+    name="commonvoice-fi-continuation",
+    base="commonvoice-fi",
+    user_template=types.CONTINUATION_USER_TEMPLATE,
+    assistant_template=types.CONTINUATION_ASSISTANT_TEMPLATE,
+)
+
+CV_MR_CONT_CONFIG = types.DatasetConfig(
+    name="commonvoice-mr-continuation",
+    base="commonvoice-mr",
+    user_template=types.CONTINUATION_USER_TEMPLATE,
+    assistant_template=types.CONTINUATION_ASSISTANT_TEMPLATE,
+)
+
+CV_MN_CONT_CONFIG = types.DatasetConfig(
+    name="commonvoice-mn-continuation",
+    base="commonvoice-mn",
+    user_template=types.CONTINUATION_USER_TEMPLATE,
+    assistant_template=types.CONTINUATION_ASSISTANT_TEMPLATE,
+)
+
+CV_VI_CONT_CONFIG = types.DatasetConfig(
+    name="commonvoice-vi-continuation",
+    base="commonvoice-vi",
+    user_template=types.CONTINUATION_USER_TEMPLATE,
+    assistant_template=types.CONTINUATION_ASSISTANT_TEMPLATE,
+)
+
+CV_DA_CONT_CONFIG = types.DatasetConfig(
+    name="commonvoice-da-continuation",
+    base="commonvoice-da",
+    user_template=types.CONTINUATION_USER_TEMPLATE,
+    assistant_template=types.CONTINUATION_ASSISTANT_TEMPLATE,
+)
+
+CV_SL_CONT_CONFIG = types.DatasetConfig(
+    name="commonvoice-sl-continuation",
+    base="commonvoice-sl",
+    user_template=types.CONTINUATION_USER_TEMPLATE,
+    assistant_template=types.CONTINUATION_ASSISTANT_TEMPLATE,
+)
+
+CV_SR_CONT_CONFIG = types.DatasetConfig(
+    name="commonvoice-sr-continuation",
+    base="commonvoice-sr",
+    user_template=types.CONTINUATION_USER_TEMPLATE,
+    assistant_template=types.CONTINUATION_ASSISTANT_TEMPLATE,
+)
+
+CV_ML_CONT_CONFIG = types.DatasetConfig(
+    name="commonvoice-ml-continuation",
+    base="commonvoice-ml",
+    user_template=types.CONTINUATION_USER_TEMPLATE,
+    assistant_template=types.CONTINUATION_ASSISTANT_TEMPLATE,
+)
+
+CV_OC_CONT_CONFIG = types.DatasetConfig(
+    name="commonvoice-oc-continuation",
+    base="commonvoice-oc",
+    user_template=types.CONTINUATION_USER_TEMPLATE,
+    assistant_template=types.CONTINUATION_ASSISTANT_TEMPLATE,
+)
+
 configs = [
     CV_BASE_CONFIG,
     CV_EN_CONFIG,
@@ -308,6 +1155,37 @@ configs = [
     CV_TR_CONFIG,
     CV_SV_CONFIG,
     CV_UK_CONFIG,
+    CV_SW_CONFIG,
+    CV_FA_CONFIG,
+    CV_TH_CONFIG,
+    CV_BE_CONFIG,
+    CV_TA_CONFIG,
+    CV_CS_CONFIG,
+    CV_LV_CONFIG,
+    CV_KA_CONFIG,
+    CV_UR_CONFIG,
+    CV_PL_CONFIG,
+    CV_HU_CONFIG,
+    CV_NL_CONFIG,
+    CV_GL_CONFIG,
+    CV_CY_CONFIG,
+    CV_RO_CONFIG,
+    CV_ET_CONFIG,
+    CV_BR_CONFIG,
+    CV_LT_CONFIG,
+    CV_EL_CONFIG,
+    CV_SK_CONFIG,
+    CV_BG_CONFIG,
+    CV_MK_CONFIG,
+    CV_FI_CONFIG,
+    CV_MR_CONFIG,
+    CV_MN_CONFIG,
+    CV_VI_CONFIG,
+    CV_DA_CONFIG,
+    CV_SL_CONFIG,
+    CV_SR_CONFIG,
+    CV_ML_CONFIG,
+    CV_OC_CONFIG,
     CV_EN_TRANS_CONFIG,
     CV_AR_TRANS_CONFIG,
     CV_DE_TRANS_CONFIG,
@@ -321,6 +1199,37 @@ configs = [
     CV_TR_TRANS_CONFIG,
     CV_SV_TRANS_CONFIG,
     CV_UK_TRANS_CONFIG,
+    CV_SW_TRANS_CONFIG,
+    CV_FA_TRANS_CONFIG,
+    CV_TH_TRANS_CONFIG,
+    CV_BE_TRANS_CONFIG,
+    CV_TA_TRANS_CONFIG,
+    CV_CS_TRANS_CONFIG,
+    CV_LV_TRANS_CONFIG,
+    CV_KA_TRANS_CONFIG,
+    CV_UR_TRANS_CONFIG,
+    CV_PL_TRANS_CONFIG,
+    CV_HU_TRANS_CONFIG,
+    CV_NL_TRANS_CONFIG,
+    CV_GL_TRANS_CONFIG,
+    CV_CY_TRANS_CONFIG,
+    CV_RO_TRANS_CONFIG,
+    CV_ET_TRANS_CONFIG,
+    CV_BR_TRANS_CONFIG,
+    CV_LT_TRANS_CONFIG,
+    CV_EL_TRANS_CONFIG,
+    CV_SK_TRANS_CONFIG,
+    CV_BG_TRANS_CONFIG,
+    CV_MK_TRANS_CONFIG,
+    CV_FI_TRANS_CONFIG,
+    CV_MR_TRANS_CONFIG,
+    CV_MN_TRANS_CONFIG,
+    CV_VI_TRANS_CONFIG,
+    CV_DA_TRANS_CONFIG,
+    CV_SL_TRANS_CONFIG,
+    CV_SR_TRANS_CONFIG,
+    CV_ML_TRANS_CONFIG,
+    CV_OC_TRANS_CONFIG,
     CV_EN_CONT_CONFIG,
     CV_AR_CONT_CONFIG,
     CV_DE_CONT_CONFIG,
@@ -334,4 +1243,35 @@ configs = [
     CV_TR_CONT_CONFIG,
     CV_SV_CONT_CONFIG,
     CV_UK_CONT_CONFIG,
+    CV_SW_CONT_CONFIG,
+    CV_FA_CONT_CONFIG,
+    CV_TH_CONT_CONFIG,
+    CV_BE_CONT_CONFIG,
+    CV_TA_CONT_CONFIG,
+    CV_CS_CONT_CONFIG,
+    CV_LV_CONT_CONFIG,
+    CV_KA_CONT_CONFIG,
+    CV_UR_CONT_CONFIG,
+    CV_PL_CONT_CONFIG,
+    CV_HU_CONT_CONFIG,
+    CV_NL_CONT_CONFIG,
+    CV_GL_CONT_CONFIG,
+    CV_CY_CONT_CONFIG,
+    CV_RO_CONT_CONFIG,
+    CV_ET_CONT_CONFIG,
+    CV_BR_CONT_CONFIG,
+    CV_LT_CONT_CONFIG,
+    CV_EL_CONT_CONFIG,
+    CV_SK_CONT_CONFIG,
+    CV_BG_CONT_CONFIG,
+    CV_MK_CONT_CONFIG,
+    CV_FI_CONT_CONFIG,
+    CV_MR_CONT_CONFIG,
+    CV_MN_CONT_CONFIG,
+    CV_VI_CONT_CONFIG,
+    CV_DA_CONT_CONFIG,
+    CV_SL_CONT_CONFIG,
+    CV_SR_CONT_CONFIG,
+    CV_ML_CONT_CONFIG,
+    CV_OC_CONT_CONFIG,
 ]
