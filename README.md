@@ -165,7 +165,7 @@ Before running any training jobs, you need to setup your SSH key in the Mosaic P
 ```bash
 ## Create a new SSH key and add it to the Mosaic Platform
 # ssh-keygen -f ~/.ssh/mclid_id_rsa
-## add the **public** key to Github
+## add the **public** key to GitHub
 # mcli create secret ssh ~/.ssh/mclid_id_rsa
 
 mcli run -f mcloud.yaml --follow
