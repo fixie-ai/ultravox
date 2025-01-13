@@ -33,13 +33,13 @@ class UltravoxPipeline(transformers.Pipeline):
                 model.config.audio_model_id or model.config.audio_config._name_or_path
             )
 
+        super().__init__(model=model, tokenizer=tokenizer, **kwargs)
+
         self.processor = UltravoxProcessor(
             audio_processor=audio_processor,
             tokenizer=tokenizer,
             stack_factor=model.config.stack_factor,
         )
-
-        super().__init__(model=model, tokenizer=tokenizer, **kwargs)
 
     def _sanitize_parameters(self, **kwargs):
         generation_keys = ["temperature", "max_new_tokens", "repetition_penalty"]
