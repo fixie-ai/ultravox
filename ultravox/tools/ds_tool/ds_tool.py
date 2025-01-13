@@ -2,7 +2,7 @@ import dataclasses
 import math
 import os
 import traceback
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Type
 
 import datasets
 import simple_parsing
@@ -11,10 +11,18 @@ from tenacity import stop_after_attempt
 from tenacity import wait_fixed
 
 import ultravox.tools.ds_tool.chunked_dataset as chunked_dataset
+from ultravox.tools.ds_tool import ds_commons
 from ultravox.tools.ds_tool.tasks import dedup_task
 from ultravox.tools.ds_tool.tasks import text_gen_task
 from ultravox.tools.ds_tool.tasks import timestamp_gen_task
 from ultravox.tools.ds_tool.tasks import tts_task
+
+DS_TOOL_TASKS: Dict[str, Type[ds_commons.DSToolTask]] = {
+    "tts": tts_task.TtsTask,
+    "textgen": text_gen_task.TextGenerationTask,
+    "timestamp": timestamp_gen_task.TimestampGenerationTask,
+    "dedup": dedup_task.DeduplicationTask,
+}
 
 
 # This script is used to either generate audio samples from text using a TTS model, or to generate text samples using a text generation model.
@@ -63,19 +71,9 @@ class DatasetToolArgs:
         default_factory=lambda: ["audio"]
     )
 
-    task: Union[
-        tts_task.TtsTask,
-        text_gen_task.TextGenerationTask,
-        timestamp_gen_task.TimestampGenerationTask,
-        dedup_task.DeduplicationTask,
-    ] = simple_parsing.subgroups(
-        {
-            "tts": tts_task.TtsTask,
-            "textgen": text_gen_task.TextGenerationTask,
-            "timestamp": timestamp_gen_task.TimestampGenerationTask,
-            "dedup": dedup_task.DeduplicationTask,
-        },  # type: ignore
-        default_factory=tts_task.TtsTask,
+    task: ds_commons.DSToolTask = simple_parsing.subgroups(
+        DS_TOOL_TASKS,  # type: ignore
+        default_factory=DS_TOOL_TASKS["tts"],
         positional=True,
     )
 
@@ -101,15 +99,17 @@ class DatasetChunkProcessor:
     def __init__(self, args: DatasetToolArgs):
         self.args = args
 
-    def process_and_upload_split_rescursive(
-        self,
-        split_name: str,
-        ds_split: datasets.Dataset,
-        start_index: int,
-        end_index: int,
-    ):
+    def _get_num_chunks_and_chunk_size(
+        self, start_index: int, end_index: int
+    ) -> Tuple[int, int]:
         original_chunk_size = end_index - start_index
-        if original_chunk_size < self.args.chunk_split_threshold:
+        if not self.args.task.chunking_allowed():
+            total_chunks = 1
+            chunk_size = original_chunk_size
+            print(
+                "Chunking is not allowed for this task. Processing and uploading as a single chunk."
+            )
+        elif original_chunk_size < self.args.chunk_split_threshold:
             total_chunks = 1
             chunk_size = original_chunk_size
             print(
@@ -118,6 +118,20 @@ class DatasetChunkProcessor:
         else:
             total_chunks = self.args.num_chunks
             chunk_size = math.ceil(original_chunk_size / total_chunks)
+
+        return total_chunks, chunk_size
+
+    def process_and_upload_split_rescursive(
+        self,
+        split_name: str,
+        ds_split: datasets.Dataset,
+        start_index: int,
+        end_index: int,
+    ):
+        total_chunks, chunk_size = self._get_num_chunks_and_chunk_size(
+            start_index, end_index
+        )
+
         failed_chunk_ranges = []
         print(
             f"Processing and uploading {total_chunks} chunks for range [{start_index}, {end_index}) with chunk size {chunk_size}"

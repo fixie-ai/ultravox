@@ -14,7 +14,7 @@ chat_client: caching.CachingChatWrapper
 
 
 @dataclasses.dataclass
-class TextGenerationTask:
+class TextGenerationTask(ds_commons.DSToolTask):
     new_column_name: str = simple_parsing.field(alias="-c")
     template: str = simple_parsing.field(alias="-T")
     json_mode: bool = simple_parsing.field(default=False, alias="-j")

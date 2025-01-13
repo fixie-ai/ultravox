@@ -1,9 +1,27 @@
+import abc
 import json
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, List, Optional, Set
 
+import datasets
 import jinja2
 
 from ultravox.data import text_proc
+
+
+class DSToolTask(abc.ABC):
+    @classmethod
+    def chunking_allowed(cls) -> bool:
+        return True
+
+    @abc.abstractmethod
+    def map_split(
+        self,
+        ds_split: datasets.Dataset,
+        num_proc: int,
+        writer_batch_size: int,
+        exclude_fields: List[str],
+    ) -> datasets.Dataset:
+        raise NotImplementedError
 
 
 def apply_jinja_template(

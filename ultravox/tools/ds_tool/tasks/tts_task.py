@@ -13,7 +13,7 @@ tts_client: caching.CachingTtsWrapper
 
 
 @dataclasses.dataclass
-class TtsTask:
+class TtsTask(ds_commons.DSToolTask):
     # Jinja template for the text that needs to be converted to audio
     template: str = simple_parsing.field(alias="-T")
     implementation: str = simple_parsing.field(default="azure", alias="-i")

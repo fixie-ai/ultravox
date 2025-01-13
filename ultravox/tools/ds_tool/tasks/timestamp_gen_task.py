@@ -18,7 +18,7 @@ MFA_ENV_NAME = "aligner"
 
 
 @dataclasses.dataclass
-class TimestampGenerationTask:
+class TimestampGenerationTask(ds_commons.DSToolTask):
     """
     This task is used to generate timestamps for the text transcription.
     It uses the Montreal Forced Aligner (MFA) to align the text with the audio. The result is a

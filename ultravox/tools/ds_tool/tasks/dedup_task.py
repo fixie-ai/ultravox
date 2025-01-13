@@ -16,7 +16,7 @@ embedding_client: caching.CachingEmbeddingWrapper
 # Example usage:
 #   just ds_tool dedup -d fixie-ai/proper-noun-challenge -T "\"{{user}}\"" -t 0.6 -u fixie-ai/proper-noun-challenge-filtered --check_empty_columns --chunk_split_threshold 1000000
 @dataclasses.dataclass
-class DeduplicationTask:
+class DeduplicationTask(ds_commons.DSToolTask):
     """
     This task is used to deduplicate a dataset based on a text template.
     It uses a vector database to store the embeddings of the text and then checks for duplicates based on the cosine similarity of the embeddings.
@@ -32,6 +32,10 @@ class DeduplicationTask:
     model_dimensions: int = simple_parsing.field(default=1024, alias="-md")
     # The number of trees to build in the Annoy index.
     num_trees: int = simple_parsing.field(default=100, alias="-nt")
+
+    @classmethod
+    def chunking_allowed(cls) -> bool:
+        return False
 
     def __post_init__(self):
         if self.text_template.startswith("@"):
