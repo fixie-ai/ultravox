@@ -583,6 +583,21 @@ CV_OC_CONFIG = types.DatasetConfig(
     ],
 )
 
+# Bengali
+CV_BN_CONFIG = types.DatasetConfig(
+    name="commonvoice-bn",
+    base="commonvoice",
+    subset="bn",
+    splits=[
+        types.DatasetSplitConfig(name="train", num_samples=21_228),
+        types.DatasetSplitConfig(name="validation", num_samples=9_327),
+        types.DatasetSplitConfig(
+            name="other", num_samples=99_756, split=types.DatasetSplit.TRAIN
+        ),
+        # types.DatasetSplitConfig(name="validated", num_samples=44_121),
+    ],
+)
+
 CV_EN_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-en-transcription",
     base="commonvoice-en",
@@ -837,6 +852,12 @@ CV_ML_TRANS_CONFIG = types.DatasetConfig(
 CV_OC_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-oc-transcription",
     base="commonvoice-oc",
+    user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+)
+
+CV_BN_TRANS_CONFIG = types.DatasetConfig(
+    name="commonvoice-bn-transcription",
+    base="commonvoice-bn",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
 )
 
@@ -1140,6 +1161,13 @@ CV_OC_CONT_CONFIG = types.DatasetConfig(
     assistant_template=types.CONTINUATION_ASSISTANT_TEMPLATE,
 )
 
+CV_BN_CONT_CONFIG = types.DatasetConfig(
+    name="commonvoice-bn-continuation",
+    base="commonvoice-bn",
+    user_template=types.CONTINUATION_USER_TEMPLATE,
+    assistant_template=types.CONTINUATION_ASSISTANT_TEMPLATE,
+)
+
 configs = [
     CV_BASE_CONFIG,
     CV_EN_CONFIG,
@@ -1186,6 +1214,7 @@ configs = [
     CV_SR_CONFIG,
     CV_ML_CONFIG,
     CV_OC_CONFIG,
+    CV_BN_CONFIG,
     CV_EN_TRANS_CONFIG,
     CV_AR_TRANS_CONFIG,
     CV_DE_TRANS_CONFIG,
@@ -1230,6 +1259,7 @@ configs = [
     CV_SR_TRANS_CONFIG,
     CV_ML_TRANS_CONFIG,
     CV_OC_TRANS_CONFIG,
+    CV_BN_TRANS_CONFIG,
     CV_EN_CONT_CONFIG,
     CV_AR_CONT_CONFIG,
     CV_DE_CONT_CONFIG,
@@ -1274,4 +1304,5 @@ configs = [
     CV_SR_CONT_CONFIG,
     CV_ML_CONT_CONFIG,
     CV_OC_CONT_CONFIG,
+    CV_BN_CONT_CONFIG,
 ]
