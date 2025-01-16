@@ -37,7 +37,7 @@ def download_model_from_wandb(model_url: str) -> str:
     return model_path
 
 
-def get_run_config_from_artifact(model_url: str) -> Optional[wandb.Config]:
+def get_run_config_from_artifact(model_url: str) -> Optional[wandb.sdk.Config]:
     artifact = get_artifact(model_url)
     run = artifact.logged_by()
     if run is None:
