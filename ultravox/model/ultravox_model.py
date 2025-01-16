@@ -514,25 +514,30 @@ class UltravoxProjector(nn.Module):
         super().__init__()
         self.hidden_dim = config.hidden_size
         self._pad_and_stack = StackAudioFrames(config.stack_factor)
-        dim = config.audio_config.hidden_size * config.stack_factor
-        self.ln_pre = RMSNorm(dim, init=config.norm_init)
-        self.linear_1 = nn.Linear(dim, self.hidden_dim, bias=False)
-        dim = self.hidden_dim
+        dim_in = config.audio_config.hidden_size * config.stack_factor
+        self.ln_pre = RMSNorm(dim_in, init=config.norm_init)
+        self.linear_1 = nn.Linear(dim_in, self.hidden_dim, bias=False)
+        dim_mid = self.hidden_dim
         self.act = transformers.activations.get_activation(config.projector_act)
-        dim = dim // 2 if config.projector_act == "swiglu" else dim
+        dim_mid = dim_mid // 2 if config.projector_act == "swiglu" else dim_mid
         dim_out = config.text_config.hidden_size
-        self.linear_2 = nn.Linear(dim, dim_out, bias=False)
-        self.ln_post: Union[RMSNorm, nn.Identity] = (
-            RMSNorm(dim_out, init=config.norm_init)
-            if config.last_layer_norm
-            else nn.Identity()
-        )
+        self.linear_2 = nn.Linear(dim_mid, dim_out, bias=False)
+
+        # Ultravox v0.4.1 and below uses layer_norm after the second linear layer,
+        # while v0.5.0 and above uses layer_norm after the first linear layer.
+        if config.projector_ln_mid:
+            self.ln_mid: nn.Module = RMSNorm(dim_mid, init=config.norm_init)
+            self.ln_post: nn.Module = nn.Identity()
+        else:
+            self.ln_mid = nn.Identity()
+            self.ln_post = RMSNorm(dim_out, init=config.norm_init)
 
     def forward(self, audio_features: torch.Tensor) -> torch.Tensor:
         audio_features = self._pad_and_stack(audio_features)
         audio_features = self.ln_pre(audio_features)
         hidden_states = self.linear_1(audio_features)
         hidden_states = self.act(hidden_states)
+        hidden_states = self.ln_mid(hidden_states)
         hidden_states = self.linear_2(hidden_states)
         hidden_states = self.ln_post(hidden_states)
         return hidden_states

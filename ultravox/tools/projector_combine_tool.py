@@ -65,8 +65,8 @@ def main():
         uv.config.audio_model_id is not None
     ), "Audio model has been modified ... this is not supported ... YET!"
     assert (
-        uv.config.last_layer_norm == False
-    ), "In order to combine the projectors, the model must not have a final layer norm."
+        uv.config.projector_ln_mid == True
+    ), "In order to combine the projectors, the model must use layer norm after the first linear layer instead of the after the second linear layer (v0.4.1 and below)."
 
     # reduce memory usage by releasing unused parts of the model
     uv.language_model = None

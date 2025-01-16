@@ -34,9 +34,9 @@ class TrainConfig:
     # ---------------------------------------------------------------------------
     # Ultravox-specific parameters
     # ---------------------------------------------------------------------------
-    # Ultravox up to v0.4.1 had a final projection layer, but this will be removed going forward
-    # to allow for seamlessly merging a small-to-big projection layer.
-    last_layer_norm: bool = False
+    # Ultravox up to v0.4.1 had layer_norm after the second (final) linear layer in the projector.
+    # v0.5.0 and above have layer_norm after the first linear layer in the projector.
+    projector_ln_mid: bool = True
     # Disable layerdrop
     disable_layerdrop: bool = False
     # Audio latency block size (e.g., 100 for 1s, etc.)

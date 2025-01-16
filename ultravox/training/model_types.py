@@ -63,7 +63,7 @@ class UltravoxModelPack(ModelPack):
             audio_model_lora_config=args.audio_model_lora_config,
             torch_dtype=args.data_type,
             pad_token_id=self.text_tokenizer.eos_token_id,
-            last_layer_norm=args.last_layer_norm,
+            projector_ln_mid=args.projector_ln_mid,
         )
 
         # Instantiate the model

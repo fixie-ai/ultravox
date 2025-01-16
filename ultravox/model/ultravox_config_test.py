@@ -15,7 +15,7 @@ def test_can_load_release(model_id: str):
     config_from_dict = ultravox_config.UltravoxConfig(**orig_config.to_dict())
     config_from_diff_dict = ultravox_config.UltravoxConfig(**orig_config.to_diff_dict())
     # To not inadvertently ignore other keys, we explicitly define keys we require to ignore.
-    new_keys_default = {"audio_latency_block_size": None, "last_layer_norm": True}
+    new_keys_default = {"audio_latency_block_size": None, "projector_ln_mid": False}
     orig_values = {**new_keys_default, **orig_config.to_dict()}
 
     assert config_from_dict.to_dict() == orig_values

@@ -107,7 +107,7 @@ class UltravoxConfig(transformers.PretrainedConfig):
         stack_factor: int = 8,
         norm_init: float = 0.4,
         projector_act: str = "swiglu",
-        last_layer_norm: bool = True,
+        projector_ln_mid: bool = False,  # defaults to False for compatibility with v0.4.1 and below
         text_model_lora_config: Optional[LoraConfigSimplified] = None,
         audio_model_lora_config: Optional[LoraConfigSimplified] = None,
         audio_latency_block_size: Optional[int] = None,
@@ -122,8 +122,7 @@ class UltravoxConfig(transformers.PretrainedConfig):
         self.stack_factor = stack_factor
         self.norm_init = norm_init
         self.projector_act = projector_act
-        self.last_layer_norm = last_layer_norm
-
+        self.projector_ln_mid = projector_ln_mid
         if text_model_id is not None:
             self.text_config: transformers.LlamaConfig = (
                 transformers.AutoConfig.from_pretrained(text_model_id)

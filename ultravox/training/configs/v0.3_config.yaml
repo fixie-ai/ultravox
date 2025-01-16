@@ -1,0 +1,25 @@
+# closest trining setup to v0.3, used for quick experiments and comparisons
+
+text_model: "meta-llama/Llama-3.1-8B-Instruct"
+audio_model: "openai/whisper-large-v3-turbo"
+
+loss_config:
+  loss_function: "KL_Divergence"
+
+train_sets:
+  - name: librispeech-clean-continuation
+  - name: librispeech-other-continuation
+  - name: commonvoice-en-continuation
+
+
+lr: 1e-3
+lr_warmup_steps: 1000
+batch_size: 12
+grad_accum_steps: 2
+
+max_steps: -1
+num_epochs: 2
+val_steps: 0.05
+save_steps: 0.25
+
+projector_ln_mid: false
