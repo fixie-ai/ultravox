@@ -26,6 +26,14 @@ class TrainConfig:
     model_type: str = simple_parsing.choice("ultravox", "lsm")
     # Path to load model checkpoint (local/HF/W&B)
     model_load_dir: Optional[str] = None
+    # If True, the optimizer and scheduler states are also loaded from model_load_dir
+    # and training is resumed. o/w only the model weights are loaded if present.
+    resume_from_load_dir: bool = False
+    # When resuming from a checkpoint, we can skip the same number of samples as in the previous run.
+    # If False, this makes sure that we get the same data loading as if we had not interrupted the training.
+    # If True, this allows the training to begin faster (as that skipping step can take a long time). In this case,
+    # it's recommended to change the train dataset seed, which train.py will do automatically.
+    ignore_data_skip: bool = True
 
     # LoRA configs
     text_model_lora_config: Optional[ultravox_config.LoraConfigSimplified] = None
@@ -171,6 +179,11 @@ class TrainConfig:
             self.exp_name = datetime.datetime.now().strftime("exp--%Y-%m-%d--%H-%M-%S")
         if self.output_dir is None:
             self.output_dir = Path("runs") / self.exp_name
+
+        if self.resume_from_load_dir:
+            assert bool(
+                self.model_load_dir
+            ), "model_load_dir must be set if resume_from_load_dir is True"
 
         # HF Pipeline gets tripped up if the path has a "." in it
         self.output_dir = Path(str(self.output_dir).replace(".", "--"))

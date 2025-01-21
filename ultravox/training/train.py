@@ -3,6 +3,8 @@ import dataclasses
 import glob
 import logging
 import os
+import random
+import traceback
 from datetime import datetime
 from typing import Dict, List
 
@@ -139,6 +141,19 @@ def train(config: config_base.TrainConfig):
                     f"Unexpected keys in state dict: {mismatch.unexpected_keys}"
                 )
 
+    if config.ignore_data_skip and config.resume_from_load_dir:
+        new_shuffle_seed = random.randint(1000, 1999)
+        logging.info(
+            "Since data skipping is ignored when resuming from a checkpoint,"
+            f" randomly setting the train dataset seed to {new_shuffle_seed}."
+        )
+        config.train_dataset_args.shuffle_seed = new_shuffle_seed
+        if wandb.run:
+            wandb.run.config.update(
+                {"train_dataset_args": dataclasses.asdict(config.train_dataset_args)},
+                allow_val_change=True,
+            )
+
     model.print_trainable_parameters()
 
     if not config.use_fsdp:
@@ -231,6 +246,7 @@ def train(config: config_base.TrainConfig):
         ),
     )
 
+    caught_exception = None
     if config.do_train:
         # Training loop
         logging.info("Starting training...")
@@ -245,10 +261,19 @@ def train(config: config_base.TrainConfig):
             else:
                 trainer.evaluate()
 
-        trainer.train()
+        try:
+            resume_from_checkpoint = load_path if config.resume_from_load_dir else None
+            trainer.train(resume_from_checkpoint=resume_from_checkpoint)
+        except Exception as e:
+            logging.error(f"[rank: {local_rank}] Training failed with error: {e}")
+            logging.error(f"[rank: {local_rank}] {traceback.format_exc()}")
+            caught_exception = e
+
         t_end = datetime.now()
         logging.info(f"train end time: {t_end}")
         logging.info(f"elapsed: {t_end - t_start}")
+
+    save_final_model(trainer, model_pack, config)
 
     # use fixie-ai/evals for evaluation if in use_fsdp mode
     if config.do_eval:
@@ -290,6 +315,25 @@ def train(config: config_base.TrainConfig):
             logging.info(f"eval end time: {t_end}")
             logging.info(f"elapsed: {t_end - t_start}")
 
+    # finish wandb run if it exists
+    if wandb.run and is_master:
+        wandb.run.finish(exit_code=1 if caught_exception else 0)
+    # destroy process group if distributed training
+    if world_size > 1:
+        torch.distributed.destroy_process_group()
+
+    if caught_exception:
+        logging.error(
+            f"[rank: {local_rank}] Training failed earlier, exiting and raising error."
+        )
+        raise caught_exception
+
+
+def save_final_model(
+    trainer: transformers.Trainer,
+    model_pack: model_types.ModelPack,
+    config: config_base.TrainConfig,
+):
     if config.use_fsdp:
         # For training checkpoints, we want to use SHARDED_STATE_DICT which should be faster,
         # but for the final save we want FULL_STATE_DICT so it can be serialized properly.
@@ -301,6 +345,7 @@ def train(config: config_base.TrainConfig):
     # on the other hand, trainer.save_model knows how to save FSDP models correctly, but it won't save the pipeline.
     # Saving FSDP models is already quite slow though, so we don't want to save the model twice.
     pipeline = model_pack.get_pipeline()
+    model = model_pack.model
     old_save_pretrained = model.save_pretrained
     model.save_pretrained = lambda *_, **__: None  # type: ignore[method-assign]
     # saves the pipeline code and populates the config
@@ -309,13 +354,6 @@ def train(config: config_base.TrainConfig):
 
     # saves the model weights correctly (FSDP or otherwise)
     trainer.save_model(config.output_dir)
-
-    # finish wandb run if it exists
-    if wandb.run:
-        wandb.run.finish()
-    # destroy process group if distributed training
-    if world_size > 1:
-        torch.distributed.destroy_process_group()
 
 
 if __name__ == "__main__":
