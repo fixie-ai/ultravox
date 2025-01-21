@@ -38,9 +38,12 @@ def patch_hf_hub_http_backoff():
     """
     Monkey patch the huggingface_hub http_backoff implementation to include the ChunkedEncodingError exception.
     """
-    from huggingface_hub.utils import _http
+    # We first tried patching the original http_backoff function from utils._http but due to directly importing
+    # the function, the hf_file_system's version of http_backoff would not get updated, hence we're updating it
+    # directly in the target module even if http_backoff itself is defined elsewhere.
+    from huggingface_hub import hf_file_system
 
-    original_http_backoff = _http.http_backoff
+    original_http_backoff = hf_file_system.http_backoff
 
     def http_backoff(
         method: HTTP_METHOD_T,
@@ -62,7 +65,7 @@ def patch_hf_hub_http_backoff():
             **kwargs,
         )
 
-    _http.http_backoff = http_backoff
+    hf_file_system.http_backoff = http_backoff
 
 
 patch_hf_hub_http_backoff()
