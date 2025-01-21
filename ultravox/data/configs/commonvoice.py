@@ -1,5 +1,9 @@
 from ultravox.data import types
 
+# "Other" is the split that has not yet been reviewed to be validated/invalidated
+# "Validated" split is a superset of "train, test, validation."
+# We include the "validation" split from some low-resource languages for training.
+# In the future, we will create new training splits from the "validated" split.
 CV_BASE_CONFIG = types.DatasetConfig(
     name="commonvoice",
     path="fixie-ai/common_voice_17_0",
@@ -27,7 +31,9 @@ CV_AR_CONFIG = types.DatasetConfig(
     subset="ar",
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=28_369),
-        types.DatasetSplitConfig(name="validation", num_samples=10_470),
+        types.DatasetSplitConfig(
+            name="validation", num_samples=10_470, split=types.DatasetSplit.TRAIN
+        ),
     ],
 )
 
@@ -82,7 +88,9 @@ CV_JA_CONFIG = types.DatasetConfig(
     subset="ja",
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=10_039),
-        types.DatasetSplitConfig(name="validation", num_samples=6_261),
+        types.DatasetSplitConfig(
+            name="validation", num_samples=6_261, split=types.DatasetSplit.TRAIN
+        ),
     ],
 )
 
@@ -93,7 +101,9 @@ CV_PT_CONFIG = types.DatasetConfig(
     subset="pt",
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=21_968),
-        types.DatasetSplitConfig(name="validation", num_samples=9_464),
+        types.DatasetSplitConfig(
+            name="validation", num_samples=9_464, split=types.DatasetSplit.TRAIN
+        ),
     ],
 )
 
@@ -104,7 +114,9 @@ CV_RU_CONFIG = types.DatasetConfig(
     subset="ru",
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=26_377),
-        types.DatasetSplitConfig(name="validation", num_samples=10_203),
+        types.DatasetSplitConfig(
+            name="validation", num_samples=10_203, split=types.DatasetSplit.TRAIN
+        ),
     ],
 )
 
@@ -114,8 +126,10 @@ CV_HI_CONFIG = types.DatasetConfig(
     base="commonvoice",
     subset="hi",
     splits=[
-        types.DatasetSplitConfig(name="train", num_samples=9_378),
-        types.DatasetSplitConfig(name="validation", num_samples=4_856),
+        types.DatasetSplitConfig(name="train", num_samples=4_690),
+        types.DatasetSplitConfig(
+            name="validation", num_samples=2_430, split=types.DatasetSplit.TRAIN
+        ),
     ],
 )
 
@@ -126,7 +140,9 @@ CV_TR_CONFIG = types.DatasetConfig(
     subset="tr",
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=35_147),
-        types.DatasetSplitConfig(name="validation", num_samples=11_258),
+        types.DatasetSplitConfig(
+            name="validation", num_samples=11_258, split=types.DatasetSplit.TRAIN
+        ),
     ],
 )
 
@@ -137,7 +153,9 @@ CV_SV_CONFIG = types.DatasetConfig(
     subset="sv-SE",
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=7_744),
-        types.DatasetSplitConfig(name="validation", num_samples=5_210),
+        types.DatasetSplitConfig(
+            name="validation", num_samples=5_210, split=types.DatasetSplit.TRAIN
+        ),
     ],
 )
 
@@ -148,7 +166,9 @@ CV_UK_CONFIG = types.DatasetConfig(
     subset="uk",
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=25_137),
-        types.DatasetSplitConfig(name="validation", num_samples=10_007),
+        types.DatasetSplitConfig(
+            name="validation", num_samples=10_007, split=types.DatasetSplit.TRAIN
+        ),
     ],
 )
 
@@ -159,7 +179,9 @@ CV_SW_CONFIG = types.DatasetConfig(
     subset="sw",
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=46_494),
-        types.DatasetSplitConfig(name="validation", num_samples=12_251),
+        types.DatasetSplitConfig(
+            name="validation", num_samples=12_251, split=types.DatasetSplit.TRAIN
+        ),
     ],
 )
 
@@ -169,8 +191,10 @@ CV_FA_CONFIG = types.DatasetConfig(
     base="commonvoice",
     subset="fa",
     splits=[
-        types.DatasetSplitConfig(name="train", num_samples=1_000),
-        types.DatasetSplitConfig(name="validation", num_samples=1_000),
+        types.DatasetSplitConfig(name="train", num_samples=28_893),
+        types.DatasetSplitConfig(
+            name="validation", num_samples=10_559, split=types.DatasetSplit.TRAIN
+        ),
     ],
 )
 
@@ -180,8 +204,10 @@ CV_TH_CONFIG = types.DatasetConfig(
     base="commonvoice",
     subset="th",
     splits=[
-        types.DatasetSplitConfig(name="train", num_samples=7_744),
-        types.DatasetSplitConfig(name="validation", num_samples=5_210),
+        types.DatasetSplitConfig(name="train", num_samples=32_823),
+        types.DatasetSplitConfig(
+            name="validation", num_samples=11_042, split=types.DatasetSplit.TRAIN
+        ),
     ],
 )
 
@@ -192,7 +218,9 @@ CV_BE_CONFIG = types.DatasetConfig(
     subset="be",
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=347_637),
-        types.DatasetSplitConfig(name="validation", num_samples=15_880),
+        types.DatasetSplitConfig(
+            name="validation", num_samples=15_880, split=types.DatasetSplit.TRAIN
+        ),
     ],
 )
 
@@ -203,10 +231,12 @@ CV_TA_CONFIG = types.DatasetConfig(
     subset="ta",
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=45_587),
-        types.DatasetSplitConfig(name="validation", num_samples=12_095),
         types.DatasetSplitConfig(
-            name="other", num_samples=93_989, split=types.DatasetSplit.TRAIN
+            name="validation", num_samples=12_095, split=types.DatasetSplit.TRAIN
         ),
+        # types.DatasetSplitConfig(
+        #     name="other", num_samples=93_989, split=types.DatasetSplit.TRAIN
+        # ),
         # types.DatasetSplitConfig(name="validated", num_samples=135_391),
     ],
 )
@@ -218,10 +248,12 @@ CV_CS_CONFIG = types.DatasetConfig(
     subset="cs",
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=20_144),
-        types.DatasetSplitConfig(name="validation", num_samples=9_009),
         types.DatasetSplitConfig(
-            name="other", num_samples=148_316, split=types.DatasetSplit.TRAIN
+            name="validation", num_samples=9_009, split=types.DatasetSplit.TRAIN
         ),
+        # types.DatasetSplitConfig(
+        #     name="other", num_samples=148_316, split=types.DatasetSplit.TRAIN
+        # ),
         # types.DatasetSplitConfig(name="validated", num_samples=61_391),
     ],
 )
@@ -233,10 +265,12 @@ CV_LV_CONFIG = types.DatasetConfig(
     subset="lv",
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=11_364),
-        types.DatasetSplitConfig(name="validation", num_samples=6_752),
         types.DatasetSplitConfig(
-            name="other", num_samples=32_248, split=types.DatasetSplit.TRAIN
+            name="validation", num_samples=6_752, split=types.DatasetSplit.TRAIN
         ),
+        # types.DatasetSplitConfig(
+        #     name="other", num_samples=32_248, split=types.DatasetSplit.TRAIN
+        # ),
         # types.DatasetSplitConfig(name="validated", num_samples=171_652),
     ],
 )
@@ -248,10 +282,12 @@ CV_KA_CONFIG = types.DatasetConfig(
     subset="ka",
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=52_321),
-        types.DatasetSplitConfig(name="validation", num_samples=12_545),
         types.DatasetSplitConfig(
-            name="other", num_samples=48_563, split=types.DatasetSplit.TRAIN
+            name="validation", num_samples=12_545, split=types.DatasetSplit.TRAIN
         ),
+        # types.DatasetSplitConfig(
+        #     name="other", num_samples=48_563, split=types.DatasetSplit.TRAIN
+        # ),
         # types.DatasetSplitConfig(name="validated", num_samples=97_230),
     ],
 )
@@ -263,10 +299,12 @@ CV_UR_CONFIG = types.DatasetConfig(
     subset="ur",
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=5_368),
-        types.DatasetSplitConfig(name="validation", num_samples=4_057),
         types.DatasetSplitConfig(
-            name="other", num_samples=135_861, split=types.DatasetSplit.TRAIN
+            name="validation", num_samples=4_057, split=types.DatasetSplit.TRAIN
         ),
+        # types.DatasetSplitConfig(
+        #     name="other", num_samples=135_861, split=types.DatasetSplit.TRAIN
+        # ),
         # types.DatasetSplitConfig(name="validated", num_samples=53_858),
     ],
 )
@@ -278,7 +316,9 @@ CV_PL_CONFIG = types.DatasetConfig(
     subset="pl",
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=20_729),
-        types.DatasetSplitConfig(name="validation", num_samples=9_230),
+        types.DatasetSplitConfig(
+            name="validation", num_samples=9_230, split=types.DatasetSplit.TRAIN
+        ),
         # types.DatasetSplitConfig(name="validated", num_samples=132661),
     ],
 )
@@ -290,10 +330,12 @@ CV_HU_CONFIG = types.DatasetConfig(
     subset="hu",
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=37_140),
-        types.DatasetSplitConfig(name="validation", num_samples=11_350),
         types.DatasetSplitConfig(
-            name="other", num_samples=49_019, split=types.DatasetSplit.TRAIN
+            name="validation", num_samples=11_350, split=types.DatasetSplit.TRAIN
         ),
+        # types.DatasetSplitConfig(
+        #     name="other", num_samples=49_019, split=types.DatasetSplit.TRAIN
+        # ),
         # types.DatasetSplitConfig(name="validated", num_samples=60_358),
     ],
 )
@@ -305,7 +347,9 @@ CV_NL_CONFIG = types.DatasetConfig(
     subset="nl",
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=34_898),
-        types.DatasetSplitConfig(name="validation", num_samples=11_252),
+        types.DatasetSplitConfig(
+            name="validation", num_samples=11_252, split=types.DatasetSplit.TRAIN
+        ),
         # types.DatasetSplitConfig(name="validated", num_samples=90_449),
     ],
 )
@@ -317,7 +361,9 @@ CV_GL_CONFIG = types.DatasetConfig(
     subset="gl",
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=25_159),
-        types.DatasetSplitConfig(name="validation", num_samples=9_982),
+        types.DatasetSplitConfig(
+            name="validation", num_samples=9_982, split=types.DatasetSplit.TRAIN
+        ),
         # types.DatasetSplitConfig(name="validated", num_samples=45_780),
     ],
 )
@@ -329,7 +375,9 @@ CV_CY_CONFIG = types.DatasetConfig(
     subset="cy",
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=7_960),
-        types.DatasetSplitConfig(name="validation", num_samples=5_371),
+        types.DatasetSplitConfig(
+            name="validation", num_samples=5_371, split=types.DatasetSplit.TRAIN
+        ),
         # types.DatasetSplitConfig(name="validated", num_samples=90_369),
     ],
 )
@@ -341,10 +389,12 @@ CV_RO_CONFIG = types.DatasetConfig(
     subset="ro",
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=5_141),
-        types.DatasetSplitConfig(name="validation", num_samples=3_881),
         types.DatasetSplitConfig(
-            name="other", num_samples=23_087, split=types.DatasetSplit.TRAIN
+            name="validation", num_samples=3_881, split=types.DatasetSplit.TRAIN
         ),
+        # types.DatasetSplitConfig(
+        #     name="other", num_samples=23_087, split=types.DatasetSplit.TRAIN
+        # ),
         # types.DatasetSplitConfig(name="validated", num_samples=17_737),
     ],
 )
@@ -356,7 +406,9 @@ CV_ET_CONFIG = types.DatasetConfig(
     subset="et",
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=3_157),
-        types.DatasetSplitConfig(name="validation", num_samples=2_653),
+        types.DatasetSplitConfig(
+            name="validation", num_samples=2_653, split=types.DatasetSplit.TRAIN
+        ),
         # types.DatasetSplitConfig(name="validated", num_samples=24_381),
     ],
 )
@@ -368,10 +420,12 @@ CV_BR_CONFIG = types.DatasetConfig(
     subset="br",
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=2_663),
-        types.DatasetSplitConfig(name="validation", num_samples=2_253),
         types.DatasetSplitConfig(
-            name="other", num_samples=8_037, split=types.DatasetSplit.TRAIN
+            name="validation", num_samples=2_253, split=types.DatasetSplit.TRAIN
         ),
+        # types.DatasetSplitConfig(
+        #     name="other", num_samples=8_037, split=types.DatasetSplit.TRAIN
+        # ),
         # types.DatasetSplitConfig(name="validated", num_samples=21_007),
     ],
 )
@@ -383,7 +437,9 @@ CV_LT_CONFIG = types.DatasetConfig(
     subset="lt",
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=7_253),
-        types.DatasetSplitConfig(name="validation", num_samples=4_436),
+        types.DatasetSplitConfig(
+            name="validation", num_samples=4_436, split=types.DatasetSplit.TRAIN
+        ),
         # types.DatasetSplitConfig(name="validated", num_samples=16643),
     ],
 )
@@ -395,10 +451,12 @@ CV_EL_CONFIG = types.DatasetConfig(
     subset="el",
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=1_920),
-        types.DatasetSplitConfig(name="validation", num_samples=1_700),
         types.DatasetSplitConfig(
-            name="other", num_samples=10_330, split=types.DatasetSplit.TRAIN
+            name="validation", num_samples=1_700, split=types.DatasetSplit.TRAIN
         ),
+        # types.DatasetSplitConfig(
+        #     name="other", num_samples=10_330, split=types.DatasetSplit.TRAIN
+        # ),
         # types.DatasetSplitConfig(name="validated", num_samples=16_199),
     ],
 )
@@ -410,10 +468,12 @@ CV_SK_CONFIG = types.DatasetConfig(
     subset="sk",
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=3_258),
-        types.DatasetSplitConfig(name="validation", num_samples=2_588),
         types.DatasetSplitConfig(
-            name="other", num_samples=3_392, split=types.DatasetSplit.TRAIN
+            name="validation", num_samples=2_588, split=types.DatasetSplit.TRAIN
         ),
+        # types.DatasetSplitConfig(
+        #     name="other", num_samples=3_392, split=types.DatasetSplit.TRAIN
+        # ),
         # types.DatasetSplitConfig(name="validated", num_samples=19_513),
     ],
 )
@@ -425,10 +485,12 @@ CV_BG_CONFIG = types.DatasetConfig(
     subset="bg",
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=4_849),
-        types.DatasetSplitConfig(name="validation", num_samples=2_766),
         types.DatasetSplitConfig(
-            name="other", num_samples=2_087, split=types.DatasetSplit.TRAIN
+            name="validation", num_samples=2_766, split=types.DatasetSplit.TRAIN
         ),
+        # types.DatasetSplitConfig(
+        #     name="other", num_samples=2_087, split=types.DatasetSplit.TRAIN
+        # ),
         # types.DatasetSplitConfig(name="validated", num_samples=10_832),
     ],
 )
@@ -440,10 +502,12 @@ CV_MK_CONFIG = types.DatasetConfig(
     subset="mk",
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=1_686),
-        types.DatasetSplitConfig(name="validation", num_samples=1_289),
         types.DatasetSplitConfig(
-            name="other", num_samples=12_289, split=types.DatasetSplit.TRAIN
+            name="validation", num_samples=1_289, split=types.DatasetSplit.TRAIN
         ),
+        # types.DatasetSplitConfig(
+        #     name="other", num_samples=12_289, split=types.DatasetSplit.TRAIN
+        # ),
         # types.DatasetSplitConfig(name="validated", num_samples=6_512),
     ],
 )
@@ -455,10 +519,12 @@ CV_FI_CONFIG = types.DatasetConfig(
     subset="fi",
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=2_076),
-        types.DatasetSplitConfig(name="validation", num_samples=1_770),
         types.DatasetSplitConfig(
-            name="other", num_samples=6_202, split=types.DatasetSplit.TRAIN
+            name="validation", num_samples=1_770, split=types.DatasetSplit.TRAIN
         ),
+        # types.DatasetSplitConfig(
+        #     name="other", num_samples=6_202, split=types.DatasetSplit.TRAIN
+        # ),
         # types.DatasetSplitConfig(name="validated", num_samples=10_447),
     ],
 )
@@ -470,10 +536,12 @@ CV_MR_CONFIG = types.DatasetConfig(
     subset="mr",
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=2_215),
-        types.DatasetSplitConfig(name="validation", num_samples=1_780),
         types.DatasetSplitConfig(
-            name="other", num_samples=2_805, split=types.DatasetSplit.TRAIN
+            name="validation", num_samples=1_780, split=types.DatasetSplit.TRAIN
         ),
+        # types.DatasetSplitConfig(
+        #     name="other", num_samples=2_805, split=types.DatasetSplit.TRAIN
+        # ),
         # types.DatasetSplitConfig(name="validated", num_samples=10_901),
     ],
 )
@@ -485,10 +553,12 @@ CV_MN_CONFIG = types.DatasetConfig(
     subset="mn",
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=2_175),
-        types.DatasetSplitConfig(name="validation", num_samples=1_870),
         types.DatasetSplitConfig(
-            name="other", num_samples=5_773, split=types.DatasetSplit.TRAIN
+            name="validation", num_samples=1_870, split=types.DatasetSplit.TRAIN
         ),
+        # types.DatasetSplitConfig(
+        #     name="other", num_samples=5_773, split=types.DatasetSplit.TRAIN
+        # ),
         # types.DatasetSplitConfig(name="validated", num_samples=8_757),
     ],
 )
@@ -500,10 +570,12 @@ CV_VI_CONFIG = types.DatasetConfig(
     subset="vi",
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=2_298),
-        types.DatasetSplitConfig(name="validation", num_samples=641),
         types.DatasetSplitConfig(
-            name="other", num_samples=11_533, split=types.DatasetSplit.TRAIN
+            name="validation", num_samples=641, split=types.DatasetSplit.TRAIN
         ),
+        # types.DatasetSplitConfig(
+        #     name="other", num_samples=11_533, split=types.DatasetSplit.TRAIN
+        # ),
         # types.DatasetSplitConfig(name="validated", num_samples=5_135),
     ],
 )
@@ -515,10 +587,12 @@ CV_DA_CONFIG = types.DatasetConfig(
     subset="da",
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=3_484),
-        types.DatasetSplitConfig(name="validation", num_samples=2_105),
         types.DatasetSplitConfig(
-            name="other", num_samples=396, split=types.DatasetSplit.TRAIN
+            name="validation", num_samples=2_105, split=types.DatasetSplit.TRAIN
         ),
+        # types.DatasetSplitConfig(
+        #     name="other", num_samples=396, split=types.DatasetSplit.TRAIN
+        # ),
         # types.DatasetSplitConfig(name="validated", num_samples=10_225),
     ],
 )
@@ -530,10 +604,12 @@ CV_SL_CONFIG = types.DatasetConfig(
     subset="sl",
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=1_388),
-        types.DatasetSplitConfig(name="validation", num_samples=1_232),
         types.DatasetSplitConfig(
-            name="other", num_samples=3_145, split=types.DatasetSplit.TRAIN
+            name="validation", num_samples=1_232, split=types.DatasetSplit.TRAIN
         ),
+        # types.DatasetSplitConfig(
+        #     name="other", num_samples=3_145, split=types.DatasetSplit.TRAIN
+        # ),
         # types.DatasetSplitConfig(name="validated", num_samples=10_819),
     ],
 )
@@ -545,10 +621,12 @@ CV_SR_CONFIG = types.DatasetConfig(
     subset="sr",
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=1_879),
-        types.DatasetSplitConfig(name="validation", num_samples=1_583),
         types.DatasetSplitConfig(
-            name="other", num_samples=1_781, split=types.DatasetSplit.TRAIN
+            name="validation", num_samples=1_583, split=types.DatasetSplit.TRAIN
         ),
+        # types.DatasetSplitConfig(
+        #     name="other", num_samples=1_781, split=types.DatasetSplit.TRAIN
+        # ),
         # types.DatasetSplitConfig(name="validated", num_samples=5_970),
     ],
 )
@@ -560,10 +638,12 @@ CV_ML_CONFIG = types.DatasetConfig(
     subset="ml",
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=1_259),
-        types.DatasetSplitConfig(name="validation", num_samples=764),
         types.DatasetSplitConfig(
-            name="other", num_samples=5_621, split=types.DatasetSplit.TRAIN
+            name="validation", num_samples=764, split=types.DatasetSplit.TRAIN
         ),
+        # types.DatasetSplitConfig(
+        #     name="other", num_samples=5_621, split=types.DatasetSplit.TRAIN
+        # ),
         # types.DatasetSplitConfig(name="validated", num_samples=2_984),
     ],
 )
@@ -575,10 +655,12 @@ CV_OC_CONFIG = types.DatasetConfig(
     subset="oc",
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=271),
-        types.DatasetSplitConfig(name="validation", num_samples=260),
         types.DatasetSplitConfig(
-            name="other", num_samples=7632, split=types.DatasetSplit.TRAIN
+            name="validation", num_samples=260, split=types.DatasetSplit.TRAIN
         ),
+        # types.DatasetSplitConfig(
+        #     name="other", num_samples=7632, split=types.DatasetSplit.TRAIN
+        # ),
         # types.DatasetSplitConfig(name="validated", num_samples=1668),
     ],
 )
@@ -590,10 +672,12 @@ CV_BN_CONFIG = types.DatasetConfig(
     subset="bn",
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=21_228),
-        types.DatasetSplitConfig(name="validation", num_samples=9_327),
         types.DatasetSplitConfig(
-            name="other", num_samples=99_756, split=types.DatasetSplit.TRAIN
+            name="validation", num_samples=9_327, split=types.DatasetSplit.TRAIN
         ),
+        # types.DatasetSplitConfig(
+        #     name="other", num_samples=99_756, split=types.DatasetSplit.TRAIN
+        # ),
         # types.DatasetSplitConfig(name="validated", num_samples=44_121),
     ],
 )
