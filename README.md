@@ -5,7 +5,7 @@
 </p>
 
 <h3 align="center">
-A fast multimodal LLM for real-time voice
+A fast multimodal LLM designed for real-time voice interactions
 </h3>
 
 _Latest News_
@@ -14,19 +14,25 @@ _Latest News_
 * 2024/08 — [Ultravox 0.3](https://github.com/fixie-ai/ultravox/releases/tag/v0.3) available
 * 2024/08 — Preview of Ultravox APIs available, more information [here](https://fixie-ai.github.io/ultradox/)
 
+_Key Links_
+* [Ultravox Realtime](https://ultravox.ai) — Build real-time Voice AI agents on top of the Ultravox model
+* [Hugging Face](https://huggingface.co/fixie-ai) — Our Hugging Face page
+
 ---
 
 # About
 
 Ultravox is a new kind of multimodal LLM that can understand text as well as human speech, without the need for a separate Audio Speech Recognition (ASR) stage. Building on research like [AudioLM](https://arxiv.org/abs/2209.03143), [SeamlessM4T](https://ai.meta.com/blog/seamless-m4t/), [Gazelle](https://tincans.ai/slm), [SpeechGPT](https://github.com/0nutation/SpeechGPT/tree/main/speechgpt), and others, Ultravox is able to extend any open-weight LLM with a multimodal projector that converts audio directly into the high-dimensional space used by LLM. We've trained versions on Llama 3, Mistral, and Gemma. This direct coupling allows Ultravox to respond much more quickly than systems that combine separate ASR and LLM components. In the future this will also allow Ultravox to natively understand the paralinguistic cues of timing and emotion that are omnipresent in human speech.
 
-The current version of Ultravox (v0.4), when invoked with audio content, has a time-to-first-token (TTFT) of approximately 150ms, and a tokens-per-second rate of ~60 using a Llama 3.1 8B backbone. While quite fast, we believe there is considerable room for improvement in these numbers.
-
 Ultravox currently takes in audio and emits streaming text. As we evolve the model, we'll train it to be able to emit a stream of speech tokens that can then be converted directly into raw audio by an appropriate unit vocoder.
+
+Our default model is built on top of Llama 3.3 70B. We also have an 8B variant available on Hugging Face.
+
+Ultravox can be trained against any open-weight model. See below for more details on training.
 
 ### Demo
 
-See Ultravox in action on our [demo page](https://demo.ultravox.ai).
+See Ultravox in action on our [demo page](https://demo.ultravox.ai). You can build your own voice-to-voice agents on our Realtime platform at ultravox.ai.
 
 You can run the Gradio demo locally with `just gradio`. You can run the demo in "voice mode" which allows natural audio conversations with ultravox by running `just gradio --voice_mode=True`
 
