@@ -23,7 +23,7 @@ class InstructResult:
 
 @dataclasses.dataclass
 class WerResult:
-    """Score is the 0-1 Word Error Rate for the generated transcript."""
+    """Score is Word Error Rate (%) for the generated transcript."""
 
     score: float
 

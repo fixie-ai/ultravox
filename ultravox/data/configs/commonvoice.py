@@ -19,6 +19,7 @@ CV_EN_CONFIG = types.DatasetConfig(
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=1_101_170),
         types.DatasetSplitConfig(name="validation", num_samples=16_393),
+        types.DatasetSplitConfig(name="test", num_samples=16_393),
     ],
     transcript_template="{{text_proc.format_asr_text(sentence)}}",
     assistant_template="{{text_proc.format_asr_text(sentence)}}",
@@ -34,6 +35,7 @@ CV_AR_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=10_470, split=types.DatasetSplit.TRAIN
         ),
+        types.DatasetSplitConfig(name="test", num_samples=10_480),
     ],
 )
 
@@ -45,6 +47,7 @@ CV_DE_CONFIG = types.DatasetConfig(
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=589_100),
         types.DatasetSplitConfig(name="validation", num_samples=16_183),
+        types.DatasetSplitConfig(name="test", num_samples=16_183),
     ],
 )
 
@@ -56,6 +59,7 @@ CV_ES_CONFIG = types.DatasetConfig(
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=336_846),
         types.DatasetSplitConfig(name="validation", num_samples=15_857),
+        types.DatasetSplitConfig(name="test", num_samples=15_857),
     ],
 )
 
@@ -67,6 +71,7 @@ CV_FR_CONFIG = types.DatasetConfig(
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=558_054),
         types.DatasetSplitConfig(name="validation", num_samples=16_159),
+        types.DatasetSplitConfig(name="test", num_samples=16_159),
     ],
 )
 
@@ -78,6 +83,7 @@ CV_IT_CONFIG = types.DatasetConfig(
     splits=[
         types.DatasetSplitConfig(name="train", num_samples=169_771),
         types.DatasetSplitConfig(name="validation", num_samples=15_149),
+        types.DatasetSplitConfig(name="test", num_samples=15_155),
     ],
 )
 
@@ -91,6 +97,7 @@ CV_JA_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=6_261, split=types.DatasetSplit.TRAIN
         ),
+        types.DatasetSplitConfig(name="test", num_samples=6_261),
     ],
 )
 
@@ -104,6 +111,7 @@ CV_PT_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=9_464, split=types.DatasetSplit.TRAIN
         ),
+        types.DatasetSplitConfig(name="test", num_samples=9_467),
     ],
 )
 
@@ -117,6 +125,7 @@ CV_RU_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=10_203, split=types.DatasetSplit.TRAIN
         ),
+        types.DatasetSplitConfig(name="test", num_samples=10_203),
     ],
 )
 
@@ -130,6 +139,7 @@ CV_HI_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=2_430, split=types.DatasetSplit.TRAIN
         ),
+        types.DatasetSplitConfig(name="test", num_samples=3_154),
     ],
 )
 
@@ -143,6 +153,7 @@ CV_TR_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=11_258, split=types.DatasetSplit.TRAIN
         ),
+        types.DatasetSplitConfig(name="test", num_samples=11_290),
     ],
 )
 
@@ -156,6 +167,7 @@ CV_SV_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=5_210, split=types.DatasetSplit.TRAIN
         ),
+        types.DatasetSplitConfig(name="test", num_samples=5_259),
     ],
 )
 
@@ -169,6 +181,7 @@ CV_UK_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=10_007, split=types.DatasetSplit.TRAIN
         ),
+        types.DatasetSplitConfig(name="test", num_samples=10_011),
     ],
 )
 
@@ -182,6 +195,7 @@ CV_SW_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=12_251, split=types.DatasetSplit.TRAIN
         ),
+        types.DatasetSplitConfig(name="test", num_samples=12_253),
     ],
 )
 
@@ -195,6 +209,7 @@ CV_FA_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=10_559, split=types.DatasetSplit.TRAIN
         ),
+        types.DatasetSplitConfig(name="test", num_samples=10_559),
     ],
 )
 
@@ -208,6 +223,7 @@ CV_TH_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=11_042, split=types.DatasetSplit.TRAIN
         ),
+        types.DatasetSplitConfig(name="test", num_samples=11_042),
     ],
 )
 
@@ -221,6 +237,7 @@ CV_BE_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=15_880, split=types.DatasetSplit.TRAIN
         ),
+        types.DatasetSplitConfig(name="test", num_samples=15_878),
     ],
 )
 
@@ -234,6 +251,7 @@ CV_TA_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=12_095, split=types.DatasetSplit.TRAIN
         ),
+        types.DatasetSplitConfig(name="test", num_samples=12_074),
         # types.DatasetSplitConfig(
         #     name="other", num_samples=93_989, split=types.DatasetSplit.TRAIN
         # ),
@@ -251,6 +269,7 @@ CV_CS_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=9_009, split=types.DatasetSplit.TRAIN
         ),
+        types.DatasetSplitConfig(name="test", num_samples=9_067),
         # types.DatasetSplitConfig(
         #     name="other", num_samples=148_316, split=types.DatasetSplit.TRAIN
         # ),
@@ -268,6 +287,7 @@ CV_LV_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=6_752, split=types.DatasetSplit.TRAIN
         ),
+        types.DatasetSplitConfig(name="test", num_samples=6_752),
         # types.DatasetSplitConfig(
         #     name="other", num_samples=32_248, split=types.DatasetSplit.TRAIN
         # ),
@@ -285,6 +305,7 @@ CV_KA_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=12_545, split=types.DatasetSplit.TRAIN
         ),
+        types.DatasetSplitConfig(name="test", num_samples=12_618),
         # types.DatasetSplitConfig(
         #     name="other", num_samples=48_563, split=types.DatasetSplit.TRAIN
         # ),
@@ -302,6 +323,7 @@ CV_UR_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=4_057, split=types.DatasetSplit.TRAIN
         ),
+        types.DatasetSplitConfig(name="test", num_samples=4_056),
         # types.DatasetSplitConfig(
         #     name="other", num_samples=135_861, split=types.DatasetSplit.TRAIN
         # ),
@@ -319,7 +341,8 @@ CV_PL_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=9_230, split=types.DatasetSplit.TRAIN
         ),
-        # types.DatasetSplitConfig(name="validated", num_samples=132661),
+        types.DatasetSplitConfig(name="test", num_samples=9_230),
+        # types.DatasetSplitConfig(name="validated", num_samples=132_661),
     ],
 )
 
@@ -333,6 +356,7 @@ CV_HU_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=11_350, split=types.DatasetSplit.TRAIN
         ),
+        types.DatasetSplitConfig(name="test", num_samples=11_435),
         # types.DatasetSplitConfig(
         #     name="other", num_samples=49_019, split=types.DatasetSplit.TRAIN
         # ),
@@ -350,6 +374,7 @@ CV_NL_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=11_252, split=types.DatasetSplit.TRAIN
         ),
+        types.DatasetSplitConfig(name="test", num_samples=11_266),
         # types.DatasetSplitConfig(name="validated", num_samples=90_449),
     ],
 )
@@ -364,6 +389,7 @@ CV_GL_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=9_982, split=types.DatasetSplit.TRAIN
         ),
+        types.DatasetSplitConfig(name="test", num_samples=9_990),
         # types.DatasetSplitConfig(name="validated", num_samples=45_780),
     ],
 )
@@ -378,6 +404,7 @@ CV_CY_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=5_371, split=types.DatasetSplit.TRAIN
         ),
+        types.DatasetSplitConfig(name="test", num_samples=5_379),
         # types.DatasetSplitConfig(name="validated", num_samples=90_369),
     ],
 )
@@ -392,6 +419,7 @@ CV_RO_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=3_881, split=types.DatasetSplit.TRAIN
         ),
+        types.DatasetSplitConfig(name="test", num_samples=3_896),
         # types.DatasetSplitConfig(
         #     name="other", num_samples=23_087, split=types.DatasetSplit.TRAIN
         # ),
@@ -409,6 +437,7 @@ CV_ET_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=2_653, split=types.DatasetSplit.TRAIN
         ),
+        types.DatasetSplitConfig(name="test", num_samples=2_653),
         # types.DatasetSplitConfig(name="validated", num_samples=24_381),
     ],
 )
@@ -423,6 +452,7 @@ CV_BR_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=2_253, split=types.DatasetSplit.TRAIN
         ),
+        types.DatasetSplitConfig(name="test", num_samples=2_212),
         # types.DatasetSplitConfig(
         #     name="other", num_samples=8_037, split=types.DatasetSplit.TRAIN
         # ),
@@ -440,7 +470,8 @@ CV_LT_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=4_436, split=types.DatasetSplit.TRAIN
         ),
-        # types.DatasetSplitConfig(name="validated", num_samples=16643),
+        types.DatasetSplitConfig(name="test", num_samples=4_753),
+        # types.DatasetSplitConfig(name="validated", num_samples=16_643),
     ],
 )
 
@@ -454,6 +485,7 @@ CV_EL_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=1_700, split=types.DatasetSplit.TRAIN
         ),
+        types.DatasetSplitConfig(name="test", num_samples=1_701),
         # types.DatasetSplitConfig(
         #     name="other", num_samples=10_330, split=types.DatasetSplit.TRAIN
         # ),
@@ -471,6 +503,7 @@ CV_SK_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=2_588, split=types.DatasetSplit.TRAIN
         ),
+        types.DatasetSplitConfig(name="test", num_samples=2_647),
         # types.DatasetSplitConfig(
         #     name="other", num_samples=3_392, split=types.DatasetSplit.TRAIN
         # ),
@@ -488,6 +521,7 @@ CV_BG_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=2_766, split=types.DatasetSplit.TRAIN
         ),
+        types.DatasetSplitConfig(name="test", num_samples=3_201),
         # types.DatasetSplitConfig(
         #     name="other", num_samples=2_087, split=types.DatasetSplit.TRAIN
         # ),
@@ -505,6 +539,7 @@ CV_MK_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=1_289, split=types.DatasetSplit.TRAIN
         ),
+        types.DatasetSplitConfig(name="test", num_samples=1_097),
         # types.DatasetSplitConfig(
         #     name="other", num_samples=12_289, split=types.DatasetSplit.TRAIN
         # ),
@@ -522,6 +557,7 @@ CV_FI_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=1_770, split=types.DatasetSplit.TRAIN
         ),
+        types.DatasetSplitConfig(name="test", num_samples=1_763),
         # types.DatasetSplitConfig(
         #     name="other", num_samples=6_202, split=types.DatasetSplit.TRAIN
         # ),
@@ -539,6 +575,7 @@ CV_MR_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=1_780, split=types.DatasetSplit.TRAIN
         ),
+        types.DatasetSplitConfig(name="test", num_samples=1_751),
         # types.DatasetSplitConfig(
         #     name="other", num_samples=2_805, split=types.DatasetSplit.TRAIN
         # ),
@@ -556,6 +593,7 @@ CV_MN_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=1_870, split=types.DatasetSplit.TRAIN
         ),
+        types.DatasetSplitConfig(name="test", num_samples=1_896),
         # types.DatasetSplitConfig(
         #     name="other", num_samples=5_773, split=types.DatasetSplit.TRAIN
         # ),
@@ -573,6 +611,7 @@ CV_VI_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=641, split=types.DatasetSplit.TRAIN
         ),
+        types.DatasetSplitConfig(name="test", num_samples=1_274),
         # types.DatasetSplitConfig(
         #     name="other", num_samples=11_533, split=types.DatasetSplit.TRAIN
         # ),
@@ -590,6 +629,7 @@ CV_DA_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=2_105, split=types.DatasetSplit.TRAIN
         ),
+        types.DatasetSplitConfig(name="test", num_samples=2_530),
         # types.DatasetSplitConfig(
         #     name="other", num_samples=396, split=types.DatasetSplit.TRAIN
         # ),
@@ -607,6 +647,7 @@ CV_SL_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=1_232, split=types.DatasetSplit.TRAIN
         ),
+        types.DatasetSplitConfig(name="test", num_samples=1_242),
         # types.DatasetSplitConfig(
         #     name="other", num_samples=3_145, split=types.DatasetSplit.TRAIN
         # ),
@@ -624,6 +665,7 @@ CV_SR_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=1_583, split=types.DatasetSplit.TRAIN
         ),
+        types.DatasetSplitConfig(name="test", num_samples=1_539),
         # types.DatasetSplitConfig(
         #     name="other", num_samples=1_781, split=types.DatasetSplit.TRAIN
         # ),
@@ -641,6 +683,7 @@ CV_ML_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=764, split=types.DatasetSplit.TRAIN
         ),
+        types.DatasetSplitConfig(name="test", num_samples=710),
         # types.DatasetSplitConfig(
         #     name="other", num_samples=5_621, split=types.DatasetSplit.TRAIN
         # ),
@@ -658,6 +701,7 @@ CV_OC_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=260, split=types.DatasetSplit.TRAIN
         ),
+        types.DatasetSplitConfig(name="test", num_samples=254),
         # types.DatasetSplitConfig(
         #     name="other", num_samples=7632, split=types.DatasetSplit.TRAIN
         # ),
@@ -675,6 +719,7 @@ CV_BN_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(
             name="validation", num_samples=9_327, split=types.DatasetSplit.TRAIN
         ),
+        types.DatasetSplitConfig(name="test", num_samples=9_327),
         # types.DatasetSplitConfig(
         #     name="other", num_samples=99_756, split=types.DatasetSplit.TRAIN
         # ),
@@ -686,263 +731,271 @@ CV_EN_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-en-transcription",
     base="commonvoice-en",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
 CV_AR_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-ar-transcription",
     base="commonvoice-ar",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
 CV_DE_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-de-transcription",
     base="commonvoice-de",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
 CV_ES_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-es-transcription",
     base="commonvoice-es",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
 CV_FR_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-fr-transcription",
     base="commonvoice-fr",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
 CV_IT_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-it-transcription",
     base="commonvoice-it",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
 CV_JA_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-ja-transcription",
     base="commonvoice-ja",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
 CV_PT_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-pt-transcription",
     base="commonvoice-pt",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
 CV_RU_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-ru-transcription",
     base="commonvoice-ru",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
-
 CV_HI_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-hi-transcription",
     base="commonvoice-hi",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
-
 CV_TR_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-tr-transcription",
     base="commonvoice-tr",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
-
 CV_SV_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-sv-transcription",
     base="commonvoice-sv",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
-
 CV_UK_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-uk-transcription",
     base="commonvoice-uk",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
-
 CV_SW_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-sw-transcription",
     base="commonvoice-sw",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
-
 CV_FA_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-fa-transcription",
     base="commonvoice-fa",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
-
 CV_TH_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-th-transcription",
     base="commonvoice-th",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
-
-
 CV_BE_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-be-transcription",
     base="commonvoice-be",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
-
 CV_TA_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-ta-transcription",
     base="commonvoice-ta",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
-
 CV_CS_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-cs-transcription",
     base="commonvoice-cs",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
-
 CV_LV_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-lv-transcription",
     base="commonvoice-lv",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
-
 CV_KA_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-ka-transcription",
     base="commonvoice-ka",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
-
 CV_UR_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-ur-transcription",
     base="commonvoice-ur",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
-
 CV_PL_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-pl-transcription",
     base="commonvoice-pl",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
-
 CV_HU_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-hu-transcription",
     base="commonvoice-hu",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
-
 CV_NL_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-nl-transcription",
     base="commonvoice-nl",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
-
 CV_GL_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-gl-transcription",
     base="commonvoice-gl",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
-
 CV_CY_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-cy-transcription",
     base="commonvoice-cy",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
-
 CV_RO_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-ro-transcription",
     base="commonvoice-ro",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
-
 CV_ET_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-et-transcription",
     base="commonvoice-et",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
-
 CV_BR_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-br-transcription",
     base="commonvoice-br",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
-
 CV_LT_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-lt-transcription",
     base="commonvoice-lt",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
-
 CV_EL_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-el-transcription",
     base="commonvoice-el",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
-
 CV_SK_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-sk-transcription",
     base="commonvoice-sk",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
-
 CV_BG_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-bg-transcription",
     base="commonvoice-bg",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
-
 CV_MK_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-mk-transcription",
     base="commonvoice-mk",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
-
 CV_FI_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-fi-transcription",
     base="commonvoice-fi",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
-
 CV_MR_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-mr-transcription",
     base="commonvoice-mr",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
-
 CV_MN_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-mn-transcription",
     base="commonvoice-mn",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
-
 CV_VI_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-vi-transcription",
     base="commonvoice-vi",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
-
 CV_DA_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-da-transcription",
     base="commonvoice-da",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
-
 CV_SL_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-sl-transcription",
     base="commonvoice-sl",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
-
 CV_SR_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-sr-transcription",
     base="commonvoice-sr",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
-
 CV_ML_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-ml-transcription",
     base="commonvoice-ml",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
-
 CV_OC_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-oc-transcription",
     base="commonvoice-oc",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
-
 CV_BN_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-bn-transcription",
     base="commonvoice-bn",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer"),
 )
 
 CV_EN_CONT_CONFIG = types.DatasetConfig(

@@ -1,5 +1,5 @@
 import re
-from typing import List
+from typing import Any, Dict, List
 
 import jiwer
 import sacrebleu
@@ -7,7 +7,12 @@ import sacrebleu
 from ultravox.evaluation import eval_types
 
 
-def wer(sample: eval_types.Sample):
+def wer(samples: List[eval_types.Sample], args: Dict[str, Any]) -> eval_types.WerResult:
+    """
+    Computes the WER (Word Error Rate) across multiple samples by summing
+    all errors and dividing by the total reference words (the standard
+    'global' WER).
+    """
     transforms = jiwer.Compose(
         [
             jiwer.ExpandCommonEnglishContractions(),
@@ -20,14 +25,20 @@ def wer(sample: eval_types.Sample):
         ]
     )
 
-    score = jiwer.wer(
-        [sample.expected_answer],
-        [sample.generated_answer],
+    references = [sample.expected_answer for sample in samples]
+    hypotheses = [sample.generated_answer for sample in samples]
+
+    # jiwer.wer will aggregate errors over the entire collection
+    score: float = jiwer.wer(
+        references,
+        hypotheses,
         truth_transform=transforms,
         hypothesis_transform=transforms,
+        **args,
     )
 
-    return eval_types.WerResult(score=min(1.0, score))
+    # Scale by 100 to be comparable to other metrics (e.g. BLEU)
+    return eval_types.WerResult(score=score * 100)
 
 
 def match_last_word(sample: eval_types.Sample) -> eval_types.ExactMatchResult:
@@ -50,13 +61,15 @@ def match_last_word(sample: eval_types.Sample) -> eval_types.ExactMatchResult:
     )
 
 
-def bleu(samples: List[eval_types.Sample], **kwargs) -> eval_types.BleuResult:
+def bleu(
+    samples: List[eval_types.Sample], args: Dict[str, Any]
+) -> eval_types.BleuResult:
     """
     Compute corpus BLEU score for a list of samples.
     """
     references = [[sample.expected_answer for sample in samples]]
     hypotheses = [sample.generated_answer for sample in samples]
     score = sacrebleu.corpus_bleu(
-        hypotheses=hypotheses, references=references, **kwargs
+        hypotheses=hypotheses, references=references, **args
     ).score
     return eval_types.BleuResult(score=score)
