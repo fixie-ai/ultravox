@@ -34,6 +34,11 @@ def download_hf_model(model_id: str, use_hf_transfer: bool = False) -> str:
     )
 
 
+def download_file_from_hf_hub(model_id: str, file_path: str) -> str:
+    model_id = get_hf_model_id(model_id)
+    return huggingface_hub.hf_hub_download(repo_id=model_id, filename=file_path)
+
+
 def patch_hf_hub_http_backoff():
     """
     Monkey patch the huggingface_hub http_backoff implementation to include the ChunkedEncodingError exception.

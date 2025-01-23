@@ -387,9 +387,9 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         self.merge_and_unload()
         return super().push_to_hub(*args, **kwargs)
 
-    def save_pretrained(
-        self, *args, state_dict: Optional[Dict[str, Any]] = None, **kwargs
-    ):
+    def diff_state_dict(
+        self, state_dict: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         if state_dict is None:
             state_dict = super().state_dict()
 
@@ -401,6 +401,13 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             if k in self.keep_params
             or (k in named_params and named_params[k].requires_grad)
         }
+
+        return state_dict
+
+    def save_pretrained(
+        self, *args, state_dict: Optional[Dict[str, Any]] = None, **kwargs
+    ):
+        state_dict = self.diff_state_dict(state_dict)
 
         super().save_pretrained(*args, state_dict=state_dict, **kwargs)
 

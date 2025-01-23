@@ -1,3 +1,4 @@
+import os
 from typing import Optional
 
 import wandb
@@ -16,6 +17,12 @@ def get_artifact(model_url: str) -> wandb.Artifact:
     # example artifact name: "fixie/ultravox/model-llama2_asr_gigaspeech:v0"
     model_url = model_url[len(WANDB_PREFIX) :]
     return api.artifact(model_url)
+
+
+def download_file_from_wandb(model_url: str, file_path: str) -> str:
+    artifact = get_artifact(model_url)
+    path = artifact.download(path_prefix=file_path)
+    return os.path.join(path, file_path)
 
 
 def download_model_from_wandb(model_url: str) -> str:
