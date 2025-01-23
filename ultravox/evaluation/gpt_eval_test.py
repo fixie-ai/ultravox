@@ -7,7 +7,7 @@ from ultravox.evaluation import gpt_eval_conv
 
 
 def test_evaluate_conversation():
-    gpt_eval.client = mock.MagicMock()
+    gpt_eval.gpt_evaluator.client = mock.MagicMock()
     sample = eval_types.Sample(
         index=0,
         history=[
@@ -23,7 +23,7 @@ def test_evaluate_conversation():
 
     gpt_eval_conv.evaluate_conversation_response(sample)
 
-    completion_args = gpt_eval.client.chat.completions.create.call_args[1]
+    completion_args = gpt_eval.gpt_evaluator.client.chat.completions.create.call_args[1]
     assert len(completion_args["messages"]) == 2
     assert completion_args["messages"][0]["role"] == "system"
     assert completion_args["messages"][1]["role"] == "user"

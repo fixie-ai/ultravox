@@ -30,7 +30,7 @@ tensorboardx = "~2.6.2.2"
 wandb = "~0.17.1"
 sacrebleu = "^2.4.2"
 tenacity = "^9.0.0"
-evals = {git = "https://github.com/fixie-ai/evals", rev = "7d2a02c21eabcfaad58af18b3f06b3beda5b86f5"}
+evals = {git = "https://github.com/fixie-ai/evals", rev = "2734b4318030cd15b8940b0761fff47fb0c1ad53"}
 torchaudio = "^2.4.1"
 scipy = "^1.14.1"
 einops = "^0.8.0"

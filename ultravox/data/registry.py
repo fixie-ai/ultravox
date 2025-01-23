@@ -5,6 +5,7 @@ from typing import Dict, List, Optional, Union
 from ultravox.data import datasets
 from ultravox.data import types
 from ultravox.data.configs import alpaca
+from ultravox.data.configs import bigbenchaudio
 from ultravox.data.configs import boolq
 from ultravox.data.configs import commonvoice
 from ultravox.data.configs import covost2
@@ -82,4 +83,5 @@ register_datasets(peoplespeech.configs)
 register_datasets(voxpopuli.configs)
 register_datasets(wenetspeech.configs)
 register_datasets(alpaca.configs)
+register_datasets(bigbenchaudio.configs)
 register_datasets(tulu.configs)

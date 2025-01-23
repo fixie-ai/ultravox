@@ -1,5 +1,5 @@
 import dataclasses
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Union
 
 import dataclasses_json
 
@@ -17,7 +17,7 @@ class Sample(dataclasses_json.DataClassJsonMixin):
 class InstructResult:
     """Score is a 0-1 evaluation of the accuracy of the generated answer, or None if an error occurred."""
 
-    score: Optional[float]
+    score: float
     reason: str
 
 
@@ -46,4 +46,11 @@ class BleuResult:
     score: float
 
 
-Result = Union[InstructResult, WerResult, ExactMatchResult, BleuResult]
+@dataclasses.dataclass
+class MeanResult:
+    """Score is the mean of the scores of the samples."""
+
+    score: float
+
+
+Result = Union[InstructResult, WerResult, ExactMatchResult, BleuResult, MeanResult]

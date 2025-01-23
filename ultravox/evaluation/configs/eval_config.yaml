@@ -18,5 +18,9 @@ eval_sets:
   - name: commonvoice-es-transcription
   - name: commonvoice-ru-transcription
   - name: alpaca-tts-llama
+  - name: bigbenchaudio
+
+eval_dataset_args:
+  max_audio_duration_secs: 60
 
 eval_batch_size: 60
