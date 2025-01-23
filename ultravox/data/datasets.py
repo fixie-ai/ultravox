@@ -329,6 +329,12 @@ class LibriSpeechDummyDataset(GenericDataset):
     def name(self):
         return "dummy"
 
+    def get_config(self):
+        return types.DatasetConfig(
+            name="dummy",
+            path="hf-internal-testing/librispeech_asr_dummy",
+        )
+
     def _get_sample(
         self, row: transformers.BatchFeature
     ) -> Optional[data_sample.VoiceSample]:
@@ -339,7 +345,8 @@ class LibriSpeechDummyDataset(GenericDataset):
         )
         return self._make_sample(
             self._make_messages(user_content, text),
-            self._get_audio(row, "audio"),
+            # some of our test models that use this dataset can only handle up to 4 seconds of audio
+            self._get_audio(row, "audio")[: 4 * data_sample.SAMPLE_RATE],
             audio_transcript=text,
         )
 

@@ -23,10 +23,16 @@ check:
     poetry run mypy {{PROJECT_DIR}} 
 
 test *ARGS=".":
-    cd ${PROJECT_DIR} && poetry run pytest --ignore third_party {{ARGS}}
+    cd ${PROJECT_DIR} && poetry run coverage run --source=${PROJECT_DIR} -m pytest --ignore third_party {{ARGS}}
+    just print-coverage
 
 test-verbose *ARGS=".":
-    cd ${PROJECT_DIR} && poetry run pytest --ignore third_party {{ARGS}} -vv --log-cli-level=INFO {{ARGS}}
+    cd ${PROJECT_DIR} && poetry run coverage run --source=${PROJECT_DIR} -m pytest --ignore third_party {{ARGS}} -vv --log-cli-level=INFO
+    just print-coverage
+
+# the following assumes the coverage report is already created by the test command
+print-coverage *ARGS:
+    cd ${PROJECT_DIR} && poetry run coverage report --omit "*_test.py" --sort miss {{ARGS}}
 
 @python *FLAGS:
     poetry run python {{FLAGS}}

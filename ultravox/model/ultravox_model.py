@@ -284,7 +284,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         cls, config: UltravoxConfig
     ) -> Union[transformers.Wav2Vec2Model, "ModifiedWhisperEncoder"]:
         if config.audio_model_id is not None:
-            if "whisper" in config.audio_model_id is not None:
+            if "whisper" in config.audio_model_id.lower():
                 audio_tower = ModifiedWhisperEncoder.from_pretrained(
                     config.audio_model_id, torch_dtype=config.torch_dtype
                 )
@@ -300,7 +300,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
                     config.audio_model_id, torch_dtype=config.torch_dtype
                 )
         else:
-            if "whisper" in config.audio_config._name_or_path:
+            if "whisper" in config.audio_config._name_or_path.lower():
                 audio_tower = ModifiedWhisperEncoder(config.audio_config)
                 audio_tower.init_latency_mask(
                     config.audio_latency_block_size, dtype=config.torch_dtype
@@ -560,6 +560,10 @@ class ModifiedWhisperEncoder(
 
     base_model_prefix = "model.encoder"
     _no_split_modules = ["WhisperEncoderLayer"]
+
+    def __init__(self, config: transformers.WhisperConfig):
+        super().__init__(config)
+        self.config.is_decoder = False
 
     def init_latency_mask(self, audio_latency_block_size: int, dtype: torch.dtype):
         if audio_latency_block_size is None:

@@ -207,8 +207,10 @@ def print_results(metrics: List[Tuple[str, float]], output_files: List[str]):
         print(f"  {output_file}")
 
 
-def main():
-    config = simple_parsing.parse(EvalConfig, add_config_path_arg=True)
+def main(override_sys_args: Optional[List[str]] = None):
+    config = simple_parsing.parse(
+        EvalConfig, add_config_path_arg=True, args=override_sys_args
+    )
 
     world_size = device_helpers.get_world_size()
     local_rank = device_helpers.get_local_rank()
@@ -218,7 +220,8 @@ def main():
         dist.init_process_group(backend="gloo")
 
     if local_rank == 0:
-        config.output_dir.mkdir(parents=True, exist_ok=True)
+        if config.output_dir:
+            config.output_dir.mkdir(parents=True, exist_ok=True)
         if "wandb" in config.report_logs_to:
             wandb.init(
                 project=os.getenv("WANDB_PROJECT", "ultravox"),
