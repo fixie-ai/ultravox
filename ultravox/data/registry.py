@@ -12,6 +12,7 @@ from ultravox.data.configs import gigaspeech
 from ultravox.data.configs import librispeech
 from ultravox.data.configs import multilingual_librispeech
 from ultravox.data.configs import peoplespeech
+from ultravox.data.configs import tulu
 from ultravox.data.configs import voxpopuli
 from ultravox.data.configs import wenetspeech
 
@@ -81,3 +82,4 @@ register_datasets(peoplespeech.configs)
 register_datasets(voxpopuli.configs)
 register_datasets(wenetspeech.configs)
 register_datasets(alpaca.configs)
+register_datasets(tulu.configs)
