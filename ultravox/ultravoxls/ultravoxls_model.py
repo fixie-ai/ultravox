@@ -25,14 +25,11 @@ class UltravoxLSModel(transformers.LlamaPreTrainedModel):
     config_class = ultravoxls_config.UltravoxLSConfig
     config: ultravoxls_config.UltravoxLSConfig  # for type hinting
     # We don't store the tokenizer in the state_dict since it is not trained
-    _keys_to_ignore_on_load_missing = ["tokenizer.*"]
-    # We minimize the weights in state_dict in order to reduce the size of the checkpoint
-    # The issue is that load_pretrained() uses state_dict() keys to know what keys are expected
-    # As such we have to tell is to ignore some keys that are not always in the model
-    _keys_to_ignore_on_load_unexpected = ["language_model.*"]
-    # Usually we load encoder weights from a pretrained model, so we don't want to load the decoder weights
-    # Technically we never hit this issue because these keys are already removed from state_dict() however,
-    # but there's no harm in keeping it here for when we change that behavior.
+    # Also we usually load LLM weights from a pretrained model separately, so they are allowed to be missing
+    _keys_to_ignore_on_load_missing = ["tokenizer.*", "language_model.*"]
+    # Since we have kwargs in forward, we need to set this to False, otherwise grad_accum_steps will cause incorrect train loss to be reported
+    # see https://github.com/huggingface/transformers/issues/35856 and https://github.com/huggingface/trl/pull/2615/files
+    accepts_loss_kwargs = False
 
     def __init__(self, config: ultravoxls_config.UltravoxLSConfig):
         super().__init__(config)

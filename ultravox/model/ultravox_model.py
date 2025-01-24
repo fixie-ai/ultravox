@@ -37,6 +37,9 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
     config: UltravoxConfig  # for type hinting
     # Usually we load encoder and LLM weights from a pretrained model separately, so they are allowed to be missing
     _keys_to_ignore_on_load_missing = ["audio_tower.*", "language_model.*"]
+    # Since we have kwargs in forward, we need to set this to False, otherwise grad_accum_steps will cause incorrect train loss to be reported
+    # see https://github.com/huggingface/transformers/issues/35856 and https://github.com/huggingface/trl/pull/2615/files
+    accepts_loss_kwargs = False
 
     def __init__(self, config: UltravoxConfig):
         super().__init__(config)

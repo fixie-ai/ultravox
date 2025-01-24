@@ -1738,8 +1738,8 @@ torch = ["torch"]
 [package.source]
 type = "git"
 url = "https://github.com/fixie-ai/evals"
-reference = "7d2a02c21eabcfaad58af18b3f06b3beda5b86f5"
-resolved_reference = "7d2a02c21eabcfaad58af18b3f06b3beda5b86f5"
+reference = "2734b4318030cd15b8940b0761fff47fb0c1ad53"
+resolved_reference = "2734b4318030cd15b8940b0761fff47fb0c1ad53"
 
 [[package]]
 name = "evaluate"
@@ -8297,13 +8297,13 @@ telegram = ["requests"]
 
 [[package]]
 name = "transformers"
-version = "4.48.0"
+version = "4.48.1"
 description = "State-of-the-art Machine Learning for JAX, PyTorch and TensorFlow"
 optional = false
 python-versions = ">=3.9.0"
 files = [
-    {file = "transformers-4.48.0-py3-none-any.whl", hash = "sha256:6d3de6d71cb5f2a10f9775ccc17abce9620195caaf32ec96542bd2a6937f25b0"},
-    {file = "transformers-4.48.0.tar.gz", hash = "sha256:03fdfcbfb8b0367fb6c9fbe9d1c9aa54dfd847618be9b52400b2811d22799cb1"},
+    {file = "transformers-4.48.1-py3-none-any.whl", hash = "sha256:24be0564b0a36d9e433d9a65de248f1545b6f6edce1737669605eb6a8141bbbb"},
+    {file = "transformers-4.48.1.tar.gz", hash = "sha256:7c1931facc3ee8adcbf86fc7a87461d54c1e40eca3bb57fef1ee9f3ecd32187e"},
 ]
 
 [package.dependencies]
@@ -9282,4 +9282,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10,<4.0"
-content-hash = "ef2985e8361fdfcf95d598c762278b7dfc243a355401bf05aeb0d2943a62045a"
+content-hash = "a9c0aba1bdd7b4c03223cc44cb3595b3718972e2e045a3db43022590995b56e9"
