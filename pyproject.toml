@@ -12,7 +12,6 @@ python = ">=3.10,<4.0"
 torch = ">=2.4"
 transformers = {version = ">=4.43.1,<4.48.0 || >4.48.0", extras = ["torch"]}
 huggingface-hub = ">=0.27.0"
-bitsandbytes = "~0.42.0"
 peft = "~0.11.1"
 simple-parsing = "~0.1.5"
 librosa = "~0.10.2.post1"

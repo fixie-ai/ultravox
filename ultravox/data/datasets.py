@@ -280,15 +280,14 @@ class GenericDataset(VoiceDataset):
             ).render(
                 **row,
                 text_proc=text_proc,
-                dataset=self,
                 **self._config.user_template_args,
             )
             assistant_content = jinja2.Template(
                 self._config.assistant_template, undefined=jinja2.StrictUndefined
-            ).render(**row, text_proc=text_proc, dataset=self)
+            ).render(**row, text_proc=text_proc)
             transcript = jinja2.Template(
                 self._config.transcript_template, undefined=jinja2.StrictUndefined
-            ).render(**row, text_proc=text_proc, dataset=self)
+            ).render(**row, text_proc=text_proc)
         except jinja2.TemplateError as e:
             print(f"Error rendering template: {e}")
             print(f"user_template: {self._config.user_template}")

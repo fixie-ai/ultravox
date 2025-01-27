@@ -99,6 +99,7 @@ class UltravoxModelPack(ModelPack):
             processor=self.processor,
             train_on_inputs=self.args.train_on_inputs,
             include_alt_fields=self.model.loss_config.requires_alt_fields,
+            max_response_tokens=self.args.max_response_tokens,
         )
 
     def get_pipeline(self):

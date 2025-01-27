@@ -90,7 +90,10 @@ class TrainConfig:
 
     # Dataloader workers
     num_workers: int = 8 if torch.cuda.is_available() else 1
+    # Training sample control
     train_on_inputs: bool = False
+    # assistant response is truncated to avoid OOM errors
+    max_response_tokens: Optional[int] = 50
 
     # Device and dtype
     device: str = "cuda"

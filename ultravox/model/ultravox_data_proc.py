@@ -1,4 +1,4 @@
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import numpy as np
 
@@ -14,6 +14,7 @@ class UltravoxDataproc(datasets.Dataproc):
         train_on_inputs: bool = False,
         inference_mode: bool = False,
         include_alt_fields: bool = False,
+        max_response_tokens: Optional[int] = None,
     ) -> None:
         """
         Pre-processing for the Ultravox model: applies tokenization and audio processing using the UltravoxProcessor
@@ -37,6 +38,7 @@ class UltravoxDataproc(datasets.Dataproc):
         if self.inference_mode:
             self.train_on_inputs = True
         self.include_alt_fields = include_alt_fields
+        self.max_response_tokens = max_response_tokens
 
     def _process(self, sample: datasets.VoiceSample) -> Dict[str, Any]:
         if self.inference_mode:
@@ -71,6 +73,18 @@ class UltravoxDataproc(datasets.Dataproc):
         # No need to shift the labels as the model does it internally
         labels = input_ids.clone()
 
+        # Compute the length of the user text
+        user_text = self.processor.tokenizer.apply_chat_template(
+            sample.messages[:-1], tokenize=False
+        )
+        # TODO: this might be slow due to calling audio_processor twice. We can compute modified input_text_len directly too.
+        # Revisit when using WhisperProcessor.
+        user_token_len = self.processor(
+            text=user_text,
+            audio=audio,
+            sampling_rate=sample.sample_rate,
+        )["input_ids"].shape[-1]
+
         if not self.train_on_inputs:
             # Mask the prompt tokens and only compute loss on the assistant message, not the prompt.
             # The idea is that the model should only be able to predict the assistant message given the user message.
@@ -81,18 +95,7 @@ class UltravoxDataproc(datasets.Dataproc):
             #   Labels:  -100    -100       -100    -100 <assistant> Brown fox jumps over the lazy dog </s>
             #
             # Note: The above might look weird because I'm mixing token IDs and text, but that's just for illustration.
-            input_text = self.processor.tokenizer.apply_chat_template(
-                sample.messages[:-1], tokenize=False
-            )
-
-            # TODO: this might be slow due to calling audio_processor twice. We can compute modified input_text_len directly too.
-            # Revisit when using WhisperProcessor.
-            input_token_len = self.processor(
-                text=input_text,
-                audio=audio,
-                sampling_rate=sample.sample_rate,
-            )["input_ids"].shape[-1]
-            labels[:input_token_len] = -100
+            labels[:user_token_len] = -100
 
         # If include_alt_fields is True, also include alt_input_ids, alt_attention_mask, and alt_labels
         if self.include_alt_fields:
@@ -107,16 +110,31 @@ class UltravoxDataproc(datasets.Dataproc):
             alt_input_ids = alt_inputs["input_ids"].squeeze_(0)
             alt_inputs["attention_mask"].squeeze_(0)
 
+            alt_user_token_len = user_token_len + len(alt_input_ids) - len(input_ids)
             alt_labels = alt_input_ids.clone()
             if not self.train_on_inputs:
-                alt_input_token_len = (
-                    input_token_len + len(alt_input_ids) - len(input_ids)
-                )
-                alt_labels[:alt_input_token_len] = -100
+                alt_labels[:alt_user_token_len] = -100
 
             inputs["alt_input_ids"] = alt_input_ids
             inputs["alt_attention_mask"] = alt_inputs["attention_mask"]
             inputs["alt_labels"] = alt_labels.tolist()
+
+        # Truncate the input_ids and labels if the response is longer than max_response_tokens
+        if (
+            self.max_response_tokens
+            and user_token_len + self.max_response_tokens < len(input_ids)
+        ):
+            max_tokens = user_token_len + self.max_response_tokens
+            inputs["input_ids"] = inputs["input_ids"][:max_tokens]
+            inputs["attention_mask"] = inputs["attention_mask"][:max_tokens]
+            labels = labels[:max_tokens]
+            if self.include_alt_fields:
+                max_alt_tokens = alt_user_token_len + self.max_response_tokens
+                inputs["alt_input_ids"] = inputs["alt_input_ids"][:max_alt_tokens]
+                inputs["alt_attention_mask"] = inputs["alt_attention_mask"][
+                    :max_alt_tokens
+                ]
+                inputs["alt_labels"] = inputs["alt_labels"][:max_alt_tokens]
 
         return {
             # input_ids, attention_mask, audio_values, audio_token_start_idx, audio_token_len
