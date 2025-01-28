@@ -9,7 +9,7 @@ text_model: "meta-llama/Meta-Llama-3.1-70B-Instruct"
 audio_model: "openai/whisper-medium"
 
 # We need to shard the model in order to fit on the GPU memory
-enable_fsdp: True
+use_fsdp: True
 
 batch_size: 5
 # We increase the number of steps by 2x, but with a lower batch_size, we still won't be training on as many samples as the 8B model

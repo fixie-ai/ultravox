@@ -72,7 +72,7 @@ class UltravoxConfig(transformers.PretrainedConfig):
     Example:
 
     ```python
-    >>> from transformers import UltravoxForConditionalGeneration, Wav2Vec2Config, UltravoxConfig, LlamaConfig
+    >>> from transformers import UltravoxModel, Wav2Vec2Config, UltravoxConfig, LlamaConfig
 
     >>> # Initializing an audio encoder config
     >>> audio_config = Wav2Vec2Config()
@@ -84,7 +84,7 @@ class UltravoxConfig(transformers.PretrainedConfig):
     >>> configuration = UltravoxConfig(audio_config, text_config)
 
     >>> # Initializing a completely untrained model from the configuration
-    >>> model = UltravoxForConditionalGeneration(configuration)
+    >>> model = UltravoxModel(configuration)
 
     >>> # Accessing the model configuration
     >>> configuration = model.config

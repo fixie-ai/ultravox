@@ -12,7 +12,6 @@ CONTINUATION_USER_TEMPLATE = (
     f"Continue the following text using less than 50 words:\n\n{AUDIO_PLACEHOLDER}"
 )
 CONTINUATION_ASSISTANT_TEMPLATE = "{{continuation}}"
-TRANSCRIPTION_USER_TEMPLATE = f"Transcribe\n{AUDIO_PLACEHOLDER}"
 QA_USER_TEMPLATE = f"Answer the following question:\n\n{AUDIO_PLACEHOLDER}"
 TRANSCRIPTION_USER_TEMPLATE = (
     f"Repeat the following text, without any explanation: {AUDIO_PLACEHOLDER}"
