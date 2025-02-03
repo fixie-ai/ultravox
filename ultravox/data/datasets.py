@@ -262,7 +262,7 @@ class GenericDataset(VoiceDataset):
         ), f"The {config.name} dataset has no {self._args.split} splits."
         dataset = ds if len(dsets) == 1 else hf_datasets.concatenate_datasets(dsets)
 
-        dataset_name = f"{config.name}.{self._args.split}"
+        dataset_name = f"{config.name}.{self._args.split.value}"
 
         super()._init_dataset(dataset, dataset_name, total_samples)
 

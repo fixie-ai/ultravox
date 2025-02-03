@@ -38,14 +38,14 @@ LS_CLEAN_TRANS_CONFIG = types.DatasetConfig(
     name="librispeech-clean-transcription",
     base="librispeech-clean",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
-    eval_config=types.EvalConfig(metric="wer"),
+    eval_config=types.EvalConfig(metric="wer", args={"lang_id": "en"}),
 )
 
 LS_OTHER_TRANS_CONFIG = types.DatasetConfig(
     name="librispeech-other-transcription",
     base="librispeech-other",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
-    eval_config=types.EvalConfig(metric="wer"),
+    eval_config=types.EvalConfig(metric="wer", args={"lang_id": "en"}),
 )
 
 LS_CLEAN_CONT_CONFIG = types.DatasetConfig(

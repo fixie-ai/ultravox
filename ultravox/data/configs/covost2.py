@@ -151,6 +151,7 @@ CVST_EN_JA_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(name="test", num_samples=15_531),
     ],
     user_template_args={"target": "Japanese"},
+    eval_config=types.EvalConfig(metric="bleu", args={"tokenize": "ja-mecab"}),
 )
 
 CVST_EN_LV_CONFIG = types.DatasetConfig(

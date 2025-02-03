@@ -18,6 +18,7 @@ PS_TRANS_CONFIG = types.DatasetConfig(
     name="peoplespeech-clean-transcription",
     base="peoplespeech",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer", args={"lang_id": "en"}),
 )
 
 PS_CONT_CONFIG = types.DatasetConfig(

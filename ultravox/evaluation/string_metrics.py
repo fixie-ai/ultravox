@@ -1,44 +1,53 @@
+import argparse
+import json
 import re
 from typing import Any, Dict, List
 
-import jiwer
+import evaluate
 import sacrebleu
+import whisper_normalizer.basic as whisper_basic
+import whisper_normalizer.english as whisper_english
 
 from ultravox.evaluation import eval_types
 
+# Arabic diacritic marks
+arabic_diacritics = re.compile(r"[\u064B-\u065F\u0670]")
+
+
+def remove_diacritics(text):
+    return arabic_diacritics.sub("", text)
+
 
 def wer(samples: List[eval_types.Sample], args: Dict[str, Any]) -> eval_types.WerResult:
-    """
-    Computes the WER (Word Error Rate) across multiple samples by summing
-    all errors and dividing by the total reference words (the standard
-    'global' WER).
-    """
-    transforms = jiwer.Compose(
-        [
-            jiwer.ExpandCommonEnglishContractions(),
-            jiwer.RemoveEmptyStrings(),
-            jiwer.ToLowerCase(),
-            jiwer.RemoveMultipleSpaces(),
-            jiwer.Strip(),
-            jiwer.RemovePunctuation(),
-            jiwer.ReduceToListOfListOfWords(),
-        ]
-    )
+    """Compute WER or CER using Whisper's text normalization."""
+    lang_id = args.get("lang_id", "<undefined>").lower()  # Ensure case-insensitive
+
+    # Initialize the appropriate text normalizer
+    if lang_id == "en":
+        normalizer = whisper_english.EnglishTextNormalizer()
+    else:
+        normalizer = whisper_basic.BasicTextNormalizer()
 
     references = [sample.expected_answer for sample in samples]
     hypotheses = [sample.generated_answer for sample in samples]
 
-    # jiwer.wer will aggregate errors over the entire collection
-    score: float = jiwer.wer(
-        references,
-        hypotheses,
-        truth_transform=transforms,
-        hypothesis_transform=transforms,
-        **args,
-    )
+    if lang_id == "ar":
+        references = [remove_diacritics(ref) for ref in references]
+        hypotheses = [remove_diacritics(hyp) for hyp in hypotheses]
 
-    # Scale by 100 to be comparable to other metrics (e.g. BLEU)
-    return eval_types.WerResult(score=score * 100)
+    # Normalize both reference and hypothesis
+    references = [normalizer(ref) for ref in references]
+    hypotheses = [normalizer(hyp) for hyp in hypotheses]
+
+    # Languages where we compute CER (space-separated characters)
+    if lang_id in ["zh", "ja", "th", "lo", "my"]:
+        # Convert to space-separated characters for CER
+        references = [" ".join(list(ref)) for ref in references]
+        hypotheses = [" ".join(list(hyp)) for hyp in hypotheses]
+    # Compute WER using space-separated words
+    wer_metric = evaluate.load("wer")
+    wer_score = wer_metric.compute(predictions=hypotheses, references=references)
+    return eval_types.WerResult(score=wer_score * 100)
 
 
 def match_last_word(sample: eval_types.Sample) -> eval_types.ExactMatchResult:
@@ -73,3 +82,37 @@ def bleu(
         hypotheses=hypotheses, references=references, **args
     ).score
     return eval_types.BleuResult(score=score)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Evaluate JSON files using WER and BLEU."
+    )
+    parser.add_argument("input_file", type=str, help="Path to the input JSON file.")
+    parser.add_argument(
+        "--metric",
+        type=str,
+        choices=["wer", "bleu"],
+        required=True,
+        help="Metric to compute.",
+    )
+    parser.add_argument(
+        "--lang_id", type=str, default="en", help="Language ID (e.g., en, zh, ja)."
+    )
+    args = parser.parse_args()
+
+    with open(args.input_file, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    samples = [eval_types.Sample(**sample) for sample in data]
+
+    if args.metric == "wer":
+        result = wer(samples, {"lang_id": args.lang_id})
+    else:
+        result = bleu(samples, {"tokenize": args.lang_id})
+
+    print(f"{args.metric.upper()} Score: {result.score}")
+
+
+if __name__ == "__main__":
+    main()

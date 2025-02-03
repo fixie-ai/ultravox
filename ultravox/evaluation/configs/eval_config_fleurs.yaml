@@ -1,0 +1,43 @@
+model: "fixie-ai/ultravox-v0_4_1-llama-3_1-8b"
+
+report_logs_to: ["wandb"]
+output_dir: "./output"
+
+eval_sets:
+- name: fleurs-ar_eg-transcription
+- name: fleurs-bg_bg-transcription
+- name: fleurs-cmn_hans_cn-transcription
+- name: fleurs-cs_cz-transcription
+- name: fleurs-da_dk-transcription
+- name: fleurs-de_de-transcription
+- name: fleurs-el_gr-transcription
+- name: fleurs-en_us-transcription
+- name: fleurs-es_419-transcription
+- name: fleurs-et_ee-transcription
+- name: fleurs-fa_ir-transcription
+- name: fleurs-fi_fi-transcription
+- name: fleurs-fr_fr-transcription
+- name: fleurs-hi_in-transcription
+- name: fleurs-hu_hu-transcription
+- name: fleurs-it_it-transcription
+- name: fleurs-ja_jp-transcription
+- name: fleurs-ka_ge-transcription
+- name: fleurs-lv_lv-transcription
+- name: fleurs-mk_mk-transcription
+- name: fleurs-nl_nl-transcription
+- name: fleurs-pl_pl-transcription
+- name: fleurs-pt_br-transcription
+- name: fleurs-ro_ro-transcription
+- name: fleurs-ru_ru-transcription
+- name: fleurs-sk_sk-transcription
+- name: fleurs-sl_si-transcription
+- name: fleurs-sv_se-transcription
+- name: fleurs-sw_ke-transcription
+- name: fleurs-ta_in-transcription
+- name: fleurs-th_th-transcription
+- name: fleurs-tr_tr-transcription
+- name: fleurs-uk_ua-transcription
+- name: fleurs-ur_pk-transcription
+- name: fleurs-vi_vn-transcription
+  
+eval_batch_size: 60

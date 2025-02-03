@@ -27,7 +27,10 @@ openai = ">=1.60.0"
 jiwer = "~3.0.4"
 tensorboardx = "~2.6.2.2"
 wandb = "~0.17.1"
-sacrebleu = "^2.4.2"
+sacrebleu = {version = "^2.4.2"}
+mecab-ko = "*"       # Required for Korean tokenization in sacrebleu
+mecab-python3 = "*"  # Required for Japanese tokenization in sacrebleu
+ipadic = "*"         # IPA dictionary for MeCab
 tenacity = "^9.0.0"
 evals = {git = "https://github.com/fixie-ai/evals", rev = "2734b4318030cd15b8940b0761fff47fb0c1ad53"}
 torchaudio = "^2.4.1"
@@ -37,6 +40,8 @@ praatio = "^6.2.0"
 hf-transfer = "^0.1.8"
 annoy = "^1.17.3"
 coverage = "^7.6.10"
+whisper_normalizer = "^0.0.10"
+evaluate = "^0.4.3"
 
 [tool.poetry.group.dev.dependencies]
 black = "~24.4.2"

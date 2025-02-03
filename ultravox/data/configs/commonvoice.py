@@ -731,13 +731,13 @@ CV_EN_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-en-transcription",
     base="commonvoice-en",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
-    eval_config=types.EvalConfig(metric="wer"),
+    eval_config=types.EvalConfig(metric="wer", args={"lang_id": "en"}),
 )
 CV_AR_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-ar-transcription",
     base="commonvoice-ar",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
-    eval_config=types.EvalConfig(metric="wer"),
+    eval_config=types.EvalConfig(metric="wer", args={"lang_id": "ar"}),
 )
 CV_DE_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-de-transcription",
@@ -767,7 +767,7 @@ CV_JA_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-ja-transcription",
     base="commonvoice-ja",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
-    eval_config=types.EvalConfig(metric="wer"),
+    eval_config=types.EvalConfig(metric="wer", args={"lang_id": "ja"}),
 )
 CV_PT_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-pt-transcription",
@@ -821,7 +821,7 @@ CV_TH_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-th-transcription",
     base="commonvoice-th",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
-    eval_config=types.EvalConfig(metric="wer"),
+    eval_config=types.EvalConfig(metric="wer", args={"lang_id": "th"}),
 )
 CV_BE_TRANS_CONFIG = types.DatasetConfig(
     name="commonvoice-be-transcription",

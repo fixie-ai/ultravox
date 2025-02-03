@@ -9,6 +9,7 @@ from ultravox.data.configs import bigbenchaudio
 from ultravox.data.configs import boolq
 from ultravox.data.configs import commonvoice
 from ultravox.data.configs import covost2
+from ultravox.data.configs import fleurs
 from ultravox.data.configs import gigaspeech
 from ultravox.data.configs import librispeech
 from ultravox.data.configs import multilingual_librispeech
@@ -85,3 +86,4 @@ register_datasets(wenetspeech.configs)
 register_datasets(alpaca.configs)
 register_datasets(bigbenchaudio.configs)
 register_datasets(tulu.configs)
+register_datasets(fleurs.configs)
