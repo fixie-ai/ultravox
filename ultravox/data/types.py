@@ -42,6 +42,8 @@ class VoiceDatasetArgs:
     """Whether to shuffle the dataset."""
     shuffle_seed: int = 42
     """Seed for shuffling the dataset."""
+    shuffle_buffer_size: int = 1000
+    """Buffer size for shuffling the dataset. Only used for streaming datasets."""
     max_audio_duration_secs: Optional[float] = 16
     """Whether to skip samples with audio longer than this duration."""
     max_samples: Optional[int] = None

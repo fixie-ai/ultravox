@@ -12,9 +12,11 @@ from ultravox.data.configs import commonvoice
 from ultravox.data.configs import covost2
 from ultravox.data.configs import fleurs
 from ultravox.data.configs import gigaspeech
+from ultravox.data.configs import librilight
 from ultravox.data.configs import librispeech
 from ultravox.data.configs import multilingual_librispeech
 from ultravox.data.configs import peoplespeech
+from ultravox.data.configs import podcasts
 from ultravox.data.configs import tulu
 from ultravox.data.configs import voxpopuli
 from ultravox.data.configs import wenetspeech
@@ -87,5 +89,7 @@ register_datasets(wenetspeech.configs)
 register_datasets(alpaca.configs)
 register_datasets(bigbenchaudio.configs)
 register_datasets(tulu.configs)
+register_datasets(podcasts.configs)
+register_datasets(librilight.configs)
 register_datasets(audiobench.configs)
 register_datasets(fleurs.configs)

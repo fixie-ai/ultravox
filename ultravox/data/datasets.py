@@ -121,7 +121,13 @@ class VoiceDataset(SizedIterableDataset):
                 audio_field, hf_datasets.Audio(sampling_rate=data_sample.SAMPLE_RATE)
             )
         if self._args.shuffle:
-            dataset = dataset.shuffle(seed=self._args.shuffle_seed)
+            if streaming:
+                dataset = dataset.shuffle(
+                    seed=self._args.shuffle_seed,
+                    buffer_size=self._args.shuffle_buffer_size,
+                )
+            else:
+                dataset = dataset.shuffle(seed=self._args.shuffle_seed)
         return dataset
 
     def _load_mds_dataset(
