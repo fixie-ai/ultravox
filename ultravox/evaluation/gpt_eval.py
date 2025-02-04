@@ -57,23 +57,35 @@ class GPTBasedEvaluator:
         return rating_text
 
     def evaluate_binary_with_reason(
-        self, sys_prompt: str, user_prompt: str, sample: eval_types.Sample
+        self,
+        sys_prompt: str,
+        user_prompt: str,
+        sample: eval_types.Sample,
+        rating_at_end: bool = False,
     ) -> eval_types.InstructResult:
         """
         A GPT-based evaluation that expects the model to return a line
         beginning with either 0 or 1 (and an optional explanation).
         """
-        rating_text = self._run_gpt_inference(sys_prompt, user_prompt, sample)
+        rating_text = self._run_gpt_inference(
+            sys_prompt, user_prompt, sample, max_tokens=1024, temperature=0.7
+        )
         assert rating_text is not None
         score = 0
+        reason = ""
         try:
-            rating = int(rating_text.strip()[0])
+            # Depending on the prompt, the rating may be at the beginning or the end
+            if rating_at_end:
+                rating = int(rating_text.split()[-1])
+                reason = rating_text[: -len(str(rating))].strip()
+            else:
+                rating = int(rating_text.strip()[0])
+                reason = rating_text[2:].strip() if len(rating_text) > 2 else ""
             if rating in (0, 1):
                 score = rating
         except (ValueError, IndexError):
             pass
 
-        reason = rating_text[2:].strip() if len(rating_text) > 2 else ""
         return eval_types.InstructResult(score=score, reason=reason)
 
     def evaluate_correct_incorrect(
@@ -88,6 +100,24 @@ class GPTBasedEvaluator:
         assert rating_text is not None
         score = 1 if rating_text == "CORRECT" else 0
         return eval_types.InstructResult(score=score, reason="")
+
+    def evaluate_score_scalar(
+        self, sys_prompt: str, user_prompt: str, sample: eval_types.Sample
+    ) -> eval_types.InstructResult:
+        """
+        A GPT-based evaluation that expects the model to return a scalar score.
+        """
+        rating_text = self._run_gpt_inference(
+            sys_prompt, user_prompt, sample, max_tokens=1024, temperature=0.7
+        )
+        assert rating_text is not None
+        try:
+            score = int(rating_text.split()[-1])
+            reason = rating_text[: -len(str(score))].strip()
+        except:
+            score = 0
+            reason = ""
+        return eval_types.InstructResult(score=score, reason=reason)
 
 
 gpt_evaluator = GPTBasedEvaluator()

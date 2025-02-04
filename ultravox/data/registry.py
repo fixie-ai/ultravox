@@ -5,6 +5,7 @@ from typing import Dict, List, Optional, Union
 from ultravox.data import datasets
 from ultravox.data import types
 from ultravox.data.configs import alpaca
+from ultravox.data.configs import audiobench
 from ultravox.data.configs import bigbenchaudio
 from ultravox.data.configs import boolq
 from ultravox.data.configs import commonvoice
@@ -86,4 +87,5 @@ register_datasets(wenetspeech.configs)
 register_datasets(alpaca.configs)
 register_datasets(bigbenchaudio.configs)
 register_datasets(tulu.configs)
+register_datasets(audiobench.configs)
 register_datasets(fleurs.configs)

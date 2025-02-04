@@ -3,6 +3,7 @@ from typing import Any, Callable, Dict, List
 
 from ultravox.data import types
 from ultravox.evaluation import eval_types
+from ultravox.evaluation import gpt_eval_audiobench
 from ultravox.evaluation import gpt_eval_bigbench
 from ultravox.evaluation import gpt_eval_boolq
 from ultravox.evaluation import gpt_eval_conv
@@ -14,6 +15,8 @@ METRIC_REGISTRY: Dict[str, Callable[[eval_types.Sample], eval_types.Result]] = {
     "instruct": gpt_eval_instruct.evaluate_answer_instruct,
     "conversation": gpt_eval_conv.evaluate_conversation_response,
     "bigbench": gpt_eval_bigbench.evaluate_answer_bigbench,
+    "audiobench_binary": gpt_eval_audiobench.evaluate_answer_audiobench_binary,
+    "audiobench_scalar": gpt_eval_audiobench.evaluate_answer_audiobench,
     "exact_match_last_word": string_metrics.match_last_word,
     "conversation": gpt_eval_conv.evaluate_conversation_response,
 }
