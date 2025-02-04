@@ -49,6 +49,9 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         self.vocab_size = config.vocab_size
 
         self.audio_tower = self._create_audio_tower(config)
+        self.audio_tower_context_length: Optional[int] = None
+        self.audio_tower_context_length = self.audio_tower.max_context_length
+
         self.multi_modal_projector = self._create_multi_modal_projector(config)
         self.language_model = self._create_language_model(config)
 
@@ -152,8 +155,9 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         labels: Optional[torch.Tensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
         audio_token_start_idx: Optional[torch.Tensor] = None,
-        audio_len: Optional[torch.Tensor] = None,
+        audio_lens: Optional[torch.Tensor] = None,
         audio_token_len: Optional[torch.Tensor] = None,
+        audio_batch_size: Optional[torch.Tensor] = None,
         past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
         # the alt_* fields are needed for KL divergence loss
         alt_input_ids: Optional[torch.Tensor] = None,
@@ -186,27 +190,49 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
 
         if audio_values is not None:
             assert (
-                audio_token_start_idx is not None and audio_token_len is not None
-            ), "audio_token_start_idx and audio_token_len must be provided if audio_values are provided."
+                audio_token_start_idx is not None
+                and audio_token_len is not None
+                and audio_batch_size is not None
+            ), "audio_token_start_idx and audio_token_len and audio_batch_size must be provided if audio_values are provided."
             assert (
-                len(audio_token_start_idx) == len(audio_token_len) == len(audio_values)
-            ), "audio_token_start_idx, audio_token_len, and audio_values must have the same batch size."
+                len(audio_token_start_idx)
+                == len(audio_token_len)
+                == len(audio_batch_size)
+            ), "audio_token_start_idx and audio_token_len and audio_batch_size must have the same batch size."
+            assert (
+                audio_lens is not None
+            ), "audio_lens must be provided if audio_values are provided"
+            assert len(audio_lens) == len(
+                audio_values
+            ), "audio_lens must have the same batch size as audio_values."
 
-            # B x A/3200 x D
+            # B x A/3200 x (D=max-audio-length-in-batch)
             audio_tower_output = self.audio_tower.forward(
                 audio_values.to(self.audio_tower.dtype),
-                audio_len=audio_len,
+                audio_len=audio_lens,
             ).last_hidden_state
             audio_tower_output = audio_tower_output.to(inputs_embeds.dtype)
-
             audio_embeds = self.multi_modal_projector.forward(audio_tower_output)
 
             # combine audio and text embeddings
-            for i, (audio, start, length) in enumerate(
-                zip(audio_embeds, audio_token_start_idx, audio_token_len)
+            # audio_embeds is (B_a X T X D)
+            # inputs_embeds is (B_i X T X D)
+            # B_a >= B_i because B_a includes all audio chunks.
+            # B_i == audio_token_start_idx.shape[0] == audio_token_len.shape[0] == audio_batch_size.shape[0]
+            audio_ind = 0
+            for i, (start, length, batch_size) in enumerate(
+                zip(audio_token_start_idx, audio_token_len, audio_batch_size)
             ):
-                length = min(length, audio.shape[0])
+                # audio_embeds is [B1 x T1 x D_hidden, B2 x T2 x D_hidden, ...]
+                # audio.shape (T1 + T2 + ..., D_hidden)
+                audio = torch.cat(
+                    [audio_embeds[k] for k in range(audio_ind, audio_ind + batch_size)],
+                    dim=0,
+                )
+                length = min(length, audio.shape[1])
                 inputs_embeds[i, start : start + length] = audio[:length]
+
+                audio_ind += batch_size
 
         lm_output = self.language_model.forward(
             inputs_embeds=inputs_embeds,
@@ -241,7 +267,8 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         audio_values: Optional[torch.FloatTensor] = None,
         audio_token_start_idx: Optional[torch.Tensor] = None,
         audio_token_len: Optional[torch.Tensor] = None,
-        audio_len: Optional[torch.Tensor] = None,
+        audio_lens: Optional[torch.Tensor] = None,
+        audio_batch_size: Optional[torch.Tensor] = None,
         past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
         attention_mask: Optional[torch.Tensor] = None,
         inputs_embeds: Optional[torch.Tensor] = None,
@@ -270,7 +297,8 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
                 audio_token_start_idx - prefill_start_idx
             )
             model_input["audio_token_len"] = audio_token_len
-            model_input["audio_len"] = audio_len
+            model_input["audio_batch_size"] = audio_batch_size
+            model_input["audio_lens"] = audio_lens
 
         return model_input
 
@@ -575,17 +603,21 @@ class ModifiedWhisperEncoder(
         super().__init__(config)
         self.config.is_decoder = False
 
+    @property
+    def max_context_length(self):
+        return (
+            self.config.max_source_positions
+            * self.conv1.stride[0]
+            * self.conv2.stride[0]
+        )
+
     def init_latency_mask(self, audio_latency_block_size: int, dtype: torch.dtype):
         if audio_latency_block_size is None:
             self.audio_streaming_mask = None
             return
 
-        # maximum sequence length
-        max_seqlen = (
-            self.config.max_source_positions
-            * self.conv1.stride[0]
-            * self.conv2.stride[0]
-        )
+        # Use max_context_length directly in the calculation
+        max_seqlen = self.max_context_length
         assert (
             max_seqlen > 0
         ), f"maximum sequence length must be positive, got {max_seqlen}"
@@ -617,11 +649,7 @@ class ModifiedWhisperEncoder(
         output_hidden_states=None,
         return_dict=None,
     ):
-        expected_seq_length = (
-            self.config.max_source_positions
-            * self.conv1.stride[0]
-            * self.conv2.stride[0]
-        )
+        expected_seq_length = self.max_context_length
         if input_features.shape[-1] > expected_seq_length:
             raise ValueError(
                 f"Whisper expects the mel input features to be of length {expected_seq_length} or less, but found {input_features.shape[-1]}. Make sure to pad the input mel features to {expected_seq_length}."

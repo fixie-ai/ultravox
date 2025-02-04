@@ -31,7 +31,7 @@ def fake_process(text, audio, return_tensors="pt", sampling_rate=16000):
         "audio_values": torch.tensor([[[0.1, 0.2, 0.3]]]),
         "audio_token_start_idx": torch.tensor([1]),
         "audio_token_len": torch.tensor([2]),
-        "audio_len": torch.tensor([10]),
+        "audio_lens": torch.tensor([10]),
     }
 
 
@@ -63,7 +63,7 @@ def test_process(mock_processor, fake_dataset):
     assert torch.tensor(processed["labels"]).equal(
         torch.tensor([-100, -100, -100, -100, -100, 5, 6, 7, 8, 9])
     )
-    assert processed["audio_values"].shape == torch.Size([1, 3])
+    assert processed["audio_values"].shape == torch.Size([1, 1, 3])
     assert "audio_token_start_idx" in processed
     assert "audio_token_len" in processed
 
@@ -76,6 +76,6 @@ def test_process_inference_mode(mock_processor, fake_dataset):
 
     assert processed["input_ids"].shape == torch.Size([5])
     assert processed["attention_mask"].shape == torch.Size([5])
-    assert processed["audio_values"].shape == torch.Size([1, 3])
+    assert processed["audio_values"].shape == torch.Size([1, 1, 3])
     assert "audio_token_start_idx" in processed
     assert "audio_token_len" in processed

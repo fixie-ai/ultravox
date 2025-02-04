@@ -51,9 +51,6 @@ class UltravoxModelPack(ModelPack):
         self.text_tokenizer.padding_side = "right"
         self.text_tokenizer.pad_token = self.text_tokenizer.eos_token
         audio_processor = transformers.AutoProcessor.from_pretrained(args.audio_model)
-        self.processor = ultravox_processing.UltravoxProcessor(
-            audio_processor, self.text_tokenizer
-        )
 
         # Instantiate the model and processor
         self.config = ultravox_config.UltravoxConfig(
@@ -69,6 +66,12 @@ class UltravoxModelPack(ModelPack):
         # Instantiate the model
         self.model: ultravox_model.UltravoxModel = ultravox_model.UltravoxModel(
             self.config
+        )
+
+        self.processor = ultravox_processing.UltravoxProcessor(
+            audio_processor,
+            self.text_tokenizer,
+            audio_context_size=self.model.audio_tower_context_length,
         )
 
         # loss_config needs to be passed separately just for model training

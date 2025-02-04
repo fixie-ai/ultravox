@@ -111,7 +111,8 @@ class LocalInference(base.VoiceInference):
         inputs = [self._dataproc(s) for s in samples]
         for input in inputs:
             for key, val in input.items():
-                input[key] = val.squeeze(0)
+                if key != "audio_values" and key != "audio_lens":
+                    input[key] = val.squeeze(0)
 
         tensors = self.data_collator(inputs)
         # Move non-None tensors to the same device as the model

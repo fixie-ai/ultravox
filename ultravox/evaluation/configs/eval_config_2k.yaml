@@ -1,22 +1,22 @@
 model: "fixie-ai/ultravox-v0_4_1-llama-3_1-8b"
 
-report_logs_to: ["wandb"]
+report_logs_to: []
 output_dir: "./output"
 
 eval_sets:
-  - name: covost2-en-de
-  - name: covost2-en-zh
-  - name: covost2-es-en
-  - name: covost2-zh-en
-  - name: librispeech-clean-transcription
-  - name: librispeech-other-transcription
-  - name: commonvoice-en-transcription
-  - name: commonvoice-es-transcription
-  - name: commonvoice-ru-transcription
-  - name: alpaca-tts-llama
+  # - name: covost2-en-de
+  # - name: covost2-en-zh
+  # - name: covost2-es-en
+  # - name: covost2-zh-en
+  # - name: librispeech-clean-transcription
+  # - name: librispeech-other-transcription
+  # - name: commonvoice-en-transcription
+  # - name: commonvoice-es-transcription
+  # - name: commonvoice-ru-transcription
+  # - name: alpaca-tts-llama
   - name: bigbenchaudio
 
 eval_dataset_args:
-  max_samples: 2000
-  
-eval_batch_size: 60
+  max_samples: 20
+
+eval_batch_size: 10
