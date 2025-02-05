@@ -151,6 +151,8 @@ def eval_datasets(
         dataset: Union[data.GenericDataset, data.Range] = data.create_dataset(
             dataset_opt.name, dataset_args, verbose=local_rank == 0
         )
+        if dataset_args.max_samples:
+            dataset = data.Range(dataset, dataset_args.max_samples)
         results = infer_dataset(
             inference,
             dataset,

@@ -11,15 +11,18 @@ import transformers.activations
 import transformers.modeling_outputs
 import transformers.models
 
+# TODO: to make this work with HF Hub, we need to use relative imports, but that's not easily achieved right now
 import ultravox.model.ultravox_model as ultravox_model
-
-# from third_party.tokenizer import wav_tokenizer
-from third_party.tokenizer.decoder import pretrained as wav_tokenizer
+from third_party.tokenizer import wav_tokenizer
 from ultravox.model import ultravox_config
 from ultravox.ultravoxls import ultravoxls_config
 
+SAMPLE_RATE_LS = 24000
+TOKEN_FREQ_LS = 40
+HOP_LENGTH_LS = SAMPLE_RATE_LS // TOKEN_FREQ_LS
 
-class UltravoxLSModel(transformers.LlamaPreTrainedModel):
+
+class UltravoxLSModel(transformers.LlamaPreTrainedModel, transformers.GenerationMixin):
     """Ultravox Language-Speech Model. A pretrained llama backbone trained on speech tokens."""
 
     config_class = ultravoxls_config.UltravoxLSConfig
@@ -67,7 +70,7 @@ class UltravoxLSModel(transformers.LlamaPreTrainedModel):
 
     def _create_tokenizer(
         self, config: ultravoxls_config.UltravoxLSConfig
-    ) -> wav_tokenizer.WavTokenizer:
+    ) -> wav_tokenizer.CustomWavTokenizer:
         HF_MODEL_NAME = "novateur/WavTokenizer"
         CHECKPOINT_FILE_NAME = "WavTokenizer_small_600_24k_4096.ckpt"
 
@@ -80,12 +83,10 @@ class UltravoxLSModel(transformers.LlamaPreTrainedModel):
         root_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
         config_path = os.path.join(root_dir, config_path)
 
-        tokenizer: wav_tokenizer.WavTokenizer = (
-            wav_tokenizer.WavTokenizer.from_pretrained0802(config_path, model_path)
-        )
+        tokenizer = wav_tokenizer.CustomWavTokenizer(config_path, model_path)
 
         # freeze the tokenizer
-        for param in tokenizer.parameters():
+        for param in tokenizer.wavtokenizer.parameters():
             param.requires_grad = False
 
         tokenizer.apply(lambda module: setattr(module, "_is_hf_initialized", True))
@@ -95,19 +96,23 @@ class UltravoxLSModel(transformers.LlamaPreTrainedModel):
         return tokenizer
 
     def _convert_tokens_to_wav(self, discrete_code):
-        features = self.tokenizer.codes_to_features(discrete_code)
+        features = self.tokenizer.wavtokenizer.codes_to_features(discrete_code)
         bandwidth_id = torch.tensor([0])
-        audio_out = self.tokenizer.decode(features, bandwidth_id=bandwidth_id)
+        audio_out = self.tokenizer.wavtokenizer.decode(
+            features, bandwidth_id=bandwidth_id
+        )
         return audio_out.cpu()
 
     @property
     def tokenizer_vocab_size(self):
-        return self.tokenizer.feature_extractor.encodec.quantizer.bins
+        return self.tokenizer.wavtokenizer.feature_extractor.encodec.quantizer.bins
 
     def _convert_wav_to_tokens(self, wav: torch.Tensor):
         wav = wav.to(self.device)
         bandwidth_id = torch.tensor([0], device=wav.device)
-        _, discrete_code = self.tokenizer.encode_infer(wav, bandwidth_id=bandwidth_id)
+        _, discrete_code = self.tokenizer.wavtokenizer.encode_infer(
+            wav, bandwidth_id=bandwidth_id
+        )
 
         return discrete_code
 
@@ -157,32 +162,52 @@ class UltravoxLSModel(transformers.LlamaPreTrainedModel):
         self.vocab_size = model_embeds.num_embeddings
         return model_embeds
 
-    def _compute_tokens_from_audio(self, audio: torch.Tensor, num_tokens: torch.Tensor):
+    def _compute_tokens_from_audio(self, audio: torch.Tensor, audio_len: torch.Tensor):
+        """
+        Compute tokens from audio input.
+        It assumed the audio is left-padded and the output tokens will also be left-padded.
+        """
         with torch.no_grad():
             # clone is needed since tokenizer uses inference mode which is not compatible with autograd
-            input_ids = self._convert_wav_to_tokens(audio).squeeze(0).clone()
+            input_ids = self.tokenizer._tokenize(audio).squeeze(0).clone()
+            num_tokens = (audio_len / HOP_LENGTH_LS).ceil().long()
+
+            if input_ids.shape[-1] != num_tokens.max():
+                logging.warning(
+                    f"number of tokens don't match our estimation: {input_ids.shape[-1]} vs {num_tokens.max()} [audio_len: {audio_len.tolist()}] [audio shape: {audio.shape}]"
+                )
+
+            # remove 2 token from the right, since they might be invalid
+            input_ids = input_ids[..., :-2]
+            num_tokens -= 2
+
+            # pad to multiple of pad_to (for efficient computation on NVIDIA GPU)
             pad_to = self.config.pad_to_multiple_of
-            max_num_tokens = (num_tokens.max() + pad_to - 1) // pad_to * pad_to
+            _, seq_len = input_ids.shape
+            pad_seq_len = (seq_len + pad_to - 1) // pad_to * pad_to
             input_ids = nn.functional.pad(
-                input_ids,
-                (0, max_num_tokens - input_ids.shape[-1]),
-                value=self.pad_token_id,
+                input_ids, (pad_seq_len - seq_len, 0), value=self.pad_token_id
             )
-            # generate attention mask using num_tokens, e.g. 1 1 1 1 0 0 ... if num_tokens is 4
-            attention_mask = torch.stack(
-                [
-                    torch.arange(max_num_tokens, device=audio.device) < num_tokens_i
-                    for num_tokens_i in num_tokens
-                ]
+
+            # generate attention mask using num_tokens, e.g. ... 0 0 1 1 1 if num_tokens is 3
+            attention_mask = (
+                torch.arange(pad_seq_len, device=audio.device).flip(-1)[None, :]
+                < num_tokens[:, None]
             ).long()
-            labels = torch.where(attention_mask.bool(), input_ids, -100)
+
+            have_labels = (
+                torch.arange(pad_seq_len, device=audio.device).flip(-1)[None, :]
+                < num_tokens[:, None] - self.loss_config.initial_tokens_to_ignore
+            )
+
+            labels = torch.where(have_labels, input_ids, -100)
 
         return input_ids, attention_mask, labels
 
     def forward(
         self,
         audio: torch.Tensor,
-        num_tokens: torch.Tensor,
+        audio_len: torch.Tensor,
         return_loss: bool = True,
         **kwargs,
     ) -> Union[Tuple, transformers.modeling_outputs.CausalLMOutputWithPast]:
@@ -191,13 +216,11 @@ class UltravoxLSModel(transformers.LlamaPreTrainedModel):
 
         Args:
             audio: The audio input.
-            num_tokens: The number of tokens expected to be produced from the audio input. Used to generate attention mask.
-                Since the original audio is padded, this value is used to let us ignore the padded tokens.
-                If the audio is padded, the last token is also ignored as it is not fully valid (i.e. affected by padding).
+            audio_len: The length of the original audio waveform.
             **kwargs: Additional keyword arguments. Passed directly to the language model.
         """
         input_ids, attention_mask, labels = self._compute_tokens_from_audio(
-            audio, num_tokens
+            audio, audio_len
         )
 
         return self.language_model(
@@ -207,24 +230,22 @@ class UltravoxLSModel(transformers.LlamaPreTrainedModel):
             **kwargs,
         )
 
-    def generate(self, audio: torch.Tensor, num_tokens: torch.Tensor, **kwargs):
+    def generate(self, audio: torch.Tensor, audio_len: torch.Tensor, **kwargs):
         assert (
             audio.shape[0] == 1
         ), f"Generate with larger batch size is not supported, got audio with shape {audio.shape}"
         input_len = audio.shape[-1]
 
-        input_ids, attention_mask, _ = self._compute_tokens_from_audio(
-            audio, num_tokens
-        )
+        input_ids, attention_mask, _ = self._compute_tokens_from_audio(audio, audio_len)
 
         output = self.language_model.generate(
             input_ids=input_ids, attention_mask=attention_mask, **kwargs
         )
         output_tokens = output.sequences[0]
         output_tokens = output_tokens.reshape(1, 1, -1)
-        output_audio = self._convert_tokens_to_wav(output_tokens)
+        output_audio = self.tokenizer.decode(output_tokens, skip_special_tokens=True)
 
-        output_tokens_len = output_tokens.shape[-1] - num_tokens[0]
+        output_tokens_len = output_tokens.shape[-1] - input_ids.shape[-1]
 
         return output_audio[..., input_len:], output_tokens_len
 

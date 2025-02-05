@@ -1,8 +1,8 @@
+import math
 from typing import Any, Dict
 
-import datasets
 import librosa
-from torch.utils import data
+import numpy as np
 
 from ultravox import data as datasets
 from ultravox.ultravoxls import ultravoxls_processing
@@ -11,7 +11,7 @@ from ultravox.ultravoxls import ultravoxls_processing
 class UltravoxLSDataproc(datasets.Dataproc):
     def __init__(
         self,
-        dataset: data.IterableDataset,
+        dataset: datasets.SizedIterableDataset,
         processor: ultravoxls_processing.UltravoxLSProcessor,
         expected_audio_length_seconds: float,
     ) -> None:
@@ -24,7 +24,6 @@ class UltravoxLSDataproc(datasets.Dataproc):
             processor: The processor.
         """
         super().__init__(dataset)
-        self._dataset = dataset
         self.processor = processor
         self.expected_audio_length_seconds = expected_audio_length_seconds
         self.min_audio_length_seconds = expected_audio_length_seconds / 2
@@ -44,15 +43,15 @@ class UltravoxLSDataproc(datasets.Dataproc):
                     self.expected_audio_length_seconds * sample.sample_rate
                 )
 
-                # Split the entire audio into chunks of the specified length
-                for chunk_start in range(0, len(sample.audio), chunk_size_samples):
-                    chunk_end = chunk_start + chunk_size_samples
-                    chunk = sample.audio[chunk_start:chunk_end]
+                audio_len = len(sample.audio)
+                num_chunks = int(math.ceil(audio_len / chunk_size_samples))
 
-                    # If the chunk is shorter than the specified length (last chunk), overlap it with the previous chunk
-                    if len(chunk) < chunk_size_samples:
-                        chunk = sample.audio[-chunk_size_samples:]
-                        # TODO: in this case space out the chunks more evenly
+                # spread out the chunks evenly across the audio
+                starts = np.linspace(0, audio_len - chunk_size_samples, num_chunks)
+
+                # Split the entire audio into chunks of the specified length
+                for chunk_start in starts.round().astype(int):
+                    chunk = sample.audio[chunk_start : chunk_start + chunk_size_samples]
 
                     yield self._process(
                         datasets.VoiceSample(

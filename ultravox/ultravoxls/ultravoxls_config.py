@@ -92,7 +92,7 @@ class UltravoxLSConfig(transformers.PretrainedConfig):
 
         self.initializer_range = self.text_config.initializer_range
 
-        super().__init__(**kwargs)
+        super().__init__(**kwargs, pad_token_id=0)
 
     def to_diff_dict(self) -> Dict[str, Any]:
         diff_dict = super().to_diff_dict()

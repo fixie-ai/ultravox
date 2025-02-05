@@ -412,7 +412,13 @@ class InterleaveDataset(SizedIterableDataset):
                 yield next(ds_iters[iter_index])
             except StopIteration:
                 ds_iters[iter_index] = iter(self._datasets[iter_index])
-                yield next(ds_iters[iter_index])
+                try:
+                    yield next(ds_iters[iter_index])
+                except StopIteration:
+                    warnings.warn(
+                        f"Dataset {iter_index} is empty. num_workers is likely too high. Stopping iteration."
+                    )
+                    break
             ds_pos[iter_index] += 1
 
     def __len__(self):

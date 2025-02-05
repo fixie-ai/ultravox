@@ -33,7 +33,7 @@ class LocalLSInference(base.VoiceInference):
     ) -> base.VoiceOutput:
         inputs = self.processor.dataproc(sample)
         inputs = self.collate_fn([inputs])
-        input_len = inputs["num_tokens"][0].item()
+        input_len = 1  # TODO
         inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
         output_audio, output_len = self._generate(inputs, max_tokens, temperature)
         return base.VoiceOutput(output_audio, input_len, output_len)
@@ -76,7 +76,7 @@ class UltravoxLSInference(LocalLSInference):
                     runs/llama2_asr_gigaspeech/checkpoint-1000/
                     wandb://fixie/ultravox/model-llama2_asr_gigaspeech:v0
             device: where to put the model and data
-            data_type: data type to use for the model
+            dtype: data type to use for the model
         """
         device = device or device_helpers.default_device()
         model_path = file_utils.download_dir_if_needed(model_path)

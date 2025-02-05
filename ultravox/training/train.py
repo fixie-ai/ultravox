@@ -1,11 +1,11 @@
 import contextlib
 import dataclasses
+import datetime
 import glob
 import logging
 import os
 import random
 import traceback
-from datetime import datetime
 from typing import Dict, List
 
 import accelerate
@@ -49,7 +49,10 @@ def prepare_dataset(
 
     interleave = datasets.InterleaveDataset(data_sets, data_weights)
     ds_with_proc = model_pack.wrap_with_data_proc(interleave)
-    return ds_with_proc
+    if data_args.max_samples:
+        return datasets.Range(ds_with_proc, data_args.max_samples)
+    else:
+        return ds_with_proc
 
 
 def main() -> None:
@@ -76,7 +79,7 @@ def train(config: config_base.TrainConfig):
     # DDP blows up logging, so this is an attempt to suppress it to only logs from the master process
     logging.basicConfig(level=logging.INFO if is_master else logging.ERROR)
     # os.environ["TORCH_LOGS"] = "ERROR" if is_master else "WARNING"
-    transformers.logging.set_verbosity(logging.WARNING if is_master else logging.ERROR)
+    transformers.logging.set_verbosity(logging.INFO)
     hf_datasets.logging.set_verbosity(logging.WARNING if is_master else logging.ERROR)
 
     if is_distributed:
@@ -184,7 +187,9 @@ def train(config: config_base.TrainConfig):
         # When using epochs to train, emptydataset must have a length equal to the training set
         train_dataset = datasets.EmptyDataset(len(train_dataset))
         for val_opts in config.get_val_sets():
-            val_datasets[val_opts.name] = datasets.EmptyDataset()
+            val_datasets[val_opts.name] = datasets.EmptyDataset(
+                config.val_dataset_args.max_samples or 1
+            )
 
     logging.info(f"Config Params: {config}")
     trainer = transformers.Seq2SeqTrainer(
@@ -218,7 +223,8 @@ def train(config: config_base.TrainConfig):
             learning_rate=config.lr,
             lr_scheduler_type=config.lr_scheduler,
             lr_scheduler_kwargs=config.lr_scheduler_kwargs,
-            warmup_steps=config.lr_warmup_steps,
+            warmup_steps=0 if config.lr_warmup_steps < 1 else config.lr_warmup_steps,
+            warmup_ratio=config.lr_warmup_steps if config.lr_warmup_steps < 1 else 0,
             weight_decay=config.weight_decay,
             # fp16=dtype == torch.float16,
             # bf16=dtype == torch.bfloat16,
@@ -240,7 +246,7 @@ def train(config: config_base.TrainConfig):
     if config.do_train:
         # Training loop
         logging.info("Starting training...")
-        t_start = datetime.now()
+        t_start = datetime.datetime.now()
         logging.info(f"train start time: {t_start}")
 
         if config.val_steps:
@@ -259,7 +265,7 @@ def train(config: config_base.TrainConfig):
             logging.error(f"[rank: {local_rank}] {traceback.format_exc()}")
             caught_exception = e
 
-        t_end = datetime.now()
+        t_end = datetime.datetime.now()
         logging.info(f"train end time: {t_end}")
         logging.info(f"elapsed: {t_end - t_start}")
 
@@ -267,11 +273,13 @@ def train(config: config_base.TrainConfig):
 
     # use fixie-ai/evals for evaluation if in use_fsdp mode
     if config.do_eval:
+        if config.model_type == "lsm":
+            logging.warning("Evaluation is not supported for LSM models, skipping")
         if config.use_fsdp:
             logging.warning("Evaluation is not supported in FSDP mode, skipping")
         else:
             logging.info("Starting evaluation...")
-            t_start = datetime.now()
+            t_start = datetime.datetime.now()
             logging.info(f"eval start time: {t_start}")
 
             # Merge LoRA weights for better inference performance.
@@ -301,7 +309,7 @@ def train(config: config_base.TrainConfig):
             if is_master:
                 eval.print_results(metrics, output_files)
 
-            t_end = datetime.now()
+            t_end = datetime.datetime.now()
             logging.info(f"eval end time: {t_end}")
             logging.info(f"elapsed: {t_end - t_start}")
 

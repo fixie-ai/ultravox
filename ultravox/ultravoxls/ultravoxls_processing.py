@@ -1,5 +1,4 @@
 import dataclasses
-import math
 from typing import Optional, Union
 
 import librosa
@@ -10,8 +9,6 @@ import transformers
 from ultravox.data import data_sample
 
 SAMPLE_RATE_LS = 24000
-TOKEN_FREQ_LS = 40
-HOP_LENGTH_LS = SAMPLE_RATE_LS // TOKEN_FREQ_LS
 
 
 class UltravoxLSProcessor:
@@ -50,31 +47,25 @@ class UltravoxLSProcessor:
         ] = transformers.TensorType.PYTORCH,
         **kwargs,
     ) -> transformers.BatchFeature:
-        num_tokens = int(math.ceil(audio.shape[-1] / HOP_LENGTH_LS))
-        data = {"audio": audio, "num_tokens": num_tokens}
+        data = {"audio": audio}
         return transformers.BatchFeature(data=data, tensor_type=return_tensors)
 
 
 @dataclasses.dataclass
 class DataCollatorForLSM:
     def __call__(self, features, *args, **kwargs):
-        # If a sample is padded, the last token is not gonna be fully valid. Hence we remove it.
-        # Sometimes the last two tokens are affected, but that's less likely.
-        num_tokens = torch.LongTensor([f["num_tokens"] for f in features])
-        not_full_batch = num_tokens != num_tokens.max().item()
-        num_tokens = num_tokens - not_full_batch.long()
-
-        # pad audio on the right
+        # TODO: assert to make sure only left padding is used?
+        # pad audio on the left
         audio_len = torch.LongTensor([f["audio"].shape[-1] for f in features])
         max_audio_len = audio_len.max().item()
         audio = torch.concat(
             [
                 torch.nn.functional.pad(
-                    f["audio"], (0, max_audio_len - f["audio"].shape[-1])
+                    f["audio"], (max_audio_len - f["audio"].shape[-1], 0)
                 )
                 for f in features
             ],
             dim=0,
         )
 
-        return {"audio": audio, "num_tokens": num_tokens}
+        return {"audio": audio, "audio_len": audio_len}

@@ -32,6 +32,8 @@ class LossFunction(str, Enum):
 class LossConfig:
     loss_function: LossFunction = LossFunction.CrossEntropy
     kl_temperature: float = 2.0
+    # Number of tokens to ignore from the beginning of the sequence. Only used in LSM
+    initial_tokens_to_ignore: int = 0
 
     @property
     def requires_alt_fields(self):

@@ -132,6 +132,10 @@ class LSModelPack(ModelPack):
         # Instantiate the model
         self.model = ultravoxls_model.UltravoxLSModel(self.config)
 
+        # loss_config needs to be passed separately just for model training
+        if args.loss_config is not None:
+            self.model.set_loss_config(args.loss_config)
+
         # Set up the data loader
         self.data_collator = ultravoxls_processing.DataCollatorForLSM()
         self.model.language_model.config.use_cache = False
