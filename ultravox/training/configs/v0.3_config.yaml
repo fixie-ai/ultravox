@@ -1,4 +1,5 @@
-# closest trining setup to v0.3, used for quick experiments and comparisons
+# closest trining data setup to v0.3, used for quick experiments and comparisons
+# note: the audio_model is upgraded to whisper-large-v3-turbo instead of openai/whisper-medium
 
 text_model: "meta-llama/Llama-3.1-8B-Instruct"
 audio_model: "openai/whisper-large-v3-turbo"
@@ -22,4 +23,5 @@ num_epochs: 2
 val_steps: 0.05
 save_steps: 0.25
 
-projector_ln_mid: false
+# the original v0.3 model is equivalent to projector_ln_mid: false
+# use the default value here for projector_ln_mid: true
