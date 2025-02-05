@@ -20,8 +20,7 @@ import wandb.sdk
 from ultravox import data as datasets
 from ultravox.evaluation import eval
 from ultravox.inference import infer
-from ultravox.model import hf_hub_utils
-from ultravox.model import wandb_utils
+from ultravox.model import file_utils
 from ultravox.training import config_base
 from ultravox.training import ddp_utils
 from ultravox.training import model_types
@@ -121,16 +120,7 @@ def train(config: config_base.TrainConfig):
 
     if config.model_load_dir:
         logging.info(f"Loading model state dict from {config.model_load_dir}")
-        load_path = config.model_load_dir
-        if wandb_utils.is_wandb_url(load_path):
-            # We assume that the weights are already downloaded via prefetch_weights.py
-            # and hence this is just resolving the path. If the weights are not downloaded,
-            # we might see a race condition here when using DDP.
-            load_path = wandb_utils.download_model_from_wandb(load_path)
-        elif hf_hub_utils.is_hf_model(load_path):
-            load_path = hf_hub_utils.download_hf_model(load_path)
-        if os.path.isdir(load_path):
-            load_path = os.path.join(load_path, "model*.safetensors")
+        load_path = file_utils.download_dir_if_needed(config.model_load_dir)
         paths = glob.glob(load_path)
         assert len(paths) > 0, f"No model files found at {load_path}"
         for path in paths:

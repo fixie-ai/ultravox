@@ -15,6 +15,7 @@ command: >-
   cd ultravox-omni &&
   poetry install --no-dev &&
   poetry run pip install vllm &&
+  if [ ! -z "${MODEL_SOUP}" ]; then python3 -m ultravox.tools.model_averaging $MODEL_SOUP; fi &&
   HF_TOKEN=$HF_WRITE_TOKEN poetry run python -m ultravox.inference.run_vllm_inference $EVAL_ARGS
 
 # Potentially prefetch weights. The code tries to find the right weights, but if parent job is not found (e.g. deleted), loading weights for a 70B model can be slow.
@@ -24,3 +25,6 @@ env_variables:
   UV_BRANCH: main
   # TODO: the right model path and evalset need to be set below
   EVAL_ARGS: --evalset audio-core --model wandb://fixie/ultravox/model-70B-bs6-ga1-cont:v6
+  # You can use MODEL_SOUP to average multiple models together.
+  # Just make sure to set the right model_paths and update EVAL_ARGS to use updated_model
+  # MODEL_SOUP: --model_paths <model_1> <model_2> <model_3> ... --output_path updated_model

@@ -21,10 +21,10 @@ import simple_parsing
 import torch
 import torch.nn as nn
 
+from ultravox.model import file_utils
 from ultravox.model import hf_hub_utils
 from ultravox.model import ultravox_config
 from ultravox.model import ultravox_model
-from ultravox.model import wandb_utils
 
 PREFIXES_TO_REMOVE = ["projector.", "0."]  # NOTE: the order matters
 
@@ -45,10 +45,9 @@ class CombineProjectionArgs:
     verbose: bool = simple_parsing.field(alias="-v", default=True)
 
     def __post_init__(self):
-        if wandb_utils.is_wandb_url(self.source_model_path):
-            self.source_model_path = wandb_utils.download_model_from_wandb(
-                self.source_model_path
-            )
+        self.source_model_path = file_utils.download_dir_if_needed(
+            self.source_model_path
+        )
 
 
 def main(args: CombineProjectionArgs):
@@ -121,11 +120,8 @@ def main(args: CombineProjectionArgs):
 
 
 def load_weights(path: str, file_name: str):
-    if wandb_utils.is_wandb_url(path):
-        local_path = wandb_utils.download_file_from_wandb(path, file_name)
-    elif hf_hub_utils.is_hf_model(path):
-        local_path = hf_hub_utils.download_file_from_hf_hub(path, file_name)
-    elif os.path.isdir(path):
+    local_path = file_utils.download_file_if_needed(path, file_name)
+    if os.path.isdir(local_path):
         local_path = path
     else:
         raise ValueError(f"Invalid path: {path}")

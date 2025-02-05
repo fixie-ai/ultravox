@@ -5,7 +5,7 @@ import transformers
 
 from ultravox.data import data_sample
 from ultravox.inference import base
-from ultravox.model import wandb_utils
+from ultravox.model import file_utils
 from ultravox.ultravoxls import ultravoxls_model
 from ultravox.ultravoxls import ultravoxls_processing
 from ultravox.utils import device_helpers
@@ -79,8 +79,7 @@ class UltravoxLSInference(LocalLSInference):
             data_type: data type to use for the model
         """
         device = device or device_helpers.default_device()
-        if wandb_utils.is_wandb_url(model_path):
-            model_path = wandb_utils.download_model_from_wandb(model_path)
+        model_path = file_utils.download_dir_if_needed(model_path)
 
         model = ultravoxls_model.UltravoxLSModel.from_pretrained(model_path)
         model.to(device=device)
