@@ -100,5 +100,7 @@ class UltravoxLSConfig(transformers.PretrainedConfig):
         # remove text_config if text_model_id
         if self.text_model_id is not None:
             diff_dict.pop("text_config", None)
+        elif "text_config" in diff_dict:
+            diff_dict["text_config"].pop("_attn_implementation_autoset", None)
 
         return diff_dict

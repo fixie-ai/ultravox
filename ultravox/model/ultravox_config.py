@@ -169,7 +169,12 @@ class UltravoxConfig(transformers.PretrainedConfig):
         # remove text_config and audio_config if text_model_id and audio_model_id are present
         if self.text_model_id is not None:
             diff_dict.pop("text_config", None)
+        elif "text_config" in diff_dict:
+            diff_dict["text_config"].pop("_attn_implementation_autoset", None)
+
         if self.audio_model_id is not None:
             diff_dict.pop("audio_config", None)
+        elif "audio_config" in diff_dict:
+            diff_dict["audio_config"].pop("_attn_implementation_autoset", None)
 
         return diff_dict
