@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import Any, Dict, Optional, Set, Tuple, Union
 
 import peft
@@ -36,6 +37,9 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
     config: UltravoxConfig  # for type hinting
     # Usually we load encoder and LLM weights from a pretrained model separately, so they are allowed to be missing
     _keys_to_ignore_on_load_missing = ["audio_tower.*", "language_model.*"]
+    # Since we have kwargs in forward, we need to set this to False, otherwise grad_accum_steps will cause incorrect train loss to be reported
+    # see https://github.com/huggingface/transformers/issues/35856 and https://github.com/huggingface/trl/pull/2615/files
+    accepts_loss_kwargs = False
 
     def __init__(self, config: UltravoxConfig):
         super().__init__(config)
@@ -283,7 +287,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         cls, config: UltravoxConfig
     ) -> Union[transformers.Wav2Vec2Model, "ModifiedWhisperEncoder"]:
         if config.audio_model_id is not None:
-            if "whisper" in config.audio_model_id is not None:
+            if "whisper" in config.audio_model_id.lower():
                 audio_tower = ModifiedWhisperEncoder.from_pretrained(
                     config.audio_model_id, torch_dtype=config.torch_dtype
                 )
@@ -299,7 +303,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
                     config.audio_model_id, torch_dtype=config.torch_dtype
                 )
         else:
-            if "whisper" in config.audio_config._name_or_path:
+            if "whisper" in config.audio_config._name_or_path.lower():
                 audio_tower = ModifiedWhisperEncoder(config.audio_config)
                 audio_tower.init_latency_mask(
                     config.audio_latency_block_size, dtype=config.torch_dtype
@@ -384,12 +388,11 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
 
     def push_to_hub(self, *args, **kwargs):
         self.merge_and_unload()
-        self.to(self.language_model.dtype)
         return super().push_to_hub(*args, **kwargs)
 
-    def save_pretrained(
-        self, *args, state_dict: Optional[Dict[str, Any]] = None, **kwargs
-    ):
+    def diff_state_dict(
+        self, state_dict: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         if state_dict is None:
             state_dict = super().state_dict()
 
@@ -401,6 +404,13 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             if k in self.keep_params
             or (k in named_params and named_params[k].requires_grad)
         }
+
+        return state_dict
+
+    def save_pretrained(
+        self, *args, state_dict: Optional[Dict[str, Any]] = None, **kwargs
+    ):
+        state_dict = self.diff_state_dict(state_dict)
 
         super().save_pretrained(*args, state_dict=state_dict, **kwargs)
 
@@ -436,6 +446,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         )
 
 
+# TODO: refactor common parts to a shared module
 def is_cache_empty(
     past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]]
 ) -> bool:
@@ -453,12 +464,18 @@ def apply_lora(model: torch.nn.Module, lora_config: dict) -> torch.nn.Module:
     """
     Applies LoRA finetuning to the model. If the `r` parameter is set to 0, the model is frozen instead.
     """
+    unfreeze_layers = lora_config.pop("unfreeze_layers", None)
     lora_config = peft.LoraConfig(**lora_config or {})
 
     if lora_config.r == 0:
-        # freeze the model entirely
-        for param in model.parameters():
-            param.requires_grad = False
+        # freeze the model entirely, except for the specified layers
+        for name, param in model.named_parameters():
+            if not unfreeze_layers or not any(
+                re.match(layer, name) for layer in unfreeze_layers
+            ):
+                param.requires_grad = False
+            else:
+                logging.info(f"Unfreezing layer: {name} with #{param.numel()} params")
     else:
         model = peft.get_peft_model(model, lora_config)
 
@@ -502,25 +519,35 @@ class SwiGLU(nn.Module):
         return F.silu(gate) * x
 
 
-class UltravoxProjector(nn.Sequential):
+class UltravoxProjector(nn.Module):
     def __init__(self, config: UltravoxConfig):
         super().__init__()
         self.hidden_dim = config.hidden_size
         self._pad_and_stack = StackAudioFrames(config.stack_factor)
-        dim = config.audio_config.hidden_size * config.stack_factor
-        self.ln_pre = RMSNorm(dim, init=config.norm_init)
-        self.linear_1 = nn.Linear(dim, self.hidden_dim, bias=False)
-        dim = self.hidden_dim
+        dim_in = config.audio_config.hidden_size * config.stack_factor
+        self.ln_pre = RMSNorm(dim_in, init=config.norm_init)
+        self.linear_1 = nn.Linear(dim_in, self.hidden_dim, bias=False)
+        dim_mid = self.hidden_dim
         self.act = transformers.activations.get_activation(config.projector_act)
-        dim = dim // 2 if config.projector_act == "swiglu" else dim
-        self.linear_2 = nn.Linear(dim, config.text_config.hidden_size, bias=False)
-        self.ln_post = RMSNorm(config.text_config.hidden_size, init=config.norm_init)
+        dim_mid = dim_mid // 2 if config.projector_act == "swiglu" else dim_mid
+        dim_out = config.text_config.hidden_size
+        self.linear_2 = nn.Linear(dim_mid, dim_out, bias=False)
+
+        # Ultravox v0.4.1 and below uses layer_norm after the second linear layer,
+        # while v0.5.0 and above uses layer_norm after the first linear layer.
+        if config.projector_ln_mid:
+            self.ln_mid: nn.Module = RMSNorm(dim_mid, init=config.norm_init)
+            self.ln_post: nn.Module = nn.Identity()
+        else:
+            self.ln_mid = nn.Identity()
+            self.ln_post = RMSNorm(dim_out, init=config.norm_init)
 
     def forward(self, audio_features: torch.Tensor) -> torch.Tensor:
         audio_features = self._pad_and_stack(audio_features)
         audio_features = self.ln_pre(audio_features)
         hidden_states = self.linear_1(audio_features)
         hidden_states = self.act(hidden_states)
+        hidden_states = self.ln_mid(hidden_states)
         hidden_states = self.linear_2(hidden_states)
         hidden_states = self.ln_post(hidden_states)
         return hidden_states
@@ -543,6 +570,10 @@ class ModifiedWhisperEncoder(
 
     base_model_prefix = "model.encoder"
     _no_split_modules = ["WhisperEncoderLayer"]
+
+    def __init__(self, config: transformers.WhisperConfig):
+        super().__init__(config)
+        self.config.is_decoder = False
 
     def init_latency_mask(self, audio_latency_block_size: int, dtype: torch.dtype):
         if audio_latency_block_size is None:

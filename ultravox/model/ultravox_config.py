@@ -19,6 +19,8 @@ class LoraConfigSimplified:
     target_modules: Optional[List[str]] = dataclasses.field(
         default_factory=lambda: ["k_proj", "q_proj", "linear_k", "linear_q"]
     )
+    # A list of module names regex patterns to unfreeze. Only used if r == 0.
+    unfreeze_layers: Optional[List[str]] = None
 
 
 class LossFunction(str, Enum):
@@ -28,7 +30,7 @@ class LossFunction(str, Enum):
 
 @dataclasses.dataclass
 class LossConfig:
-    loss_function: LossFunction = LossFunction.KL_Divergence
+    loss_function: LossFunction = LossFunction.CrossEntropy
     kl_temperature: float = 2.0
 
     @property
@@ -70,7 +72,7 @@ class UltravoxConfig(transformers.PretrainedConfig):
     Example:
 
     ```python
-    >>> from transformers import UltravoxForConditionalGeneration, Wav2Vec2Config, UltravoxConfig, LlamaConfig
+    >>> from transformers import UltravoxModel, Wav2Vec2Config, UltravoxConfig, LlamaConfig
 
     >>> # Initializing an audio encoder config
     >>> audio_config = Wav2Vec2Config()
@@ -82,7 +84,7 @@ class UltravoxConfig(transformers.PretrainedConfig):
     >>> configuration = UltravoxConfig(audio_config, text_config)
 
     >>> # Initializing a completely untrained model from the configuration
-    >>> model = UltravoxForConditionalGeneration(configuration)
+    >>> model = UltravoxModel(configuration)
 
     >>> # Accessing the model configuration
     >>> configuration = model.config
@@ -105,6 +107,7 @@ class UltravoxConfig(transformers.PretrainedConfig):
         stack_factor: int = 8,
         norm_init: float = 0.4,
         projector_act: str = "swiglu",
+        projector_ln_mid: bool = False,  # defaults to False for compatibility with v0.4.1 and below
         text_model_lora_config: Optional[LoraConfigSimplified] = None,
         audio_model_lora_config: Optional[LoraConfigSimplified] = None,
         audio_latency_block_size: Optional[int] = None,
@@ -119,7 +122,7 @@ class UltravoxConfig(transformers.PretrainedConfig):
         self.stack_factor = stack_factor
         self.norm_init = norm_init
         self.projector_act = projector_act
-
+        self.projector_ln_mid = projector_ln_mid
         if text_model_id is not None:
             self.text_config: transformers.LlamaConfig = (
                 transformers.AutoConfig.from_pretrained(text_model_id)
