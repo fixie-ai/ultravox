@@ -1,6 +1,6 @@
 model: "fixie-ai/ultravox-v0_4_1-llama-3_1-8b"
 
-report_logs_to: []
+report_logs_to: ["wandb"]
 output_dir: "./output"
 
 eval_sets:
@@ -21,6 +21,6 @@ eval_sets:
   - name: audiobench-public-sg-speech-qa
 
 eval_dataset_args:
-  max_samples: 20
+  max_samples: 2000
 
-eval_batch_size: 10
+eval_batch_size: 60
