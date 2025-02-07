@@ -22,3 +22,6 @@ env_variables:
   TRAIN_ARGS: --config_path ultravox/training/configs/release_config.yaml
   HF_HUB_DOWNLOAD_TIMEOUT: "300"  # Set timeout to 300 seconds (5 minutes)
   HF_HUB_ENABLE_HF_TRANSFER: 1
+  # RAM Efficient Loading: only the first process loads the pretrained model checkoint while all other processes have empty
+  # weights. Only applicable for Transformers. Forcibly sets `sync_module_states` to `True`.
+  FSDP_CPU_RAM_EFFICIENT_LOADING: 1

@@ -57,10 +57,8 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
 
         # Determine no_split_modules dynamically to use with FSDP auto_wrap policy.
         # FSDP throws an error if some of the layer types are not found in the model.
-        # This would be something like ["LlamaDecoderLayer", "WhisperEncoderLayer"]
-        self._no_split_modules = (self.language_model._no_split_modules or []) + (
-            self.audio_tower._no_split_modules or []
-        )
+        # This would be something like ["LlamaDecoderLayer"] as we don't split audio encoder layers.
+        self._no_split_modules = self.language_model._no_split_modules
 
         self.loss_config = LossConfig()
         self.post_init()
@@ -424,13 +422,17 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         if state_dict is None:
             state_dict = super().state_dict()
 
-        named_params = dict(self.named_parameters())
+        trainable_params = {k for k, v in self.named_parameters() if v.requires_grad}
+        # normalize the keys to match the original model
+        # Example: audio_tower.base_model.model.layers.0._fsdp_wrapped_module.self_attn.k_proj.lora_B.default.weight
+        trainable_params = {
+            k.replace("_fsdp_wrapped_module.", "") for k in trainable_params
+        }
 
         state_dict = {
             k: v
             for k, v in state_dict.items()
-            if k in self.keep_params
-            or (k in named_params and named_params[k].requires_grad)
+            if k in self.keep_params or k in trainable_params
         }
 
         return state_dict

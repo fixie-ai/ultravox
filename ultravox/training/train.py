@@ -28,6 +28,26 @@ from ultravox.training.helpers import prefetch_weights
 from ultravox.utils import device_helpers
 
 
+def patch_trainer_save_fsdp_model():
+    """
+    When using FSDP, the trainer._save_checkpoint first calls self.save_model and then accelerator.save_fsdp_model.
+    This leads to the model being saved twice when in FULL_STATE_DICT mode as save_model refuses to save the model otherwise.
+    To make matters worse, the second save is going to be produce a huge `pytorch_model_fsdp.bin` file which is not what we want.
+    This function skips the second save if the state_dict_type is FULL_STATE_DICT.
+    We currently only use FULL_STATE_DICT (default) for training checkpoints.
+    """
+
+    def save_fsdp_model_if_not_full_state_dict(
+        fsdp_plugin, accelerator, model, output_dir, **kwargs
+    ):
+        if "FULL_STATE_DICT" in str(fsdp_plugin.state_dict_type):
+            return
+        original_save_fsdp_model(fsdp_plugin, accelerator, model, output_dir, **kwargs)
+
+    original_save_fsdp_model = transformers.trainer.save_fsdp_model
+    transformers.trainer.save_fsdp_model = save_fsdp_model_if_not_full_state_dict
+
+
 def prepare_dataset(
     train_args: config_base.TrainConfig,
     model_pack: model_types.ModelPack,
@@ -65,6 +85,7 @@ def main() -> None:
 
     config = config_base.get_train_config()
 
+    patch_trainer_save_fsdp_model()
     transformers.set_seed(config.seed)
 
     train(config)
@@ -79,7 +100,7 @@ def train(config: config_base.TrainConfig):
     # DDP blows up logging, so this is an attempt to suppress it to only logs from the master process
     logging.basicConfig(level=logging.INFO if is_master else logging.ERROR)
     # os.environ["TORCH_LOGS"] = "ERROR" if is_master else "WARNING"
-    transformers.logging.set_verbosity(logging.INFO)
+    transformers.logging.set_verbosity(logging.WARNING if is_master else logging.ERROR)
     hf_datasets.logging.set_verbosity(logging.WARNING if is_master else logging.ERROR)
 
     if is_distributed:
@@ -124,6 +145,8 @@ def train(config: config_base.TrainConfig):
     if config.model_load_dir:
         logging.info(f"Loading model state dict from {config.model_load_dir}")
         load_path = file_utils.download_dir_if_needed(config.model_load_dir)
+        if os.path.isdir(load_path):
+            load_path = os.path.join(load_path, "model*.safetensors")
         paths = glob.glob(load_path)
         assert len(paths) > 0, f"No model files found at {load_path}"
         for path in paths:
@@ -197,7 +220,7 @@ def train(config: config_base.TrainConfig):
         train_dataset=train_dataset,
         eval_dataset=val_datasets,
         data_collator=model_pack.data_collator,
-        tokenizer=getattr(model_pack, "text_tokenizer", None),
+        processing_class=model_pack.processor,
         args=transformers.Seq2SeqTrainingArguments(
             dataloader_num_workers=config.num_workers if is_master else 0,
             output_dir=config.output_dir,
@@ -236,8 +259,6 @@ def train(config: config_base.TrainConfig):
             fsdp_config={
                 "backward_prefetch": "backward_pre",
                 "auto_wrap_policy": "TRANSFORMER_BASED_WRAP",
-                "state_dict_type": "SHARDED_STATE_DICT",
-                "sync_module_states": "true",
             },
         ),
     )
@@ -269,7 +290,7 @@ def train(config: config_base.TrainConfig):
         logging.info(f"train end time: {t_end}")
         logging.info(f"elapsed: {t_end - t_start}")
 
-    save_final_model(trainer, model_pack, config)
+    # save_final_model(trainer, model_pack, config)
 
     # use fixie-ai/evals for evaluation if in use_fsdp mode
     if config.do_eval:
@@ -333,22 +354,9 @@ def save_final_model(
     config: config_base.TrainConfig,
 ):
     if config.use_fsdp:
-        # For training checkpoints, we want to use SHARDED_STATE_DICT which should be faster,
-        # but for the final save we want FULL_STATE_DICT so it can be serialized properly.
+        # For training checkpoints, even if we decide to use SHARDED_STATE_DICT (which is faster),
+        # we still want the final save to be with FULL_STATE_DICT so it can be serialized properly.
         trainer.accelerator.state.fsdp_plugin.set_state_dict_type("FULL_STATE_DICT")
-
-    # We use both pipeline.save_pretrained and trainer.save_model to save everything.
-    # This is because pipeline.save_pretrained knows how to save the pipeline (code and config),
-    # but it doesn't know how to save FSDP models correctly (the final tensors could be flattened).
-    # on the other hand, trainer.save_model knows how to save FSDP models correctly, but it won't save the pipeline.
-    # Saving FSDP models is already quite slow though, so we don't want to save the model twice.
-    pipeline = model_pack.get_pipeline()
-    model = model_pack.model
-    old_save_pretrained = model.save_pretrained
-    model.save_pretrained = lambda *_, **__: None  # type: ignore[method-assign]
-    # saves the pipeline code and populates the config
-    pipeline.save_pretrained(config.output_dir)
-    model.save_pretrained = old_save_pretrained  # type: ignore[method-assign]
 
     # saves the model weights correctly (FSDP or otherwise)
     trainer.save_model(config.output_dir)

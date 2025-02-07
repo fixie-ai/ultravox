@@ -205,12 +205,6 @@ class TrainConfig:
             )
             self.disable_layerdrop = True
 
-        if self.use_fsdp and self.save_steps:
-            logging.warning(
-                "FSDP is enabled: Saving checkpoints is going to be extremely slow and results in a full save."
-                " Consider setting save_steps=0."
-            )
-
         if self.use_fsdp and self.do_eval:
             logging.warning(
                 "FSDP is enabled: Evaluation is not supported with FSDP. Disabling evaluation."
