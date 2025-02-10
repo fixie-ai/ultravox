@@ -1,4 +1,5 @@
 import dataclasses
+import logging
 from typing import Dict, List, Optional
 
 from ultravox.data import datasets
@@ -41,8 +42,8 @@ def _merge_configs(configs: List[types.DatasetConfig]) -> types.DatasetConfig:
 
 
 def create_dataset(
-    name: str, args: types.VoiceDatasetArgs
-) -> datasets.SizedIterableDataset:
+    name: str, args: types.VoiceDatasetArgs, verbose: bool = False
+) -> datasets.GenericDataset:
     if name == "dummy":
         return datasets.LibriSpeechDummyDataset(args)
     assert name in DATASET_MAP, f"Unknown dataset: {name}"
@@ -60,7 +61,10 @@ def create_dataset(
         raise ValueError(f"Dataset {name} has no path")
     if not merged_config.splits:
         raise ValueError(f"Dataset {name} has no splits")
-    return datasets.GenericDataset(args, merged_config)
+    if verbose:
+        logging.info(f"Creating dataset {name} with config:\n{merged_config}")
+    dataset = datasets.GenericDataset(args, merged_config)
+    return dataset
 
 
 register_datasets(boolq.configs)

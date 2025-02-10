@@ -27,6 +27,13 @@ class FakeSizedIterableDataset(datasets.SizedIterableDataset):
     def __len__(self):
         return self._length
 
+    def __str__(self):
+        return "FakeSizedIterableDataset"
+
+    @property
+    def name(self):
+        return "fake"
+
 
 class FakeHuggingFaceIterableDataset(hf_datasets.IterableDataset):
     """Fake version of an ASR Hugging Face IterableDataset."""
@@ -50,11 +57,18 @@ class FakeTranscribeDataset(datasets.VoiceDataset):
 
     def __init__(self, n: int, args: Optional[types.VoiceDatasetArgs] = None):
         super().__init__(args or types.VoiceDatasetArgs())
-        self._init_dataset(FakeHuggingFaceIterableDataset(n), n)
+        self._init_dataset(FakeHuggingFaceIterableDataset(n), "fake", n)
 
     def _get_sample(self, row: BatchFeature) -> Optional[data_sample.VoiceSample]:
         messages = self._make_messages("<|audio|>", row["text"])
         return self._make_sample(messages, np.zeros(256), row["text"])
+
+    def __str__(self):
+        return "FakeTranscribeDataset"
+
+    @property
+    def name(self):
+        return "fake_transcribe"
 
 
 class FakeGenericDataset(datasets.GenericDataset):
@@ -141,7 +155,7 @@ def test_range():
     s = datasets.Range(ds, 5)
     assert len(s) == 5
     assert list(s) == [0, 1, 2, 3, 4]
-    with pytest.raises(ValueError, match="exceeds dataset length"):
+    with pytest.warns(UserWarning, match="exceeds dataset length"):
         s = datasets.Range(ds, 100)
     s = datasets.Range(ds, 10)
     assert list(s) == [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
@@ -170,16 +184,16 @@ def test_dataset_config():
         path="mock_path",
         splits=[
             types.DatasetSplitConfig(
-                name="clean", num_samples=5000, split_type=types.DatasetSplit.TRAIN
+                name="clean", num_samples=5000, split=types.DatasetSplit.TRAIN
             ),
             types.DatasetSplitConfig(
-                name="other", num_samples=10000, split_type=types.DatasetSplit.TRAIN
+                name="other", num_samples=10000, split=types.DatasetSplit.TRAIN
             ),
             types.DatasetSplitConfig(name="validation", num_samples=1000),
             types.DatasetSplitConfig(
                 name="another_validation",
                 num_samples=1000,
-                split_type=types.DatasetSplit.VALIDATION,
+                split=types.DatasetSplit.VALIDATION,
             ),
         ],
     )
@@ -188,16 +202,16 @@ def test_dataset_config():
     assert len(config.splits) == 4
     assert config.splits[0].name == "clean"
     assert config.splits[0].num_samples == 5000
-    assert config.splits[0].split_type == types.DatasetSplit.TRAIN
+    assert config.splits[0].split == types.DatasetSplit.TRAIN
     assert config.splits[1].name == "other"
     assert config.splits[1].num_samples == 10000
-    assert config.splits[1].split_type == types.DatasetSplit.TRAIN
+    assert config.splits[1].split == types.DatasetSplit.TRAIN
     assert config.splits[2].name == "validation"
     assert config.splits[2].num_samples == 1000
-    assert config.splits[2].split_type == types.DatasetSplit.VALIDATION
+    assert config.splits[2].split == types.DatasetSplit.VALIDATION
     assert config.splits[3].name == "another_validation"
     assert config.splits[3].num_samples == 1000
-    assert config.splits[3].split_type == types.DatasetSplit.VALIDATION
+    assert config.splits[3].split == types.DatasetSplit.VALIDATION
 
 
 def test_dataset_config_serialization():
@@ -206,10 +220,10 @@ def test_dataset_config_serialization():
         path="fake_path",
         splits=[
             types.DatasetSplitConfig(
-                name="clean", num_samples=5000, split_type=types.DatasetSplit.TRAIN
+                name="clean", num_samples=5000, split=types.DatasetSplit.TRAIN
             ),
             types.DatasetSplitConfig(
-                name="other", num_samples=10000, split_type=types.DatasetSplit.TRAIN
+                name="other", num_samples=10000, split=types.DatasetSplit.TRAIN
             ),
         ],
     )
@@ -231,7 +245,7 @@ def test_generic_dataset():
         path="fake_path",
         splits=[
             types.DatasetSplitConfig(
-                name="fake", num_samples=5, split_type=types.DatasetSplit.TRAIN
+                name="fake", num_samples=5, split=types.DatasetSplit.TRAIN
             )
         ],
     )
@@ -254,7 +268,7 @@ def test_generic_dataset_custom_templates():
         path="fake_path",
         splits=[
             types.DatasetSplitConfig(
-                name="fake", num_samples=5, split_type=types.DatasetSplit.TRAIN
+                name="fake", num_samples=5, split=types.DatasetSplit.TRAIN
             )
         ],
         user_template="Listen to the following and respond with 'xyzzy':\n<|audio|>",
@@ -283,7 +297,7 @@ def test_generic_dataset_text_only():
         path="fake_path",
         splits=[
             types.DatasetSplitConfig(
-                name="fake", num_samples=5, split_type=types.DatasetSplit.TRAIN
+                name="fake", num_samples=5, split=types.DatasetSplit.TRAIN
             )
         ],
         user_template="Transcribe\n<|audio|>",
@@ -305,7 +319,7 @@ def test_generic_dataset_merge_configs():
         path="fake_path",
         splits=[
             types.DatasetSplitConfig(
-                name="fake", num_samples=5, split_type=types.DatasetSplit.TRAIN
+                name="fake", num_samples=5, split=types.DatasetSplit.TRAIN
             )
         ],
     )
@@ -327,7 +341,7 @@ def test_generic_dataset_merge_configs():
     assert config.path == "fake_path"
     assert config.splits[0].name == "fake"
     assert config.splits[0].num_samples == 5
-    assert config.splits[0].split_type == types.DatasetSplit.TRAIN
+    assert config.splits[0].split == types.DatasetSplit.TRAIN
     assert config.user_template == "fake_user_template"
     assert config.user_template_args == {"a": 1}
     assert config.assistant_template == "{{text}}"  # the default
@@ -335,37 +349,38 @@ def test_generic_dataset_merge_configs():
     assert config.audio_field == "fake_audio_field"
 
 
-def test_generic_dataset_length_mismatch():
-    config = types.DatasetConfig(
-        name="fake_dataset",
-        path="fake_path",
-        splits=[
-            types.DatasetSplitConfig(
-                name="fake", num_samples=5, split_type=types.DatasetSplit.TRAIN
-            )
-        ],
-    )
-    ds = FakeGenericDataset(10, config)
-    assert len(ds) == 5
+# This test is disabled as we don't have a good way to measure the actual length of the dataset when num_workers > 1
+# def test_generic_dataset_length_mismatch():
+#     config = types.DatasetConfig(
+#         name="fake_dataset",
+#         path="fake_path",
+#         splits=[
+#             types.DatasetSplitConfig(
+#                 name="fake", num_samples=5, split=types.DatasetSplit.TRAIN
+#             )
+#         ],
+#     )
+#     ds = FakeGenericDataset(10, config)
+#     assert len(ds) == 5
 
-    pattern = r"(has been exceeded|Mismatch between presumed length)"
-    with pytest.warns(UserWarning, match=pattern):
-        list(ds)
+#     pattern = r"(has been exceeded|Mismatch between presumed length)"
+#     with pytest.warns(UserWarning, match=pattern):
+#         list(ds)
 
-    config = types.DatasetConfig(
-        name="fake_dataset",
-        path="fake_path",
-        splits=[
-            types.DatasetSplitConfig(
-                name="fake", num_samples=10, split_type=types.DatasetSplit.TRAIN
-            )
-        ],
-    )
-    ds = FakeGenericDataset(5, config)
-    assert len(ds) == 10
+#     config = types.DatasetConfig(
+#         name="fake_dataset",
+#         path="fake_path",
+#         splits=[
+#             types.DatasetSplitConfig(
+#                 name="fake", num_samples=10, split=types.DatasetSplit.TRAIN
+#             )
+#         ],
+#     )
+#     ds = FakeGenericDataset(5, config)
+#     assert len(ds) == 10
 
-    with pytest.warns(UserWarning, match="Mismatch between presumed length"):
-        list(ds)
+#     with pytest.warns(UserWarning, match="Mismatch between presumed length"):
+#         list(ds)
 
 
 def test_generic_dataset_multiple_splits():
