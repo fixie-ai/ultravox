@@ -28,6 +28,7 @@ from ultravox.model import wandb_utils
 from ultravox.training import config_base
 from ultravox.training import ddp_utils
 from ultravox.training.helpers import prefetch_weights
+from ultravox.utils import monkey_patches
 
 
 def prepare_dataset(
@@ -61,6 +62,8 @@ def prepare_dataset(
 
 
 def main() -> None:
+    monkey_patches.apply_all_patches()
+
     # Disable parallelism to avoid deadlocks in DataLoader, apparently
     # multiple processes are forked when using multiple datasets.
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
