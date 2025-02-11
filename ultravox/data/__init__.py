@@ -12,6 +12,7 @@ __all__ = [
     "VoiceDataset",
     "VoiceDatasetArgs",
     "VoiceSample",
+    "DatasetOptions",
     "create_dataset",
     "register_datasets",
 ]
