@@ -1,0 +1,31 @@
+text_model: "hf-internal-testing/tiny-random-LlamaForCausalLM"
+audio_model: "hf-internal-testing/tiny-random-WhisperForCausalLM"
+
+loss_config:
+  loss_function: "KL_Divergence"
+
+train_sets:
+  - name: dummy
+
+val_sets:
+  - name: dummy
+
+do_eval: false
+
+num_workers: 0
+
+save_steps: 0
+max_steps: 2
+batch_size: 2
+
+val_steps: 0
+# The following adds only 2 loc to the covered set, so not worth it
+# val_steps: 2
+# val_dataset_args:
+#   max_samples: 2
+#   max_audio_duration_secs: 4
+
+train_dataset_args:
+  max_audio_duration_secs: 4
+
+report_logs_to: []

@@ -1,10 +1,57 @@
-from typing import Optional, Union
+import dataclasses
+from typing import Any, Dict, Optional, Union
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 import transformers
 
 from .ultravox_config import UltravoxConfig
+
+
+@dataclasses.dataclass
+class DataCollatorForSeq2SeqWithAudio(transformers.DataCollatorForSeq2Seq):
+    # when enabled, the alt_input_ids, alt_attention_mask, and alt_labels fields are used for computing the KL loss in UltravoxModel
+    include_alt_fields: bool = False
+
+    def __call__(self, features, *args, **kwargs):
+        audio_values = [f.pop("audio_values", None) for f in features]
+        audio_lens = [f.pop("audio_lens", None) for f in features]
+        if self.include_alt_fields:
+            # these fields are hard-coded in the transformer data collator, so they need special handling before calling the super method
+            alt_features = [
+                {
+                    "input_ids": f.pop("alt_input_ids"),
+                    "attention_mask": f.pop("alt_attention_mask"),
+                    "labels": f.pop("alt_labels"),
+                }
+                for f in features
+            ]
+
+        batch = super().__call__(features, *args, **kwargs)
+        if self.include_alt_fields:
+            alt_batch = super().__call__(alt_features, *args, **kwargs)
+            batch["alt_input_ids"] = alt_batch["input_ids"]
+            batch["alt_attention_mask"] = alt_batch["attention_mask"]
+            batch["alt_labels"] = alt_batch["labels"]
+
+        # Pad the last dimension of all audio_values to the same length, with 0s on the right.
+        if audio_values and audio_values[0] is not None:
+            max_len = max([x.shape[-1] for x in audio_values])
+            batch["audio_values"] = torch.cat(
+                [F.pad(x, (0, max_len - x.shape[-1])) for x in audio_values]
+            )
+            if self.tokenizer.padding_side == "left":
+                input_ids_lens = torch.LongTensor(
+                    [f["input_ids"].shape[-1] for f in features]
+                )
+                displacement = batch["input_ids"].shape[-1] - input_ids_lens
+                batch["audio_token_start_idx"] += displacement.to(
+                    batch["audio_token_start_idx"].device
+                )
+        # batch["audio_lens"].shape = (B,)
+        batch["audio_lens"] = torch.cat(audio_lens)
+        return batch
 
 
 class UltravoxProcessor(transformers.ProcessorMixin):
@@ -38,6 +85,8 @@ class UltravoxProcessor(transformers.ProcessorMixin):
         encoder_ds_factor: int = 320,
         stack_factor: int = 8,
         audio_placeholder: str = "<|audio|>",
+        # Defaults to whisper encoder context size
+        audio_context_size: Optional[int] = 3000,
     ):
         """
         Args:
@@ -47,12 +96,14 @@ class UltravoxProcessor(transformers.ProcessorMixin):
             encoder_ds_factor: The downsample factor of the audio encoder.
             stack_factor: The factor by which the audio encoder output is stacked in the multimodal projector.
             audio_placeholder: The placeholder for the audio in the text.
+            audio_context_size: The maximum number of frames that the audio encoder can handle.
         """
         self.audio_padding = audio_padding
         self.encoder_ds_factor = encoder_ds_factor
         self.stack_factor = stack_factor
         self.audio_placeholder = audio_placeholder
         self.audio_token_replacement = tokenizer.eos_token
+        self.audio_context_size = audio_context_size
         assert (
             self.audio_token_replacement is not None
         ), "The tokenizer has no EOS token. Cannot recover."
@@ -83,6 +134,41 @@ class UltravoxProcessor(transformers.ProcessorMixin):
             tokenizer=tokenizer,
             stack_factor=config.stack_factor,
         )
+
+    def _chunk_and_pad_audio(self, audio_values: torch.Tensor) -> Dict[str, Any]:
+        """
+        Processes the audio tensor by chunking it according to the audio_context_size,
+        padding the last chunk if needed, and returns a dictionary with updated audio data.
+
+        Args:
+            audio_values (torch.Tensor): A tensor of audio values (e.g., in B, D, T format).
+
+        Returns:
+            Dict[str, Any]: Dictionary with the following keys:
+                - "audio_values": The concatenated audio tensor after chunking and padding.
+                - "audio_lens": List of lengths (as torch.Tensor) for each chunk.
+                - "audio_batch_size": A list with one integer representing the number of chunks.
+        """
+        result: Dict[str, Any] = {}
+        if self.audio_context_size and audio_values.shape[-1] > self.audio_context_size:
+            audio_chunks = list(
+                torch.split(audio_values, self.audio_context_size, dim=-1)
+            )
+            valid_lengths = [chunk.shape[-1] for chunk in audio_chunks]
+            result = {
+                "audio_lens": [torch.as_tensor(length) for length in valid_lengths]
+            }
+            # Pad the last chunk to the full context length if needed.
+            last_chunk = audio_chunks[-1]
+            pad_size = self.audio_context_size - last_chunk.shape[-1]
+            if pad_size > 0:
+                audio_chunks[-1] = F.pad(last_chunk, (0, pad_size))
+        else:
+            audio_chunks = [audio_values]
+            result = {"audio_lens": [torch.as_tensor(audio_values.shape[-1])]}
+        result["audio_values"] = torch.cat(audio_chunks)
+        result["audio_batch_size"] = [result["audio_values"].shape[0]]
+        return result
 
     def __call__(
         self,
@@ -132,15 +218,10 @@ class UltravoxProcessor(transformers.ProcessorMixin):
             - **audio_token_start_idx** -- The index in the tokenized text where the audio starts. Returned when `audio` is not `None`.
         """
         # TODO: Add support for multiple audio and text inputs.
-        data = {}
+        data: Dict[str, Any] = {}
         audio_embed_frames = 0
         if audio is not None and len(audio) > 0:
-            if self.audio_padding == "max_length":
-                # 30 seconds is the expected length for Whisper
-                assert sampling_rate is not None, "Sampling rate must be provided."
-                audio_len = 30 * sampling_rate
-            else:
-                audio_len = audio.shape[-1]
+            audio_len = audio.shape[-1]
             # It's guaranteed that the number of frames is less than or equal to this amount.
             # For Whisper this is exact AFAICT, but for Wav2Vec2 it's an upper bound.
             # Currently, StackAudioFrames makes sure an over-estimation won't cause issues by padding the audio embeddings.
@@ -153,14 +234,25 @@ class UltravoxProcessor(transformers.ProcessorMixin):
                 audio,
                 sampling_rate=sampling_rate,
                 padding="longest",
+<<<<<<< HEAD
                 max_length=audio_len,
+=======
+                max_length=audio_len,  # The whisper audio_processor can handle audio lengths longer than 30 seconds
+>>>>>>> upstream/main
                 return_attention_mask=True,
                 **kwargs,
             )
+
             if "input_features" in x:
-                data["audio_values"] = x.input_features
+                audio_values = x.input_features
             else:
-                data["audio_values"] = x.input_values
+                audio_values = x.input_values
+
+            audio_values = torch.tensor(audio_values)
+            chunk_and_pad_results = self._chunk_and_pad_audio(audio_values)
+            data["audio_values"] = chunk_and_pad_results["audio_values"]
+            data["audio_lens"] = chunk_and_pad_results["audio_lens"]
+            data["audio_batch_size"] = chunk_and_pad_results["audio_batch_size"]
 
             # data["audio_len"] is the number of frames in the audio, used for creating attention masks in whisper encoder
             if (
@@ -191,7 +283,7 @@ class UltravoxProcessor(transformers.ProcessorMixin):
                 data["audio_token_start_idx"] = [start_idx]
 
                 # Replace the audio placeholder with the audio token.
-                #   e.g. "Transcribe\n<|audio|>" -> "Transcribe </s></s></s></s></s></s></s></s>"
+                #   e.g. "Transcribe\n<|audio|>" -> "Transcribe\n</s></s></s></s></s></s></s></s>"
                 #        where the number of </s> is the number of audio frames.
                 text = text.replace(
                     self.audio_placeholder,

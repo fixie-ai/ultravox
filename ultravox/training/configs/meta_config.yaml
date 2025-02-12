@@ -1,35 +1,41 @@
-text_model: "meta-llama/Meta-Llama-3-8B-Instruct"
-audio_model: "facebook/wav2vec2-base-960h"
+model_type: "ultravox"
+text_model: "meta-llama/Llama-3-8B-Instruct"
+audio_model: "openai/whisper-medium"
 
-train_sets:
-  - name: gigaspeech
 val_sets:
-  - name: gigaspeech
-  - weight: 0.01
+  - name: covost2-en-de
+  - name: covost2-zh-en
+  - name: peoplespeech-clean-transcription
 
-train_on_inputs: False
-shuffle_data: True
-max_audio_duration_secs: 16
+eval_sets:
+  - name: covost2-en-de
+  - name: covost2-en-zh
+  - name: covost2-es-en
+  - name: covost2-zh-en
+  - name: librispeech-clean-transcription
+  - name: librispeech-other-transcription
+  - name: commonvoice-en-transcription
+  - name: commonvoice-es-transcription
+  - name: commonvoice-ru-transcription
+  
+eval_dataset_args:
+  max_samples: 2000
 
-val_num_samples: 64
-val_steps: 1000
-eval_num_samples: 2000
-eval_max_new_tokens: 32
-eval_num_procs: 16
-
-optimizer: "adamw_torch" # options: adamw_torch, adamw_bnb_8bit
-lr_scheduler: "cosine" # options: linear, cosine, cosine_with_restarts, etc.
+optimizer: "adamw_torch" 
 lr: 2.e-3
-grad_accum_steps: 1
+lr_scheduler: "cosine_with_min_lr"
+lr_scheduler_kwargs: {"min_lr_rate": 0.1}
 lr_warmup_steps: 1000
+
+batch_size: 4
+grad_accum_steps: 1
 max_steps: 10_000
 
+val_steps: 0.05
 save_steps: 0.25
 logging_steps: 100
 
-batch_size: 4
 data_type: "bfloat16"
-
 report_logs_to: ["tensorboard", "wandb"]
 
-audio_latency_block_size: null # null for non-causal, 100 for 1s, 200 for 2s, and so on.
+eval_batch_size: 60

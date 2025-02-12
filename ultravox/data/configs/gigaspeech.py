@@ -15,6 +15,7 @@ GS_XL_TRANS_CONFIG = types.DatasetConfig(
     name="gigaspeech-xl-transcription",
     base="gigaspeech-xl",
     user_template=types.TRANSCRIPTION_USER_TEMPLATE,
+    eval_config=types.EvalConfig(metric="wer", args={"lang_id": "en"}),
 )
 
 GS_XL_CONT_CONFIG = types.DatasetConfig(

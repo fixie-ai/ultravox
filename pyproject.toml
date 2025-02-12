@@ -10,8 +10,8 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = ">=3.10,<4.0"
 torch = ">=2.4"
-transformers = {version = ">=4.43.1", extras = ["torch"]}
-bitsandbytes = "~0.42.0"
+transformers = {version = ">=4.43.1,<4.48.0 || >4.48.0", extras = ["torch"]}
+huggingface-hub = ">=0.27.0"
 peft = "~0.11.1"
 simple-parsing = "~0.1.5"
 librosa = "~0.10.2.post1"
@@ -23,14 +23,25 @@ truecase = "~0.0.14"
 sentencepiece = "~0.2.0"
 protobuf = "~4.25.3"
 dataclasses-json = "~0.6.7"
-openai = "~1.33.0"
+openai = ">=1.60.0"
 jiwer = "~3.0.4"
 tensorboardx = "~2.6.2.2"
 wandb = "~0.17.1"
-sacrebleu = "^2.4.2"
+sacrebleu = {version = "^2.4.2"}
+mecab-ko = "*"       # Required for Korean tokenization in sacrebleu
+mecab-python3 = "*"  # Required for Japanese tokenization in sacrebleu
+ipadic = "*"         # IPA dictionary for MeCab
 tenacity = "^9.0.0"
-evals = {git = "https://github.com/fixie-ai/evals", rev = "0c66bf85df7a4b903ecb202b23c2a826b749fd71"}
+evals = {git = "https://github.com/fixie-ai/evals", rev = "2734b4318030cd15b8940b0761fff47fb0c1ad53"}
+torchaudio = "^2.4.1"
+scipy = "^1.14.1"
+einops = "^0.8.0"
 praatio = "^6.2.0"
+hf-transfer = "^0.1.8"
+annoy = "^1.17.3"
+coverage = "^7.6.10"
+whisper_normalizer = "^0.0.10"
+evaluate = "^0.4.3"
 
 [tool.poetry.group.dev.dependencies]
 black = "~24.4.2"
@@ -72,3 +83,11 @@ extend-exclude = '''
   | venv
 )/
 '''
+
+[tool.coverage.run]
+relative_files = true
+source = ["ultravox"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
