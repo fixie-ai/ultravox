@@ -178,7 +178,7 @@ class VoiceDataset(SizedIterableDataset):
                     bad_samples += 1
                     continue  # Skip this sample
                 if (
-                    self._args.max_audio_duration_secs is not None
+                    self._args.max_audio_duration_secs > 0
                     and sample.audio.shape[-1] / data_sample.SAMPLE_RATE
                     > self._args.max_audio_duration_secs
                 ):

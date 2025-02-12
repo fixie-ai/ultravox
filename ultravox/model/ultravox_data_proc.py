@@ -67,7 +67,6 @@ class UltravoxDataproc(datasets.Dataproc):
         if "audio_values" in inputs:
             inputs["audio_token_start_idx"].squeeze_(0)
             inputs["audio_token_len"].squeeze_(0)
-            inputs["audio_len"].squeeze_(0)
 
         # No need to shift the labels as the model does it internally
         labels = input_ids.clone()
