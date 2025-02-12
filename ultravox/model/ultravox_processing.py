@@ -234,11 +234,7 @@ class UltravoxProcessor(transformers.ProcessorMixin):
                 audio,
                 sampling_rate=sampling_rate,
                 padding="longest",
-<<<<<<< HEAD
-                max_length=audio_len,
-=======
                 max_length=audio_len,  # The whisper audio_processor can handle audio lengths longer than 30 seconds
->>>>>>> upstream/main
                 return_attention_mask=True,
                 **kwargs,
             )

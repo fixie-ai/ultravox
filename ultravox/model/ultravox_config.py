@@ -32,7 +32,7 @@ class LossFunction(str, Enum):
 class LossConfig:
     loss_function: LossFunction = LossFunction.CrossEntropy
     kl_temperature: float = 2.0
-    
+
     @property
     def requires_alt_fields(self):
         return self.loss_function == LossFunction.KL_Divergence

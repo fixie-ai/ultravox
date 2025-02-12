@@ -18,25 +18,13 @@ import wandb
 import wandb.sdk
 
 from ultravox import data as datasets
-<<<<<<< HEAD
-from ultravox.model import data_processing
-from ultravox.model import ultravox_config
-from ultravox.model import ultravox_model
-from ultravox.model import ultravox_pipeline
-from ultravox.model import ultravox_processing
-from ultravox.model import wandb_utils
-=======
 from ultravox.evaluation import eval
 from ultravox.inference import infer
 from ultravox.model import file_utils
->>>>>>> upstream/main
 from ultravox.training import config_base
 from ultravox.training import ddp_utils
 from ultravox.training import model_types
 from ultravox.training.helpers import prefetch_weights
-<<<<<<< HEAD
-from ultravox.utils import monkey_patches
-=======
 from ultravox.utils import device_helpers
 from ultravox.utils import monkey_patches
 
@@ -59,23 +47,10 @@ def patch_trainer_save_fsdp_model():
 
     original_save_fsdp_model = transformers.trainer.save_fsdp_model
     transformers.trainer.save_fsdp_model = save_fsdp_model_if_not_full_state_dict
->>>>>>> upstream/main
 
 
 def prepare_dataset(
     train_args: config_base.TrainConfig,
-<<<<<<< HEAD
-    data_opts: List[config_base.DatasetOptions],
-    data_args: datasets.VoiceDatasetArgs,
-    processor: ultravox_processing.UltravoxProcessor,
-    train_on_inputs: bool,
-    num_samples: Optional[int] = None,
-    include_alt_fields: bool = False,  # whether to generate tensors for text-only input (e.g., used for KD training)
-) -> datasets.SizedIterableDataset:
-    data_names = [ds.name for ds in data_opts]
-    data_weights = [ds.weight for ds in data_opts]
-    data_sets = [datasets.create_dataset(ds, data_args) for ds in data_names]
-=======
     model_pack: model_types.ModelPack,
     data_opts: List[datasets.DatasetOptions],
     data_args: datasets.VoiceDatasetArgs,
@@ -86,7 +61,6 @@ def prepare_dataset(
     data_sets = [
         datasets.create_dataset(ds, data_args, verbose=verbose) for ds in data_names
     ]
->>>>>>> upstream/main
     # If we're using epochs to train, validate the dataset length is appropriate.
     if train_args.max_steps == 0:
         for ds in data_sets:
@@ -95,22 +69,11 @@ def prepare_dataset(
             ), f"Dataset {ds} has length {len(ds)} which is too short for epoch training"
 
     interleave = datasets.InterleaveDataset(data_sets, data_weights)
-<<<<<<< HEAD
-    ds_with_proc = data_processing.UltravoxDataproc(
-        interleave,
-        processor=processor,
-        train_on_inputs=train_on_inputs,
-        include_alt_fields=include_alt_fields,
-    )
-    limited_ds = datasets.Range(ds_with_proc, num_samples=num_samples)
-    return limited_ds
-=======
     ds_with_proc = model_pack.wrap_with_data_proc(interleave)
     if data_args.max_samples:
         return datasets.Range(ds_with_proc, data_args.max_samples)
     else:
         return ds_with_proc
->>>>>>> upstream/main
 
 
 def main() -> None:
@@ -154,31 +117,7 @@ def train(config: config_base.TrainConfig):
             [config.text_model, config.audio_model], config.model_load_dir
         )
 
-<<<<<<< HEAD
-    logging.info("Instantiating processor...")
-    text_tokenizer: transformers.PreTrainedTokenizerFast = (
-        transformers.AutoTokenizer.from_pretrained(args.text_model)
-    )
-    text_tokenizer.padding_side = "right"
-    text_tokenizer.pad_token = text_tokenizer.eos_token
-    audio_processor = transformers.AutoProcessor.from_pretrained(args.audio_model)
-    processor = ultravox_processing.UltravoxProcessor(audio_processor, text_tokenizer)
-
-    # Instantiate the model and processor
-    config = ultravox_config.UltravoxConfig(
-        audio_model_id=args.audio_model,
-        text_model_id=args.text_model,
-        text_model_lora_config=args.text_model_lora_config,
-        audio_model_lora_config=args.audio_model_lora_config,
-        torch_dtype=args.data_type,
-        pad_token_id=text_tokenizer.eos_token_id,
-        audio_latency_block_size=args.audio_latency_block_size,
-    )
-
-    logging.info("Instantiating model...")
-=======
     logging.info("Instantiating model and processor...")
->>>>>>> upstream/main
 
     model_load_context = (
         accelerate.init_empty_weights()
@@ -242,50 +181,13 @@ def train(config: config_base.TrainConfig):
         logging.info(f"Using device (world_size): {model.device} ({world_size})")
 
     # Register custom datasets
-<<<<<<< HEAD
-    datasets.register_datasets(args.get_data_sets())
-=======
     datasets.register_datasets(config.get_data_sets())
->>>>>>> upstream/main
 
     # Prepare dataset, subsetting if needed
     train_dataset: datasets.SizedIterableDataset
     val_datasets: Dict[str, datasets.SizedIterableDataset] = {}
 
     train_dataset = prepare_dataset(
-<<<<<<< HEAD
-        train_args=args,
-        data_opts=args.get_train_sets(),
-        train_on_inputs=args.train_on_inputs,
-        processor=processor,
-        num_samples=args.num_samples,
-        data_args=datasets.VoiceDatasetArgs(
-            shuffle=args.shuffle_data,
-            shuffle_seed=args.shuffle_seed,
-            max_audio_duration_secs=args.max_audio_duration_secs,
-        ),
-        include_alt_fields=model.loss_config.requires_alt_fields,
-    )
-    if is_master:
-        val_ds_args = datasets.VoiceDatasetArgs(
-            split=datasets.DatasetSplit.VALIDATION,
-            shuffle=False,
-            max_audio_duration_secs=16,
-        )
-        for val_opt in args.get_val_sets():
-            val_dataset = prepare_dataset(
-                train_args=args,
-                data_opts=[val_opt],
-                train_on_inputs=args.train_on_inputs,
-                processor=processor,
-                num_samples=args.val_num_samples,
-                data_args=val_ds_args,
-                include_alt_fields=model.loss_config.requires_alt_fields,
-            )
-            val_datasets[val_opt.name] = val_dataset
-        logging.info(
-            f"Loaded {len(args.train_sets)}) data sets, sample limit: {args.num_samples} (val sample limit: {args.val_num_samples})"
-=======
         train_args=config,
         model_pack=model_pack,
         data_opts=config.get_train_sets(),
@@ -304,22 +206,16 @@ def train(config: config_base.TrainConfig):
             val_datasets[val_opt.name] = val_dataset
         logging.info(
             f"Loaded {len(config.train_sets)}) data sets, sample limit: {config.train_dataset_args.max_samples} (val sample limit: {config.val_dataset_args.max_samples})"
->>>>>>> upstream/main
         )
     else:
         # When using DDP with split_batches=True, the primary process will distribute the batches to the workers
         # The point of this is to avoid unnecessary data processing/downloading in the workers.
         # When using epochs to train, emptydataset must have a length equal to the training set
         train_dataset = datasets.EmptyDataset(len(train_dataset))
-<<<<<<< HEAD
-        for val_opts in args.get_val_sets():
-            val_datasets[val_opts.name] = datasets.EmptyDataset()
-=======
         for val_opts in config.get_val_sets():
             val_datasets[val_opts.name] = datasets.EmptyDataset(
                 config.val_dataset_args.max_samples or 1
             )
->>>>>>> upstream/main
 
     logging.info(f"Config Params: {config}")
     trainer = transformers.Seq2SeqTrainer(

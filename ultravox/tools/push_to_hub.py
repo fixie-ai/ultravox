@@ -48,18 +48,6 @@ def main(args: UploadToHubArgs):
     print("Uploading model to HuggingFace Hub...")
     pipe.push_to_hub(args.hf_upload_model, private=args.private)
 
-<<<<<<< HEAD
-    print("Model uploaded. Testing model...")
-    loaded_pipe = transformers.pipeline(
-        model=args.hf_upload_model, trust_remote_code=True
-    )
-    ds = datasets.create_dataset("boolq", datasets.VoiceDatasetArgs())
-    sample = next(iter(ds))
-    generated = loaded_pipe(
-        {"audio": sample.audio, "turns": sample.messages[:-1]}, max_new_tokens=10
-    )
-    print(f"Generated (max 10 tokens): {generated}")
-=======
     if args.verify:
         print("Model uploaded. Testing model...")
         loaded_pipe = transformers.pipeline(
@@ -71,7 +59,6 @@ def main(args: UploadToHubArgs):
             {"audio": sample.audio, "turns": sample.messages[:-1]}, max_new_tokens=10
         )
         print(f"Generated (max 10 tokens): {generated}")
->>>>>>> upstream/main
 
 
 if __name__ == "__main__":
