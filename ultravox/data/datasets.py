@@ -492,30 +492,3 @@ class Range(SizedIterableDataset):
             return self._dataset.get_config()
         else:
             raise ValueError("Cannot get config for non-GenericDataset")
-
-
-def patch_audio_decoder():
-    """
-    Monkey-patch the datasets.Audio.decode_example method to handle errors gracefully.
-    When decoding fails, returns a dict with None for array and original path.
-    """
-    # Store the original decode_example method
-    original_decode_example = hf_datasets.Audio.decode_example
-
-    def safe_decode_example(self, value, token_per_repo_id=None):
-        try:
-            # Try to decode using the original method
-            return original_decode_example(self, value, token_per_repo_id)
-        except Exception as e:
-            logging.warn(f"Error decoding audio at path {value.get('path')}: {e}")
-            return {
-                "array": None,
-                "path": value.get("path", None),
-                "sampling_rate": self.sampling_rate or 16000,
-            }
-
-    # Replace the original decode_example with our safe version
-    hf_datasets.Audio.decode_example = safe_decode_example
-
-
-patch_audio_decoder()

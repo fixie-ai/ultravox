@@ -19,6 +19,7 @@ from ultravox.inference import infer
 from ultravox.inference import ultravox_infer
 from ultravox.training import ddp_utils
 from ultravox.utils import device_helpers
+from ultravox.utils import monkey_patches
 
 logging.basicConfig(level=logging.INFO)
 
@@ -210,6 +211,8 @@ def print_results(metrics: List[Tuple[str, float]], output_files: List[str]):
 
 
 def main(override_sys_args: Optional[List[str]] = None):
+    monkey_patches.apply_all_patches()
+
     config = simple_parsing.parse(
         EvalConfig, add_config_path_arg=True, args=override_sys_args
     )
