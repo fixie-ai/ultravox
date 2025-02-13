@@ -127,5 +127,8 @@ def apply_all_patches():
     # Patch audio decoder
     patch_audio_decoder()
 
+    # Patch datasets methods
+    patch_with_retry(datasets.utils.file_utils, "get_from_cache")
+
     IS_PATCHED = True
     logger.info("Successfully applied all patches")
