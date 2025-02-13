@@ -4,6 +4,8 @@ from typing import Dict, List, Optional
 
 from ultravox.data import datasets
 from ultravox.data import types
+from ultravox.data.configs import audiobench
+from ultravox.data.configs import bigbenchaudio
 from ultravox.data.configs import boolq
 from ultravox.data.configs import commonvoice
 from ultravox.data.configs import covost2
@@ -67,6 +69,8 @@ def create_dataset(
     return dataset
 
 
+register_datasets(audiobench.configs)
+register_datasets(bigbenchaudio.configs)
 register_datasets(boolq.configs)
 register_datasets(commonvoice.configs)
 register_datasets(covost2.configs)

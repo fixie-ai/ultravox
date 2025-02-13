@@ -2,11 +2,10 @@ import logging
 from functools import wraps
 from typing import Any, Type
 
-import datasets as hf_datasets
-import huggingface_hub as hf_hub
+import datasets
+import huggingface_hub
 import requests
 import tenacity
-from huggingface_hub.utils._typing import HTTP_METHOD_T
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +28,7 @@ def patch_with_retry(cls: Type[Any], method_name: str, max_attempts: int = 10) -
         wait=tenacity.wait_exponential(multiplier=1, min=4, max=10),
         retry=tenacity.retry_if_exception_type(Exception),
         before_sleep=tenacity.before_sleep_log(logger, logging.INFO),
+        reraise=True,
     )
     @wraps(original_method)
     def method_with_retry(self, *args, **kwargs):
@@ -45,7 +45,7 @@ def patch_hf_hub_http_backoff():
     """
     Monkey patch the huggingface_hub http_backoff implementation to include the ChunkedEncodingError exception.
     """
-    original_http_backoff = hf_hub.hf_file_system.http_backoff
+    original_http_backoff = huggingface_hub.hf_file_system.http_backoff
 
     @tenacity.retry(
         stop=tenacity.stop_after_attempt(3),
@@ -54,7 +54,7 @@ def patch_hf_hub_http_backoff():
         before_sleep=tenacity.before_sleep_log(logger, logging.INFO),
     )
     def http_backoff(
-        method: HTTP_METHOD_T,
+        method: huggingface_hub.utils._typing.HTTP_METHOD_T,
         url: str,
         *,
         max_retries: int = 10,
@@ -73,7 +73,7 @@ def patch_hf_hub_http_backoff():
             **kwargs,
         )
 
-    hf_hub.hf_file_system.http_backoff = http_backoff
+    huggingface_hub.hf_file_system.http_backoff = http_backoff
     logger.info(
         "Applied retry patch to huggingface_hub http_backoff with ChunkedEncodingError support"
     )
@@ -85,7 +85,7 @@ def patch_audio_decoder():
     When decoding fails, returns a dict with None for array and original path.
     """
     # Store the original decode_example method
-    original_decode_example = hf_datasets.Audio.decode_example
+    original_decode_example = datasets.Audio.decode_example
 
     def safe_decode_example(self, value, token_per_repo_id=None):
         try:
@@ -100,7 +100,7 @@ def patch_audio_decoder():
             }
 
     # Replace the original decode_example with our safe version
-    hf_datasets.Audio.decode_example = safe_decode_example
+    datasets.Audio.decode_example = safe_decode_example
     logger.info(
         "Applied patch to datasets.Audio.decode_example for graceful error handling"
     )
@@ -112,20 +112,26 @@ def apply_all_patches():
     """
     global IS_PATCHED
     if IS_PATCHED:
+        logger.info("Patches already applied, skipping")
         return
 
     logger.info("Starting to apply patches...")
 
     # Patch HF Hub methods
-    patch_with_retry(hf_hub.HfApi, "dataset_info")
-    patch_with_retry(hf_hub.HfApi, "model_info")
-    patch_with_retry(hf_hub.HfApi, "repo_info")
+    patch_with_retry(huggingface_hub.HfApi, "dataset_info")
+    patch_with_retry(huggingface_hub.HfApi, "model_info")
+    patch_with_retry(huggingface_hub.HfApi, "repo_info")
 
     # Patch http_backoff
     patch_hf_hub_http_backoff()
 
     # Patch audio decoder
     patch_audio_decoder()
+
+    # Patch datasets methods
+    patch_with_retry(
+        datasets.load.HubDatasetModuleFactoryWithParquetExport, "get_module"
+    )
 
     IS_PATCHED = True
     logger.info("Successfully applied all patches")

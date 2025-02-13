@@ -17,6 +17,15 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    # permissions:
+    #   # Gives the action the necessary permissions for publishing new
+    #   # comments in pull requests.
+    #   pull-requests: write
+    #   # Gives the action the necessary permissions for pushing data to the
+    #   # python-coverage-comment-action branch, and for editing existing
+    #   # comments (to avoid publishing multiple comments in the same PR)
+    #   contents: write
+
     steps:
       - uses: actions/checkout@v4
         with:
@@ -37,8 +46,15 @@ jobs:
         run: |
           just check
 
-      - name: Run tests
+      - name: Run tests and coverage
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           just test-verbose
+
+      # - name: Coverage comment
+      #   id: coverage_comment
+      #   uses: py-cov-action/python-coverage-comment-action@v3
+      #   with:
+      #     GITHUB_TOKEN: ${{ github.token }}
+      #     COVERAGE_PATH: ultravox

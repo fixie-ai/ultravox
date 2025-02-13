@@ -1,0 +1,10 @@
+model: fixie-ai-dev/internal-testing-untrained-tiny-ultravox
+
+eval_sets:
+  - name: dummy
+
+eval_dataset_args:
+  max_samples: 2
+  max_audio_duration_secs: 4
+
+eval_max_tokens: 4

@@ -1,0 +1,13 @@
+generation/direct/vllm:
+  class: evals.solvers.providers.fixie.fixie_solver:FixieSolver
+  args:
+    api_base: http://localhost:8000/v1
+    completion_fn_options:
+      model: fixie-ai/ultravox
+      extra_options:
+        temperature: 0
+        # empirically, setting frequency_penalty to 1.0 seems to get us closer to the HF results
+        # but it's not clear why this is necessary
+        # TODO: investigate and try to match HF/VLLM results without this
+        # UPDATE: freq penalty 1.0 hurts performance on big-bench-audio eval for ultravox8b. Switching back to 0.0.
+        frequency_penalty: 0.0

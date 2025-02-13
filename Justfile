@@ -12,21 +12,27 @@ install:
     poetry install
 
 format:
-    poetry run autoflake ${PROJECT_DIR} --remove-all-unused-imports --quiet --in-place -r --exclude third_party
-    poetry run isort ${PROJECT_DIR} --force-single-line-imports
-    poetry run black ${PROJECT_DIR}
+    poetry run autoflake {{PROJECT_DIR}} --remove-all-unused-imports --quiet --in-place -r 
+    poetry run isort {{PROJECT_DIR}} --force-single-line-imports 
+    poetry run black {{PROJECT_DIR}} 
 
 check:
-    poetry run black ${PROJECT_DIR} --check
-    poetry run isort ${PROJECT_DIR} --check --force-single-line-imports
-    poetry run autoflake  ${PROJECT_DIR} --check --quiet --remove-all-unused-imports -r --exclude third_party
-    poetry run mypy ${PROJECT_DIR}    
+    poetry run black {{PROJECT_DIR}} --check 
+    poetry run isort {{PROJECT_DIR}} --check --force-single-line-imports
+    poetry run autoflake {{PROJECT_DIR}} --check --quiet --remove-all-unused-imports -r 
+    poetry run mypy {{PROJECT_DIR}} 
 
 test *ARGS=".":
-    cd ${PROJECT_DIR} && poetry run pytest --ignore third_party {{ARGS}}
+    cd ${PROJECT_DIR} && poetry run coverage run --source=${PROJECT_DIR} -m pytest --ignore third_party {{ARGS}}
+    just print-coverage
 
 test-verbose *ARGS=".":
-    cd ${PROJECT_DIR} && poetry run pytest --ignore third_party {{ARGS}} -vv --log-cli-level=INFO {{ARGS}}
+    cd ${PROJECT_DIR} && poetry run coverage run --source=${PROJECT_DIR} -m pytest --ignore third_party {{ARGS}} -vv --log-cli-level=INFO
+    just print-coverage
+
+# the following assumes the coverage report is already created by the test command
+print-coverage *ARGS:
+    cd ${PROJECT_DIR} && poetry run coverage report --omit "*_test.py" --sort miss {{ARGS}}
 
 @python *FLAGS:
     poetry run python {{FLAGS}}
@@ -44,7 +50,7 @@ infer *FLAGS:
     poetry run python -m ultravox.tools.infer_tool {{FLAGS}}
 
 eval *FLAGS:
-    poetry run python -m ultravox.tools.eval_tool {{FLAGS}}
+    poetry run python -m ultravox.evaluation.eval {{FLAGS}}
 
 tts *FLAGS:
     poetry run python -m ultravox.tools.ds_tool.ds_tool tts {{FLAGS}}
@@ -60,6 +66,9 @@ gradio *FLAGS:
 
 run *FLAGS:
     poetry run mcli run -f mcloud.yaml --follow {{FLAGS}}
+
+vllm_eval *FLAGS:
+    poetry run mcli run -f mcloud_eval.yaml --follow {{FLAGS}}
 
 mcloud *FLAGS:
     poetry run mcli interactive {{FLAGS}} --cluster ${MCLOUD_CLUSTER} --instance ${MCLOUD_INSTANCE}  --name `whoami` --command "bash -c \"$(cat setup.sh)\"" 

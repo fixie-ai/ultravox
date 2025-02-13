@@ -1,4 +1,0 @@
-# small scale model training: mostly for debugging purposes
-
-text_model: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
-exp_name: "tinyllama_asr"

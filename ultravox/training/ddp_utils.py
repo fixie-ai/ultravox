@@ -1,5 +1,5 @@
 import contextlib
-from typing import List, TypeVar
+from typing import Any, Generator, List, Tuple, TypeVar
 
 import torch.distributed
 from torch.utils import data
@@ -43,3 +43,18 @@ def sharded_iterator(ds: data.IterableDataset, num_shards: int, shard_index: int
     for i, sample in enumerate(ds):
         if i % num_shards == shard_index:
             yield sample
+
+
+def sharded_batch_iterator(
+    ds: data.IterableDataset, batch_size: int, num_shards: int, shard_index: int
+) -> Generator[List[Tuple[int, Any]], None, None]:
+    batch = []  # List of tuples
+    for idx, sample in enumerate(ds):
+        if idx % num_shards == shard_index:
+            batch.append((idx, sample))  # Tuple of (int, sample)
+            if len(batch) == batch_size:
+                yield batch  # Yields List[Tuple[int, sample]]
+                batch = []
+    # Yield any remaining samples in the last incomplete batch
+    if batch:
+        yield batch

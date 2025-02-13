@@ -21,6 +21,6 @@ Correct answer: {{ expected_answer }}
 
 
 def evaluate_answer_instruct(sample: eval_types.Sample) -> eval_types.InstructResult:
-    return gpt_eval.evaluate_answer_gpt(
+    return gpt_eval.gpt_evaluator.evaluate_binary_with_reason(
         INSTRUCT_SYSTEM_PROMPT, INSTRUCT_USER_PROMPT, sample
     )

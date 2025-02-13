@@ -1,0 +1,22 @@
+model: "fixie-ai/ultravox-v0_5-llama-3_1-8b"
+
+report_logs_to: ["wandb"]
+output_dir: "./output"
+
+eval_sets:
+  - name: covost2-en-ar
+  - name: covost2-en-ca
+  - name: covost2-en-de
+  - name: covost2-en-zh
+  - name: covost2-es-en
+  - name: covost2-ru-en
+  - name: covost2-tr-en
+  - name: covost2-zh-en
+  - name: librispeech-clean-transcription
+  - name: librispeech-other-transcription
+  - name: commonvoice-en-transcription
+  - name: commonvoice-es-transcription
+  - name: commonvoice-ru-transcription
+  - name: bigbenchaudio
+
+eval_batch_size: 60
