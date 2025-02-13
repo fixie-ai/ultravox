@@ -1,6 +1,6 @@
 import logging
 import re
-from typing import Any, Dict, Optional, Set, Tuple, Union
+from typing import Any, Dict, Generator, Optional, Set, Tuple, Union
 
 import peft
 import torch
@@ -145,6 +145,24 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
         )
         return {"loss": kl_loss}
 
+    def _audio_iter(
+        self, audio_batch_size: torch.Tensor
+    ) -> Generator[Tuple[int, int], None, None]:
+        """
+        Iterate over the audio batch size and yield the batch index and audio index of each audio item.
+
+        Args:
+            audio_batch_size: A tensor of shape (B,) where B is the batch size.
+
+        Returns:
+            A generator that yields a tuple of (start index, length) for each audio item.
+        """
+        audio_index = 0
+        for i_b, batch_count in enumerate(audio_batch_size):
+            for _ in range(batch_count):
+                yield i_b, audio_index
+                audio_index += 1
+
     def forward(
         self,
         input_ids: torch.Tensor,
@@ -186,23 +204,22 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             # B x T  ->  B x T x D
             inputs_embeds = self.get_input_embeddings().forward(input_ids)
 
-        if audio_values is not None:
+        if audio_values is not None and len(audio_values) > 0:
             assert (
                 audio_token_start_idx is not None
                 and audio_token_len is not None
+                and audio_lens is not None
                 and audio_batch_size is not None
-            ), "audio_token_start_idx and audio_token_len and audio_batch_size must be provided if audio_values are provided."
+            ), "audio_token_start_idx/audio_token_len/audio_lens must be provided if audio_values are provided."
             assert (
                 len(audio_token_start_idx)
                 == len(audio_token_len)
-                == len(audio_batch_size)
-            ), "audio_token_start_idx and audio_token_len and audio_batch_size must have the same batch size."
-            assert (
-                audio_lens is not None
-            ), "audio_lens must be provided if audio_values are provided"
-            assert len(audio_lens) == len(
-                audio_values
-            ), "audio_lens must have the same batch size as audio_values."
+                == len(audio_lens)
+                == len(audio_values)
+            ), "audio_token_start_idx/audio_token_len/audio_lens/audio_values must have the same batch size."
+            assert len(audio_batch_size) == len(
+                inputs_embeds
+            ), "audio_batch_size and inputs_embeds must have the same batch size."
 
             # B x A/3200 x (D=max-audio-length-in-batch)
             audio_tower_output = self.audio_tower.forward(
@@ -213,24 +230,11 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
             audio_embeds = self.multi_modal_projector.forward(audio_tower_output)
 
             # combine audio and text embeddings
-            # audio_embeds is (B_a X T X D)
-            # inputs_embeds is (B_i X T X D)
-            # B_a >= B_i because B_a includes all audio chunks.
-            # B_i == audio_token_start_idx.shape[0] == audio_token_len.shape[0] == audio_batch_size.shape[0]
-            audio_ind = 0
-            for i, (start, length, batch_size) in enumerate(
-                zip(audio_token_start_idx, audio_token_len, audio_batch_size)
-            ):
-                # audio_embeds is [B1 x T1 x D_hidden, B2 x T2 x D_hidden, ...]
-                # audio.shape (T1 + T2 + ..., D_hidden)
-                audio = torch.cat(
-                    [audio_embeds[k] for k in range(audio_ind, audio_ind + batch_size)],
-                    dim=0,
-                )
-                length = min(length, audio.shape[1])
-                inputs_embeds[i, start : start + length] = audio[:length]
-
-                audio_ind += batch_size
+            for i_b, i_a in self._audio_iter(audio_batch_size):
+                start_idx = audio_token_start_idx[i_a]
+                token_len = audio_token_len[i_a]
+                item_embedding = audio_embeds[i_a][:token_len]
+                inputs_embeds[i_b][start_idx : start_idx + token_len] = item_embedding
 
         lm_output = self.language_model.forward(
             inputs_embeds=inputs_embeds,
@@ -478,7 +482,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
 
 # TODO: refactor common parts to a shared module
 def is_cache_empty(
-    past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]]
+    past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]],
 ) -> bool:
     """
     Check if the cache is empty.
@@ -514,12 +518,8 @@ def apply_lora(model: torch.nn.Module, lora_config: dict) -> torch.nn.Module:
 
 class StackAudioFrames(nn.Module):
     """
-    Stack the audio embedding frames to reduce the sequence length by a factor of `stack_factor`.
-
-    The number of output frames will be `ceil(T / stack_factor) + 1` where `T` is the number of input frames.
-    NOTE: the extra +1 is intentional: in case the number of audio tokens are over-estimated by the processor,
-    we want to make sure `processor.audio_token_replacement` (i.e. EOS) doesn't get leaked into the middle of embeddings.
-    In most cases this extra padding will get removed in the model's forward function so it has no effect.
+    Stack the audio embedding frames to reduce the sequence length by a factor
+    of `stack_factor`.
     """
 
     def __init__(self, stack_factor: int = 8):
@@ -529,7 +529,7 @@ class StackAudioFrames(nn.Module):
     def forward(self, audio_embeds: torch.Tensor) -> torch.Tensor:
         B, T, C = audio_embeds.shape
         T_pad = (T + self.stack_factor - 1) // self.stack_factor * self.stack_factor
-        audio_embeds = F.pad(audio_embeds, (0, 0, 0, T_pad - T + self.stack_factor))
+        audio_embeds = F.pad(audio_embeds, (0, 0, 0, T_pad - T))
         B, T, C = audio_embeds.shape
         audio_embeds = audio_embeds.view(
             B, T // self.stack_factor, C * self.stack_factor

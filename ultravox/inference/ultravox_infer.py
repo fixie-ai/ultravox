@@ -54,7 +54,7 @@ class UltravoxInference(infer.LocalInference):
             audio_processor_id
             or model.config.audio_model_id
             or model.config.audio_config._name_or_path
-            or "facebook/wav2vec2-base-960h"
+            or "openai/whisper-tiny",
         )
 
         processor = ultravox_processing.UltravoxProcessor(

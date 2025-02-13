@@ -49,7 +49,7 @@ class UltravoxConfig(transformers.PretrainedConfig):
     documentation from [`PretrainedConfig`] for more information.
 
     Args:
-        audio_config (`Wav2Vec2Config`,  *optional*):
+        audio_config (`WhisperConfig`,  *optional*):
             Custom audio config or dict
         text_config (`Union[AutoConfig, dict]`, *optional*):
             The config object of the text backbone. Can be any of `LlamaConfig` or `MistralConfig`.
@@ -74,10 +74,10 @@ class UltravoxConfig(transformers.PretrainedConfig):
     Example:
 
     ```python
-    >>> from transformers import UltravoxModel, Wav2Vec2Config, UltravoxConfig, LlamaConfig
+    >>> from transformers import UltravoxModel, WhisperConfig, UltravoxConfig, LlamaConfig
 
     >>> # Initializing an audio encoder config
-    >>> audio_config = Wav2Vec2Config()
+    >>> audio_config = WhisperConfig()
 
     >>> # Initializing a Llama config
     >>> text_config = LlamaConfig()
@@ -92,7 +92,7 @@ class UltravoxConfig(transformers.PretrainedConfig):
     >>> configuration = model.config
 
     >>> # Initialize a model from pretrained checkpoints and random projector weights
-    >>> config = UltravoxConfig(audio_model_id="facebook/wav2vec2-base-960h", text_model_id="meta-llama/Llama-2-7b-chat-hf")
+    >>> config = UltravoxConfig(audio_model_id="openai/whisper-tiny", text_model_id="meta-llama/Llama-2-7b-chat-hf")
     ```"""
 
     model_type = "ultravox"
@@ -142,7 +142,7 @@ class UltravoxConfig(transformers.PretrainedConfig):
         else:
             audio_config = audio_config or {}
             self.audio_config = transformers.CONFIG_MAPPING[
-                audio_config.get("model_type", "wav2vec2")
+                audio_config.get("model_type", "whisper")
             ](**audio_config)
 
         self.text_model_lora_config = (
