@@ -129,7 +129,7 @@ def apply_all_patches():
     patch_audio_decoder()
 
     # Patch datasets methods
-    patch_with_retry(datasets.load, "get_module")
+    patch_with_retry(datasets.load.HubDatasetModuleFactoryWithParquetExport, "get_module")
 
     IS_PATCHED = True
     logger.info("Successfully applied all patches")
