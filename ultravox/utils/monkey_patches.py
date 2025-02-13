@@ -28,6 +28,7 @@ def patch_with_retry(cls: Type[Any], method_name: str, max_attempts: int = 10) -
         wait=tenacity.wait_exponential(multiplier=1, min=4, max=10),
         retry=tenacity.retry_if_exception_type(Exception),
         before_sleep=tenacity.before_sleep_log(logger, logging.INFO),
+        reraise=True,
     )
     @wraps(original_method)
     def method_with_retry(self, *args, **kwargs):
