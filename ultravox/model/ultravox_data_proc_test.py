@@ -21,7 +21,9 @@ def fake_apply_chat_template(messages, tokenize):
     return "\n".join([f"{m['role']}: {m['content']}" for m in messages])
 
 
-def fake_process(text, audio, return_tensors="pt", sampling_rate=16000):
+def fake_process(
+    text, audio=None, audios=None, return_tensors="pt", sampling_rate=16000
+):
     num_messages = len(text.split("\n"))
     input_ids = torch.tensor([range(num_messages * 5)])
     attention_mask = torch.tensor([[1] * num_messages * 5])

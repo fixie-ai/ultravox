@@ -8,12 +8,14 @@ samples_en = [
     eval_types.Sample(
         index=0,
         question="",
+        transcript="",
         expected_answer="The quick brown fox jumps over the lazy dog",
         generated_answer="The quick brown fox jumps over a lazy dog",
     ),
     eval_types.Sample(
         index=1,
         question="",
+        transcript="",
         expected_answer="Hello world!",
         generated_answer="Hello world",
     ),
@@ -23,12 +25,14 @@ samples_zh = [
     eval_types.Sample(
         index=0,
         question="",
+        transcript="",
         expected_answer="今天是个好天气",
         generated_answer="今天是一个好天气",
     ),
     eval_types.Sample(
         index=1,
         question="",
+        transcript="",
         expected_answer="我喜欢吃苹果",
         generated_answer="我喜欢苹果",
     ),
@@ -38,12 +42,14 @@ samples_ja = [
     eval_types.Sample(
         index=0,
         question="",
+        transcript="",
         expected_answer="私は日本語を勉強しています",
         generated_answer="私は日本語を学んでいます",
     ),
     eval_types.Sample(
         index=1,
         question="",
+        transcript="",
         expected_answer="おはようございます",
         generated_answer="おはよう",
     ),

@@ -93,6 +93,7 @@ def infer_dataset_shard(
                 eval_types.Sample(
                     index=index,
                     question=sample.messages[-1]["content"],
+                    transcript=sample.audio_transcript or "",
                     expected_answer=reference,
                     generated_answer=output.text,
                 )

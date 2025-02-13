@@ -75,13 +75,28 @@ brew update
 brew install just
 ```
 
-Create a Python virtual environment and install the necessary packages:
+It's recommended to use pyenv for managing environments due to the use of Poetry:
+
+```bash
+brew install xz
+brew install pyenv
+pyenv init
+pyenv install 3.11
+pyenv global 3.11
+
+# Optional
+pyenv shell 3.11
+```
+
+>**Note**: Use of conda is NOT recommended with Poetry
+
+After creating a virtual environment, install required packages using `just` and `poetry`:
 
 ```bash
 just install
 ```
 
-We're using Poetry to manage the Python virtual environment.
+We're using Poetry to manage the Python virtual environment. You can observe your environment with `poetry env info`.
 
 ### Mosaic Environment Setup (Fixie Internal)
 

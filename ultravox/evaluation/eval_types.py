@@ -8,6 +8,7 @@ import dataclasses_json
 class Sample(dataclasses_json.DataClassJsonMixin):
     index: int  # index of the sample in the dataset, used for preserving order after ddp all_gather
     question: str
+    transcript: str
     generated_answer: str
     expected_answer: str
     history: List[Dict[str, str]] = dataclasses.field(default_factory=list)

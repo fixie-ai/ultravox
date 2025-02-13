@@ -31,8 +31,8 @@ class GPTBasedEvaluator:
         sys_prompt: str,
         user_prompt: str,
         sample: eval_types.Sample,
-        max_tokens: int = 50,
-        temperature: float = 0.0,
+        max_tokens: int = 1024,
+        temperature: float = 0.7,
     ) -> str:
         """
         Common utility function that runs OpenAI Chat Completions and returns
