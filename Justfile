@@ -50,7 +50,7 @@ infer *FLAGS:
     poetry run python -m ultravox.tools.infer_tool {{FLAGS}}
 
 eval *FLAGS:
-    poetry run python -m ultravox.tools.eval_tool {{FLAGS}}
+    poetry run python -m ultravox.evaluation.eval {{FLAGS}}
 
 tts *FLAGS:
     poetry run python -m ultravox.tools.ds_tool.ds_tool tts {{FLAGS}}

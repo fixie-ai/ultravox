@@ -284,7 +284,9 @@ class UltravoxModel(transformers.LlamaPreTrainedModel):
 
         # include audio information in model_input only when it is needed during prefilling
         # audio_token_start_idx should always be relative to the current cache position
-        prefill_start_idx = 0 if cache_position is None else cache_position[0]
+        prefill_start_idx: torch.Tensor = (
+            torch.tensor(0) if cache_position is None else cache_position[0]
+        )
         if (
             audio_values is not None
             and audio_token_start_idx is not None

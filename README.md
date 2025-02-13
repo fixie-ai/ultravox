@@ -204,8 +204,13 @@ IMPORTANT: Make sure to monitor your jobs and stop the machine when you're done 
 
 ### Running evaluations
 
-1. Use `infer_tool.py --json > file` to create a jsonl output from a given model/dataset combo, where each line contains two values: **question** and **answer**.
-2. Use `eval_tool.py -f file` to evaluate the jsonl file, which will produce an average score for the model on the dataset.
+For inference or evaluations, you can use:
+
+```bash
+just eval --config_path ultravox/evaluation/configs/eval_config.yaml
+```
+
+where `eval_config.yaml` is a config file that specifies the model, datasets, and configurations to use for inference or evaluation. If your dataset is not already defined in ultravox, you need to create a config file for your dataset in `ultravox/data/configs/` (with the appropriate `eval_config` field to specify evaluation metrics and arguments), and register it in `ultravox/data/registry.py`. Please refer to examples in `ultravox/data/configs/`.
 
 ## Misc
 

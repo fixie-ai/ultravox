@@ -19,7 +19,4 @@ eval_sets:
   - name: commonvoice-ru-transcription
   - name: bigbenchaudio
 
-eval_dataset_args:
-  max_audio_duration_secs: -1
-
 eval_batch_size: 60

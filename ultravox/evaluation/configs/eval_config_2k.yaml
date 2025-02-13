@@ -21,5 +21,6 @@ eval_sets:
 
 eval_dataset_args:
   max_samples: 2000
+  max_audio_duration_secs: -1
 
 eval_batch_size: 60

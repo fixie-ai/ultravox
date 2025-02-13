@@ -78,7 +78,7 @@ class ValDatasetArgs(VoiceDatasetArgs):
 @dataclasses.dataclass
 class EvalDatasetArgs(VoiceDatasetArgs):
     split: DatasetSplit = DatasetSplit.TEST
-    max_audio_duration_secs: float = 30
+    max_audio_duration_secs: float = -1
 
     def __post_init__(self):
         super().__post_init__()
