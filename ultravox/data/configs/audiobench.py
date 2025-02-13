@@ -14,7 +14,7 @@ AB_CN_COLLEGE_LISTEN_MCQ_CONFIG = types.DatasetConfig(
     ],
     eval_config=types.EvalConfig(metric="audiobench_binary"),
     user_template=INSTRUCTION_MQA_USER_TEMPLATE,
-    transcript_template="",
+    transcript_template="{{instruction}}",
     assistant_template="{{answer}}",
 )
 
@@ -26,7 +26,7 @@ AB_DREAM_TTS_MCQ_CONFIG = types.DatasetConfig(
     ],
     eval_config=types.EvalConfig(metric="audiobench_binary"),
     user_template=INSTRUCTION_MQA_USER_TEMPLATE,
-    transcript_template="",
+    transcript_template="{{instruction}}",
     assistant_template="{{answer}}",
 )
 
@@ -38,7 +38,7 @@ AB_SLUE_P2_SQA5_CONFIG = types.DatasetConfig(
     ],
     eval_config=types.EvalConfig(metric="audiobench_scalar"),
     user_template=INSTRUCTION_USER_TEMPLATE,
-    transcript_template="",
+    transcript_template="{{instruction}}",
     assistant_template="{{answer}}",
 )
 
@@ -50,7 +50,7 @@ AB_PUBLIC_SG_SPEECH_QA_CONFIG = types.DatasetConfig(
     ],
     eval_config=types.EvalConfig(metric="audiobench_scalar"),
     user_template=INSTRUCTION_USER_TEMPLATE,
-    transcript_template="",
+    transcript_template="{{instruction}}",
     assistant_template="{{answer}}",
 )
 

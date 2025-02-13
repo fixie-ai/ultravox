@@ -13,7 +13,7 @@ AUDIOBENCH_USER_PROMPT = """\
 {{ generated_answer}}
 
 [Question]
-{{ question }}
+{{ transcript }}
 
 [Task]
 Rate the model's answer based on its alignment with the reference answer, focusing on accuracy and relevance to the reference provided. Please be critical on the details. If the model response is something like 'cannot decide', please rate as 0.
@@ -40,7 +40,7 @@ AUDIOBENCH_USER_PROMPT_BINARY = """\
 {{ generated_answer}}
 
 [Question]
-{{ question }}
+{{ transcript }}
 
 [Task]
 Rate the model's answer based on its alignment with the reference answer, focusing on accuracy and relevance to the reference provided. Please be critical on the details.
