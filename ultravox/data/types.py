@@ -44,7 +44,7 @@ class VoiceDatasetArgs:
     """Seed for shuffling the dataset."""
     shuffle_buffer_size: int = 1000
     """Buffer size for shuffling the dataset. Only used for streaming datasets."""
-    max_audio_duration_secs: Optional[float] = 16
+    max_audio_duration_secs: float = 16
     """Whether to skip samples with audio longer than this duration."""
     max_samples: Optional[int] = None
     """max number of samples to use per dataset"""
@@ -52,8 +52,6 @@ class VoiceDatasetArgs:
     def __post_init__(self):
         if isinstance(self.split, str):
             self.split = DatasetSplit(self.split.lower())
-        if self.max_audio_duration_secs and self.max_audio_duration_secs < 0:
-            self.max_audio_duration_secs = None
 
 
 @dataclasses.dataclass
@@ -80,7 +78,7 @@ class ValDatasetArgs(VoiceDatasetArgs):
 @dataclasses.dataclass
 class EvalDatasetArgs(VoiceDatasetArgs):
     split: DatasetSplit = DatasetSplit.TEST
-    max_audio_duration_secs: Optional[float] = 30
+    max_audio_duration_secs: float = -1
 
     def __post_init__(self):
         super().__post_init__()

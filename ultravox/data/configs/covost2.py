@@ -6,6 +6,7 @@ CVST_BASE_CONFIG = types.DatasetConfig(
     user_template=types.TRANSLATION_USER_TEMPLATE,
     transcript_template="{{sentence}}",
     assistant_template="{{translation}}",
+    eval_config=types.EvalConfig(metric="bleu"),
 )
 
 CVST_AR_EN_CONFIG = types.DatasetConfig(
@@ -150,6 +151,7 @@ CVST_EN_JA_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(name="test", num_samples=15_531),
     ],
     user_template_args={"target": "Japanese"},
+    eval_config=types.EvalConfig(metric="bleu", args={"tokenize": "ja-mecab"}),
 )
 
 CVST_EN_LV_CONFIG = types.DatasetConfig(
@@ -234,6 +236,7 @@ CVST_EN_ZH_CONFIG = types.DatasetConfig(
         types.DatasetSplitConfig(name="test", num_samples=15_531),
     ],
     user_template_args={"target": "Chinese"},
+    eval_config=types.EvalConfig(metric="bleu", args={"tokenize": "zh"}),
 )
 
 CVST_ES_EN_CONFIG = types.DatasetConfig(

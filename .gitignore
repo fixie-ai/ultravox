@@ -12,7 +12,6 @@ output_audio_processor/
 output_tokenizer/
 
 *.csv
-*.json
 epd_eval/
 .git/
 env_vars.sh
@@ -191,3 +190,5 @@ mds_output/
 mlruns/
 output/
 
+saved_tokenizer/
+.run_configs/

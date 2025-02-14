@@ -36,7 +36,7 @@ class LocalInference(base.VoiceInference):
         self.past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = (
             None
         )
-        self.data_collator = datasets.DataCollatorForSeq2SeqWithAudio(
+        self.data_collator = ultravox_processing.DataCollatorForSeq2SeqWithAudio(
             tokenizer=self.tokenizer,
             include_alt_fields=False,
         )
@@ -111,9 +111,15 @@ class LocalInference(base.VoiceInference):
         inputs = [self._dataproc(s) for s in samples]
         for input in inputs:
             for key, val in input.items():
-                input[key] = val.squeeze(0)
+                if not key.startswith("audio"):
+                    input[key] = val.squeeze(0)
 
         tensors = self.data_collator(inputs)
+        # Move non-None tensors to the same device as the model
+        tensors = {
+            k: v.to(self.model.device) if v is not None else v
+            for k, v in tensors.items()
+        }
         input_len = tensors["input_ids"].shape[1]
         output_batch = self._generate(
             tensors, max_tokens, temperature, return_dict_in_generate=False

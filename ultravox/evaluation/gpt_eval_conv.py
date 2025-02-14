@@ -26,4 +26,6 @@ def evaluate_conversation_response(
     sample: eval_types.Sample,
 ) -> eval_types.InstructResult:
     sample.history = [msg for msg in sample.history if msg["role"] != "system"]
-    return gpt_eval.evaluate_answer_gpt(CONVO_SYSTEM_PROMPT, CONVO_USER_PROMPT, sample)
+    return gpt_eval.gpt_evaluator.evaluate_binary_with_reason(
+        CONVO_SYSTEM_PROMPT, CONVO_USER_PROMPT, sample
+    )

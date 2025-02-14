@@ -1,12 +1,14 @@
 import dataclasses
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Union
 
 import dataclasses_json
 
 
 @dataclasses.dataclass
 class Sample(dataclasses_json.DataClassJsonMixin):
+    index: int  # index of the sample in the dataset, used for preserving order after ddp all_gather
     question: str
+    transcript: str
     generated_answer: str
     expected_answer: str
     history: List[Dict[str, str]] = dataclasses.field(default_factory=list)
@@ -16,13 +18,13 @@ class Sample(dataclasses_json.DataClassJsonMixin):
 class InstructResult:
     """Score is a 0-1 evaluation of the accuracy of the generated answer, or None if an error occurred."""
 
-    score: Optional[float]
+    score: float
     reason: str
 
 
 @dataclasses.dataclass
 class WerResult:
-    """Score is the 0-1 Word Error Rate for the generated transcript."""
+    """Score is Word Error Rate (%) for the generated transcript."""
 
     score: float
 
@@ -45,4 +47,11 @@ class BleuResult:
     score: float
 
 
-Result = Union[InstructResult, WerResult, ExactMatchResult]
+@dataclasses.dataclass
+class MeanResult:
+    """Score is the mean of the scores of the samples."""
+
+    score: float
+
+
+Result = Union[InstructResult, WerResult, ExactMatchResult, BleuResult, MeanResult]

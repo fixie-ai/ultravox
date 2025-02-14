@@ -35,7 +35,6 @@ Ultravox can be trained against any open-weight model. See below for more detail
 
 See Ultravox in action on our [demo page](https://demo.ultravox.ai). You can build your own voice-to-voice agents on our Realtime platform at ultravox.ai.
 
-You can run the Gradio demo locally with `just gradio`. You can run the demo in "voice mode" which allows natural audio conversations with ultravox by running `just gradio --voice_mode=True`
 
 ### Discord
 
@@ -76,13 +75,28 @@ brew update
 brew install just
 ```
 
-Create a Python virtual environment and install the necessary packages:
+It's recommended to use pyenv for managing environments due to the use of Poetry:
+
+```bash
+brew install xz
+brew install pyenv
+pyenv init
+pyenv install 3.11
+pyenv global 3.11
+
+# Optional
+pyenv shell 3.11
+```
+
+>**Note**: Use of conda is NOT recommended with Poetry
+
+After creating a virtual environment, install required packages using `just` and `poetry`:
 
 ```bash
 just install
 ```
 
-We're using Poetry to manage the Python virtual environment.
+We're using Poetry to manage the Python virtual environment. You can observe your environment with `poetry env info`.
 
 ### Mosaic Environment Setup (Fixie Internal)
 
@@ -103,14 +117,11 @@ mcli set api-key <new-value>
 ```bash
 # Huggging Face token for accessing walled data and models
 mcli create secret env HF_TOKEN=hf_<your_token>
+mcli create secret env HF_WRITE_TOKEN=hf_<your_token_with_write_access>
 
 # WandB token for logging experiments
 mcli create secret env WANDB_PROJECT=ultravox
 mcli create secret env WANDB_API_KEY=<your_wandb_key>
-
-# GCP credentials for accessing data (e.g. BoolQ)
-# Get service_account.json file from Justin/Farzad and put it in the root dir, then
-mcli create secret gcp
 ```
 
 ## Training
@@ -167,15 +178,24 @@ See [`configs_base.py`](ultravox/training/config_base.py) to find the parameters
 
 ### MosaicML Training (Fixie Internal)
 
-Before running any training jobs, you need to setup your SSH key in the Mosaic Platform: https://docs.mosaicml.com/projects/mcli/en/latest/resources/secrets/ssh.html#page-secrets-ssh
+Before running any training jobs, set up [SSH authentication with MosaicML](https://docs.mosaicml.com/projects/mcli/en/latest/resources/secrets/ssh.html#page-secrets-ssh):
+
+1. Generate an SSH key:
+   ```bash
+   ssh-keygen -f ~/.ssh/mclid_id_rsa
+   ```
+
+2. Add the public key to your GitHub account
+
+3. Upload the private key to MosaicML (this allows MosaicML to clone the repository and run jobs):
+   ```bash
+   mcli create secret git-ssh ~/.ssh/mclid_id_rsa
+   ```
+
+Then you can run the following command to kick off a training job:
 
 ```bash
-## Create a new SSH key and add it to the Mosaic Platform
-# ssh-keygen -f ~/.ssh/mclid_id_rsa
-## add the **public** key to GitHub
-# mcli create secret ssh ~/.ssh/mclid_id_rsa
-
-mcli run -f mcloud.yaml --follow
+mcli run -f mcloud_train.yaml --follow
 ```
 
 Other useful commands:
@@ -187,7 +207,7 @@ mcli util r7z2
 mcli get runs
 mcli get runs --cluster r7z2
 
-mcli run -f mcloud.yaml --follow
+mcli run -f mcloud_eval.yaml --follow
 ```
 
 For interactive runs you can use:
@@ -199,8 +219,13 @@ IMPORTANT: Make sure to monitor your jobs and stop the machine when you're done 
 
 ### Running evaluations
 
-1. Use `infer_tool.py --json > file` to create a jsonl output from a given model/dataset combo, where each line contains two values: **question** and **answer**.
-2. Use `eval_tool.py -f file` to evaluate the jsonl file, which will produce an average score for the model on the dataset.
+For inference or evaluations, you can use:
+
+```bash
+just eval --config_path ultravox/evaluation/configs/eval_config.yaml
+```
+
+where `eval_config.yaml` is a config file that specifies the model, datasets, and configurations to use for inference or evaluation. If your dataset is not already defined in ultravox, you need to create a config file for your dataset in `ultravox/data/configs/` (with the appropriate `eval_config` field to specify evaluation metrics and arguments), and register it in `ultravox/data/registry.py`. Please refer to examples in `ultravox/data/configs/`.
 
 ## Misc
 
