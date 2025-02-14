@@ -3,7 +3,6 @@ import json
 import os
 from typing import List, Optional, Union, overload
 
-import numpy as np
 import openai
 from tenacity import retry
 from tenacity import stop_after_attempt
@@ -88,31 +87,3 @@ class CachingTtsWrapper:
             f.write(wav)
 
         return wav
-
-
-class CachingEmbeddingWrapper:
-    def __init__(self, client: openai.Client, unique_id: str):
-        super().__init__()
-        self._client = client
-        self._base_path = os.path.join(".cache/ds_tool/textgen", unique_id)
-        os.makedirs(self._base_path, exist_ok=True)
-
-    @retry(wait=wait_fixed(3), stop=stop_after_attempt(3))
-    def embed(self, **kwargs) -> List[float]:
-        text_hash = hashlib.sha256(json.dumps(kwargs).encode()).hexdigest()
-
-        # try to read from cache
-        cache_path = os.path.join(self._base_path, f"{text_hash}.npy")
-        if os.path.exists(cache_path):
-            return np.load(cache_path)
-
-        # if not found, create new embedding
-        embedding = self._client.embeddings.create(**kwargs).data[0].embedding
-
-        # write to cache
-        try:
-            np.save(cache_path, embedding)
-        except IOError as e:
-            print(f"Warning: Unable to cache embedding: {e}")
-
-        return embedding
