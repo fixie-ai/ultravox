@@ -10,6 +10,13 @@ import numpy as np
 import requests
 import soundfile as sf
 
+try:
+    from cambai import CambAI
+    from cambai.models.output_type import OutputType
+    CAMBAI_AVAILABLE = True
+except ImportError:
+    CAMBAI_AVAILABLE = False
+
 RANDOM_VOICE_KEY = "random"
 REQUEST_TIMEOUT = 30
 NUM_RETRIES = 3
@@ -282,6 +289,95 @@ class CambAiVertexTts(Client):
             raise RuntimeError(f"Error calling Camb AI Vertex TTS: {str(e)}")
 
 
+class CambAiTts(Client):
+    DEFAULT_VOICE = "20303"
+    ALL_VOICES = []
+
+    def __init__(self, sample_rate: int = 16000):
+        if not CAMBAI_AVAILABLE:
+            raise ImportError(
+                "CambAI SDK is not available. Install it with: pip install cambai"
+            )
+        
+        super().__init__(sample_rate)
+        
+        api_key = os.environ.get("CAMB_API_KEY")
+        if not api_key:
+            raise ValueError("CAMB_API_KEY environment variable is required for CambAI TTS")
+        
+        self._client = CambAI(api_key=api_key)
+        self._populate_voices()
+
+    def _populate_voices(self):
+        """Populate ALL_VOICES by fetching available voices from CambAI API"""
+        try:
+            voices = self._client.list_voices()
+            self.ALL_VOICES = [str(voice.id) for voice in voices]
+            if not self.ALL_VOICES:
+                self.ALL_VOICES = [self.DEFAULT_VOICE]
+        except Exception as e:
+            print(f"Warning: Could not fetch CambAI voices, using default: {e}")
+            self.ALL_VOICES = [self.DEFAULT_VOICE]
+
+    def tts(self, text: str, voice: Optional[str] = None) -> bytes:
+        """Synthesize text to speech using CambAI SDK.
+        
+        Args:
+            text: Text to synthesize
+            voice: Voice ID to use (string number like "20303")
+            
+        Returns:
+            WAV audio bytes
+        """
+        voice = self.resolve_voice(voice)
+        
+        try:
+            voice_id = int(voice)
+        except ValueError:
+            raise ValueError(f"CambAI voice must be a numeric ID, got: {voice}")
+        
+        import tempfile
+        
+        try:
+            with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as tmp_file:
+                temp_path = tmp_file.name
+            
+            self._client.text_to_speech(
+                text=text,
+                voice_id=voice_id,
+                output_type=OutputType.RAW_BYTES,
+                save_to_file=temp_path
+            )
+            
+            # Read the saved audio file and convert to WAV at target sample rate
+            data, samplerate = sf.read(temp_path)
+            
+            # Convert to target sample rate if needed
+            if samplerate != self._sample_rate:
+                ratio = self._sample_rate / samplerate
+                new_length = int(len(data) * ratio)
+                data = np.interp(np.linspace(0, len(data), new_length), np.arange(len(data)), data)
+            
+            # Convert to WAV format
+            wav_bytes = io.BytesIO()
+            sf.write(wav_bytes, data, self._sample_rate, format="WAV")
+            
+            # Clean up temporary file
+            try:
+                os.unlink(temp_path)
+            except OSError:
+                pass
+            
+            return wav_bytes.getvalue()
+            
+        except Exception as e:
+            try:
+                os.unlink(temp_path)
+            except (OSError, NameError):
+                pass
+            raise RuntimeError(f"Error calling CambAI TTS: {str(e)}")
+
+
 def create_client(implementation: str, sample_rate: int):
     if implementation == "azure":
         return AzureTts(sample_rate=sample_rate)
@@ -289,4 +385,6 @@ def create_client(implementation: str, sample_rate: int):
         return ElevenTts(sample_rate=sample_rate)
     elif implementation == "cambai":
         return CambAiVertexTts(sample_rate=sample_rate)
+    elif implementation == "cambai-sdk":
+        return CambAiTts(sample_rate=sample_rate)
     raise ValueError(f"Unknown TTS implementation: {implementation}")
