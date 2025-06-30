@@ -3,24 +3,20 @@ import base64
 import io
 import json
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Literal
 from xml.sax import saxutils
 from google.cloud import aiplatform
 import numpy as np
 import requests
 import soundfile as sf
+import tempfile
 
-try:
-    from cambai import CambAI
-    from cambai.models.output_type import OutputType
-    CAMBAI_AVAILABLE = True
-except ImportError:
-    CAMBAI_AVAILABLE = False
+from cambai import CambAI
+from cambai.models.output_type import OutputType
 
 RANDOM_VOICE_KEY = "random"
 REQUEST_TIMEOUT = 30
 NUM_RETRIES = 3
-
 
 def _make_ssml(voice: str, text: str):
     return f"""
@@ -170,11 +166,12 @@ class ElevenTts(Client):
         return self._handle_pcm_response(self._post(url, headers, body))
 
 
-class CambAiVertexTts(Client):
+class CambAIVertexTTS(Client):
     DEFAULT_VOICE = "reference_voice"
     ALL_VOICES = ["reference_voice"]
-
-    def __init__(self, sample_rate: int = 24000, reference_audio_path: Optional[str] = None, reference_text: Optional[str] = None):
+    # Mars7 supported languages
+    Mars7Language = Literal["de-de", "en-gb", "en-us", "es-us", "es-es", "fr-ca", "fr-fr", "ja-jp", "ko-kr", "zh-cn"]
+    def __init__(self, sample_rate: int = 24000):
         super().__init__(sample_rate)     
         # Initialize Google Cloud AI Platform
         self.project_id = os.environ.get("PROJECT_ID")
@@ -189,10 +186,6 @@ class CambAiVertexTts(Client):
             raise ValueError("GOOGLE_APPLICATION_CREDENTIALS environment variable is required for Camb AI Vertex TTS")
         
         aiplatform.init(project=self.project_id, location=self.location)
-        
-        # Set up reference audio and text (can be overridden per request)
-        self.default_reference_audio_path = reference_audio_path or os.environ.get("REFERENCE_AUDIO_PATH")
-        self.default_reference_text = reference_text or os.environ.get("REFERENCE_TEXT")
         
         # Cache for base64-encoded reference audio to avoid re-encoding
         self._reference_audio_cache = {}
@@ -211,14 +204,14 @@ class CambAiVertexTts(Client):
         self._reference_audio_cache[audio_path] = audio_bytes
         return audio_bytes
 
-    def tts(self, text: str, voice: Optional[str] = None, reference_audio_path: Optional[str] = None, reference_text: Optional[str] = None, language: str = "en-us") -> bytes:
+    def tts(self, text: str, reference_audio_path: str, reference_text: str, voice: Optional[str] = None, language: Mars7Language = "en-us") -> bytes:
         """Synthesize text to speech using Camb AI MARS7 model.
         
         Args:
             text: Text to synthesize (required)
-            voice: Voice parameter (not used in MARS7, kept for compatibility)
-            reference_audio_path: Path to reference audio file (required)
+            reference_audio_path: Path to reference audio file (required) 
             reference_text: Transcription of reference audio (required)
+            voice: Voice parameter (not used in MARS7, kept for compatibility)
             language: Target language code (default: "en-us")
             
         Returns:
@@ -228,20 +221,18 @@ class CambAiVertexTts(Client):
             ValueError: If required parameters are missing
         """
         
-        ref_audio_path = reference_audio_path or self.default_reference_audio_path
+        ref_audio_path = reference_audio_path
         if not ref_audio_path:
             raise ValueError(
                 "Reference audio path is required for Camb AI Vertex TTS. "
-                "Provide it via reference_audio_path parameter, REFERENCE_AUDIO_PATH environment variable, "
-                "or during client initialization."
+                "Provide it via reference_audio_path parameter"
             )
         
-        ref_text = reference_text or self.default_reference_text
+        ref_text = reference_text
         if not ref_text:
             raise ValueError(
                 "Reference text is required for Camb AI Vertex TTS. "
-                "Provide it via reference_text parameter, REFERENCE_TEXT environment variable, "
-                "or during client initialization."
+                "Provide it via reference_text parameter"
             )
         
         audio_ref_bytes = self._encode_audio_to_base64(ref_audio_path)
@@ -269,7 +260,6 @@ class CambAiVertexTts(Client):
             audio_bytes = base64.b64decode(response_data["predictions"][0])
             
             # Write FLAC bytes to temp file first to avoid BytesIO format issues
-            import tempfile
             with tempfile.NamedTemporaryFile(suffix='.flac') as tmp_flac:
                 tmp_flac.write(audio_bytes)
                 tmp_flac.flush()
@@ -289,12 +279,12 @@ class CambAiVertexTts(Client):
             raise RuntimeError(f"Error calling Camb AI Vertex TTS: {str(e)}")
 
 
-class CambAiTts(Client):
+class CambAITTS(Client):
     DEFAULT_VOICE = "20303"
     ALL_VOICES = []
 
     def __init__(self, sample_rate: int = 16000):
-        if not CAMBAI_AVAILABLE:
+        if not CambAI:
             raise ImportError(
                 "CambAI SDK is not available. Install it with: pip install cambai"
             )
@@ -331,50 +321,36 @@ class CambAiTts(Client):
         """
         voice = self.resolve_voice(voice)
         
+        if not voice.isnumeric():
+            raise ValueError(f"Invalid CambAI voice ID: {voice}")
+        voice_id = int(voice)
         try:
-            voice_id = int(voice)
-        except ValueError:
-            raise ValueError(f"CambAI voice must be a numeric ID, got: {voice}")
-        
-        import tempfile
-        
-        try:
-            with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as tmp_file:
+            with tempfile.NamedTemporaryFile(suffix='.wav', delete=True) as tmp_file:
                 temp_path = tmp_file.name
             
-            self._client.text_to_speech(
-                text=text,
-                voice_id=voice_id,
-                output_type=OutputType.RAW_BYTES,
-                save_to_file=temp_path
-            )
-            
-            # Read the saved audio file and convert to WAV at target sample rate
-            data, samplerate = sf.read(temp_path)
-            
-            # Convert to target sample rate if needed
-            if samplerate != self._sample_rate:
-                ratio = self._sample_rate / samplerate
-                new_length = int(len(data) * ratio)
-                data = np.interp(np.linspace(0, len(data), new_length), np.arange(len(data)), data)
-            
-            # Convert to WAV format
-            wav_bytes = io.BytesIO()
-            sf.write(wav_bytes, data, self._sample_rate, format="WAV")
-            
-            # Clean up temporary file
-            try:
-                os.unlink(temp_path)
-            except OSError:
-                pass
+                self._client.text_to_speech(
+                    text=text,
+                    voice_id=voice_id,
+                    output_type=OutputType.RAW_BYTES,
+                    save_to_file=temp_path
+                )
+                
+                # Read the saved audio file and convert to WAV at target sample rate
+                data, samplerate = sf.read(temp_path)
+                
+                # Convert to target sample rate if needed
+                if samplerate != self._sample_rate:
+                    ratio = self._sample_rate / samplerate
+                    new_length = int(len(data) * ratio)
+                    data = np.interp(np.linspace(0, len(data), new_length), np.arange(len(data)), data)
+                
+                # Convert to WAV format
+                wav_bytes = io.BytesIO()
+                sf.write(wav_bytes, data, self._sample_rate, format="WAV")
             
             return wav_bytes.getvalue()
             
         except Exception as e:
-            try:
-                os.unlink(temp_path)
-            except (OSError, NameError):
-                pass
             raise RuntimeError(f"Error calling CambAI TTS: {str(e)}")
 
 
@@ -384,7 +360,7 @@ def create_client(implementation: str, sample_rate: int):
     elif implementation == "eleven":
         return ElevenTts(sample_rate=sample_rate)
     elif implementation == "cambai":
-        return CambAiVertexTts(sample_rate=sample_rate)
+        return CambAIVertexTTS(sample_rate=sample_rate)
     elif implementation == "cambai-sdk":
-        return CambAiTts(sample_rate=sample_rate)
+        return CambAITTS(sample_rate=sample_rate)
     raise ValueError(f"Unknown TTS implementation: {implementation}")
