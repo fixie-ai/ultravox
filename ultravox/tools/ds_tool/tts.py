@@ -320,34 +320,30 @@ class CambAITTS(Client):
         if not voice.isnumeric():
             raise ValueError(f"Invalid CambAI voice ID: {voice}")
         voice_id = int(voice)
-        try:
-            with tempfile.NamedTemporaryFile(suffix='.wav', delete=True) as tmp_file:
-                temp_path = tmp_file.name
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=True) as tmp_file:
+            temp_path = tmp_file.name
+        
+            self._client.text_to_speech(
+                text=text,
+                voice_id=voice_id,
+                output_type=OutputType.RAW_BYTES,
+                save_to_file=temp_path
+            )
             
-                self._client.text_to_speech(
-                    text=text,
-                    voice_id=voice_id,
-                    output_type=OutputType.RAW_BYTES,
-                    save_to_file=temp_path
-                )
-                
-                # Read the saved audio file and convert to WAV at target sample rate
-                data, samplerate = sf.read(temp_path)
-                
-                # Convert to target sample rate if needed
-                if samplerate != self._sample_rate:
-                    ratio = self._sample_rate / samplerate
-                    new_length = int(len(data) * ratio)
-                    data = np.interp(np.linspace(0, len(data), new_length), np.arange(len(data)), data)
-                
-                # Convert to WAV format
-                wav_bytes = io.BytesIO()
-                sf.write(wav_bytes, data, self._sample_rate, format="WAV")
+            # Read the saved audio file and convert to WAV at target sample rate
+            data, samplerate = sf.read(temp_path)
             
-            return wav_bytes.getvalue()
+            # Convert to target sample rate if needed
+            if samplerate != self._sample_rate:
+                ratio = self._sample_rate / samplerate
+                new_length = int(len(data) * ratio)
+                data = np.interp(np.linspace(0, len(data), new_length), np.arange(len(data)), data)
             
-        except Exception as e:
-            raise RuntimeError(f"Error calling CambAI TTS: {str(e)}")
+            # Convert to WAV format
+            wav_bytes = io.BytesIO()
+            sf.write(wav_bytes, data, self._sample_rate, format="WAV")
+        
+        return wav_bytes.getvalue()
 
 
 def create_client(implementation: str, sample_rate: int):
