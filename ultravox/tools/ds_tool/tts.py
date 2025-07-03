@@ -280,7 +280,6 @@ class CambAIVertexTTS(Client):
 
 
 class CambAITTS(Client):
-    DEFAULT_VOICE = "20303"
     ALL_VOICES = []
 
     def __init__(self, sample_rate: int = 16000):
@@ -303,11 +302,8 @@ class CambAITTS(Client):
         try:
             voices = self._client.list_voices()
             self.ALL_VOICES = [str(voice.id) for voice in voices]
-            if not self.ALL_VOICES:
-                self.ALL_VOICES = [self.DEFAULT_VOICE]
         except Exception as e:
-            print(f"Warning: Could not fetch CambAI voices, using default: {e}")
-            self.ALL_VOICES = [self.DEFAULT_VOICE]
+            raise RuntimeError(f"Error fetching CambAI voices: {str(e)}")
 
     def tts(self, text: str, voice: Optional[str] = None) -> bytes:
         """Synthesize text to speech using CambAI SDK.
