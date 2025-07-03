@@ -17,6 +17,8 @@ from cambai.models.output_type import OutputType
 RANDOM_VOICE_KEY = "random"
 REQUEST_TIMEOUT = 30
 NUM_RETRIES = 3
+ # Mars7 supported languages
+MARS7LANGUAGES = Literal["de-de", "en-gb", "en-us", "es-us", "es-es", "fr-ca", "fr-fr", "ja-jp", "ko-kr", "zh-cn"]
 
 def _make_ssml(voice: str, text: str):
     return f"""
@@ -166,11 +168,7 @@ class ElevenTts(Client):
         return self._handle_pcm_response(self._post(url, headers, body))
 
 
-class CambAIVertexTTS(Client):
-    DEFAULT_VOICE = "reference_voice"
-    ALL_VOICES = ["reference_voice"]
-    # Mars7 supported languages
-    Mars7Language = Literal["de-de", "en-gb", "en-us", "es-us", "es-es", "fr-ca", "fr-fr", "ja-jp", "ko-kr", "zh-cn"]
+class CambAIVertexTTS(Client):   
     def __init__(self, sample_rate: int = 24000):
         super().__init__(sample_rate)     
         # Initialize Google Cloud AI Platform
@@ -204,7 +202,7 @@ class CambAIVertexTTS(Client):
         self._reference_audio_cache[audio_path] = audio_bytes
         return audio_bytes
 
-    def tts(self, text: str, reference_audio_path: str, reference_text: str, voice: Optional[str] = None, language: Mars7Language = "en-us") -> bytes:
+    def tts(self, text: str, reference_audio_path: str, reference_text: str, voice: Optional[str] = None, language: MARS7LANGUAGES = "en-us") -> bytes:
         """Synthesize text to speech using Camb AI MARS7 model.
         
         Args:
