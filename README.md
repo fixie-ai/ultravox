@@ -9,6 +9,7 @@ A fast multimodal LLM designed for real-time voice interactions
 </h3>
 
 _Latest News_
+* 2025/06 — [Ultravox 0.6](https://huggingface.co/collections/fixie-ai/ultravox-v06-6865e7885cf904e21c31da03) available
 * 2025/02 — [Ultravox 0.5](https://github.com/fixie-ai/ultravox/releases/tag/v0.5) available
 * 2024/11 — [Ultravox 0.4.1](https://github.com/fixie-ai/ultravox/releases/tag/v0.4.1) available
 * 2024/08 — [Ultravox 0.4](https://github.com/fixie-ai/ultravox/releases/tag/v0.4) available
