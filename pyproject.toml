@@ -42,6 +42,8 @@ annoy = "^1.17.3"
 coverage = "^7.6.10"
 whisper_normalizer = "^0.0.10"
 evaluate = "^0.4.3"
+google-cloud-aiplatform = ">=1.98.0"
+camb-sdk = ">=1.0.3"
 
 [tool.poetry.group.dev.dependencies]
 black = "~24.4.2"
