@@ -114,7 +114,7 @@ class GPTBasedEvaluator:
         try:
             score = int(rating_text.split()[-1])
             reason = rating_text[: -len(str(score))].strip()
-        except:
+        except:  # noqa: E722
             score = 0
             reason = ""
         return eval_types.InstructResult(score=score, reason=reason)

@@ -1,0 +1,47 @@
+model: "fixie-ai/ultravox-v0_4_1-llama-3_1-8b"
+
+report_logs_to: ["wandb"]
+output_dir: "./output"
+
+eval_sets:
+  - name: covost2-en-ar
+  - name: covost2-en-ca
+  - name: covost2-en-cy
+  - name: covost2-en-de
+  - name: covost2-en-et
+  - name: covost2-en-fa
+  - name: covost2-en-id
+  - name: covost2-en-ja
+  - name: covost2-en-lv
+  - name: covost2-en-mn
+  - name: covost2-en-sl
+  - name: covost2-en-sv
+  - name: covost2-en-ta
+  - name: covost2-en-tr
+  - name: covost2-en-zh
+  - name: covost2-ar-en
+  - name: covost2-ca-en
+  - name: covost2-cy-en
+  - name: covost2-de-en
+  - name: covost2-es-en
+  - name: covost2-et-en
+  - name: covost2-fa-en
+  - name: covost2-fr-en
+  - name: covost2-id-en
+  - name: covost2-it-en
+  - name: covost2-ja-en
+  - name: covost2-lv-en
+  - name: covost2-mn-en
+  - name: covost2-nl-en
+  - name: covost2-pt-en
+  - name: covost2-ru-en
+  - name: covost2-sl-en
+  - name: covost2-sv-en
+  - name: covost2-ta-en
+  - name: covost2-tr-en
+  - name: covost2-zh-en
+
+eval_dataset_args:
+  max_samples: 2000
+  
+eval_batch_size: 60

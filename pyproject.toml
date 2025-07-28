@@ -9,14 +9,14 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = ">=3.10,<4.0"
-torch = ">=2.4"
-transformers = {version = ">=4.43.1,<4.48.0 || >4.48.0", extras = ["torch"]}
-huggingface-hub = ">=0.27.0"
+torch = ">=2.6"
+transformers = {version = ">=4.51.3", extras = ["torch"]}
+huggingface-hub = {version = ">=0.27.0", extras = ["hf_xet"]}
 peft = "~0.11.1"
 simple-parsing = "~0.1.5"
 librosa = "~0.10.2.post1"
-requests = "~2.31.0"
-datasets = "~2.19.1"
+requests = ">=2.31.0"
+datasets = "3.5.0"
 mosaicml-streaming = "~0.7.6"
 nltk = "~3.8.1"
 truecase = "~0.0.14"
@@ -26,14 +26,14 @@ dataclasses-json = "~0.6.7"
 openai = ">=1.60.0"
 jiwer = "~3.0.4"
 tensorboardx = "~2.6.2.2"
-wandb = "~0.17.1"
+wandb = ">=0.19.10"
 sacrebleu = {version = "^2.4.2"}
 mecab-ko = "*"       # Required for Korean tokenization in sacrebleu
 mecab-python3 = "*"  # Required for Japanese tokenization in sacrebleu
 ipadic = "*"         # IPA dictionary for MeCab
 tenacity = "^9.0.0"
-evals = {git = "https://github.com/fixie-ai/evals", rev = "2734b4318030cd15b8940b0761fff47fb0c1ad53"}
-torchaudio = "^2.4.1"
+evals = {git = "https://github.com/fixie-ai/evals"}
+torchaudio = "^2.6"
 scipy = "^1.14.1"
 einops = "^0.8.0"
 praatio = "^6.2.0"
@@ -42,21 +42,25 @@ annoy = "^1.17.3"
 coverage = "^7.6.10"
 whisper_normalizer = "^0.0.10"
 evaluate = "^0.4.3"
+deepgram-sdk = "^3.10.1"
+vocos = "^0.1.0"
+torchdiffeq = "*"
+x-transformers = "*"
 
 [tool.poetry.group.dev.dependencies]
 black = "~24.4.2"
 isort = "~5.13.2"
-mypy = "~1.10.0"
+mypy = "^1.15.0"
 autoflake = "~2.3.1"
 pytest = "~8.2.2"
 fsspec = "~2024.3.1"
 gcsfs = "~2024.3.1"
 sounddevice = "~0.4.7"
-mosaicml-cli = "~0.6.31"
 gradio-webrtc = {version = ">0.0.19", extras = ["vad"]}
 gpustat = "~1.1.1"
 types-requests = "~2.26.0"
 types-pyyaml = "^6.0.12.20240724"
+ruff = "^0.11.8"
 
 [build-system]
 requires = ["poetry-core"]
@@ -66,6 +70,12 @@ build-backend = "poetry.core.masonry.api"
 python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
+disable_error_code = ["no-any-return", "import-untyped"]
+
+[[tool.mypy.overrides]]
+# Treat transformers as untyped by not following imports into it
+module = "transformers.*"
+follow_imports = "skip"
 
 [tool.isort]
 profile = "black"
@@ -91,3 +101,21 @@ branch = true
 
 [tool.coverage.report]
 show_missing = true
+
+[tool.ruff]
+src = ["ultravox"]
+line-length = 88
+target-version = "py311"
+extend-exclude = ["third_party", "ultravox/assets"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "PYI"]
+ignore = []
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"

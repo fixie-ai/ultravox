@@ -110,3 +110,5 @@ class VoiceSample:
     """Audio sample rate in Hz."""
     audio_transcript: Optional[str] = None
     """For evaluations, the known transcript of the audio."""
+    label: Optional[str] = None
+    """For evaluations, the label or expected answer of the sample."""

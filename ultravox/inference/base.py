@@ -10,6 +10,7 @@ class VoiceOutput:
     text: str
     input_tokens: int
     output_tokens: int
+    thinking_content: Optional[str] = None
 
 
 class InferenceMessage:

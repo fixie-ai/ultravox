@@ -1,7 +1,7 @@
 from ultravox.evaluation import eval_types
 from ultravox.evaluation import gpt_eval
 
-BOOLQ_SYSTEM_PROMPT = f"""
+BOOLQ_SYSTEM_PROMPT = """
 You are an expert evaluator of AI systems.
 Given a question with a known true/false answer, you will be rating the correctness of an AI model's answer to that same question.
 Based on the supplied question, answer, and expected (correct) answer, you will rate the model's answer as either correct or incorrect.

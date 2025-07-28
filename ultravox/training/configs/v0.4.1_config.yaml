@@ -1,0 +1,126 @@
+# trining setup for the v0.4.1
+text_model: "meta-llama/Llama-3.1-8B-Instruct"
+audio_model: "openai/whisper-large-v3-turbo"
+
+train_sets:
+  - name: librispeech-clean-continuation
+  - name: librispeech-other-continuation
+  - name: peoplespeech-clean-continuation
+  - name: gigaspeech-xl-continuation
+    weight: 0.5
+  - name: wenetspeech-continuation
+    weight: 0.25
+  - name: commonvoice-en-continuation
+  - name: commonvoice-ar-continuation
+    weight: 3
+  - name: commonvoice-de-continuation
+  - name: commonvoice-es-continuation
+  - name: commonvoice-fr-continuation
+  - name: commonvoice-it-continuation
+  - name: commonvoice-ja-continuation
+    weight: 5
+  - name: commonvoice-pt-continuation
+    weight: 5
+  - name: commonvoice-ru-continuation
+    weight: 5
+  - name: commonvoice-hi-continuation
+    weight: 10
+  - name: commonvoice-tr-continuation
+    weight: 5
+  - name: commonvoice-sv-continuation
+    weight: 10
+  - name: commonvoice-uk-continuation
+    weight: 5
+  - name: multilingual_librispeech-nl-continuation
+  - name: multilingual_librispeech-pt-continuation
+    weight: 5
+  - name: librispeech-clean-transcription
+    weight: 0.1
+  - name: librispeech-other-transcription
+    weight: 0.1
+  - name: peoplespeech-clean-transcription
+    weight: 0.1
+  - name: gigaspeech-xl-transcription
+    weight: 0.05
+  - name: wenetspeech-transcription
+    weight: 0.025
+  - name: commonvoice-en-transcription
+    weight: 0.1
+  - name: commonvoice-ar-transcription
+    weight: 0.3
+  - name: commonvoice-de-transcription
+    weight: 0.1
+  - name: commonvoice-es-transcription
+    weight: 0.1
+  - name: commonvoice-fr-transcription
+    weight: 0.1
+  - name: commonvoice-it-transcription
+    weight: 0.5
+  - name: commonvoice-ja-transcription
+    weight: 0.5
+  - name: commonvoice-pt-transcription
+    weight: 0.5
+  - name: commonvoice-ru-transcription
+    weight: 0.5
+  - name: commonvoice-hi-transcription
+    weight: 1
+  - name: commonvoice-tr-transcription
+    weight: 0.5
+  - name: commonvoice-sv-transcription
+    weight: 1
+  - name: commonvoice-uk-transcription
+    weight: 0.5
+  - name: multilingual_librispeech-nl-transcription
+    weight: 0.1
+  - name: multilingual_librispeech-pt-transcription
+    weight: 0.5
+  - name: covost2-ar-en
+  - name: covost2-ca-en
+  - name: covost2-cy-en
+  - name: covost2-de-en
+  - name: covost2-en-ar
+  - name: covost2-en-ca
+  - name: covost2-en-cy
+  - name: covost2-en-de
+  - name: covost2-en-et
+  - name: covost2-en-fa
+  - name: covost2-en-id
+  - name: covost2-en-ja
+  - name: covost2-en-lv
+  - name: covost2-en-mn
+  - name: covost2-en-sl
+  - name: covost2-en-sv
+  - name: covost2-en-ta
+  - name: covost2-en-tr
+  - name: covost2-en-zh
+  - name: covost2-es-en
+  - name: covost2-et-en
+  - name: covost2-fa-en
+  - name: covost2-fr-en
+  - name: covost2-id-en
+  - name: covost2-it-en
+  - name: covost2-ja-en
+  - name: covost2-lv-en
+  - name: covost2-mn-en
+  - name: covost2-nl-en
+  - name: covost2-pt-en
+  - name: covost2-ru-en
+  - name: covost2-sl-en
+  - name: covost2-sv-en
+  - name: covost2-ta-en
+  - name: covost2-tr-en
+  - name: covost2-zh-en
+
+
+lr: 1e-3
+lr_warmup_steps: 1000
+batch_size: 12
+grad_accum_steps: 2
+
+max_steps: -1
+num_epochs: 2
+val_steps: 0.05
+save_steps: 0.25
+
+# the original v0.4.1 model is equivalent to projector_ln_mid: false
+# use the default value here for projector_ln_mid: true

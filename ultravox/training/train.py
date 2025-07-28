@@ -1,7 +1,6 @@
 import contextlib
 import dataclasses
 import datetime
-import glob
 import logging
 import os
 import random
@@ -10,9 +9,9 @@ from typing import Dict, List
 
 import accelerate
 import datasets as hf_datasets
-import safetensors.torch
 import torch
 import torch.distributed
+import torch.distributed.fsdp as fsdp
 import transformers
 import wandb
 import wandb.sdk
@@ -24,6 +23,7 @@ from ultravox.model import file_utils
 from ultravox.training import config_base
 from ultravox.training import ddp_utils
 from ultravox.training import model_types
+from ultravox.training import trainer as ultra_trainer
 from ultravox.training.helpers import prefetch_weights
 from ultravox.utils import device_helpers
 from ultravox.utils import monkey_patches
@@ -59,7 +59,12 @@ def prepare_dataset(
     data_names = [ds.name for ds in data_opts]
     data_weights = [ds.weight for ds in data_opts]
     data_sets = [
-        datasets.create_dataset(ds, data_args, verbose=verbose) for ds in data_names
+        datasets.create_dataset(
+            ds,
+            data_args,
+            verbose=verbose,
+        )
+        for ds in data_names
     ]
     # If we're using epochs to train, validate the dataset length is appropriate.
     if train_args.max_steps == 0:
@@ -70,7 +75,7 @@ def prepare_dataset(
 
     interleave = datasets.InterleaveDataset(data_sets, data_weights)
     ds_with_proc = model_pack.wrap_with_data_proc(interleave)
-    if data_args.max_samples:
+    if data_args.max_samples != -1:
         return datasets.Range(ds_with_proc, data_args.max_samples)
     else:
         return ds_with_proc
@@ -95,47 +100,71 @@ def main() -> None:
 
 
 def train(config: config_base.TrainConfig):
-    world_size = int(os.environ.get("WORLD_SIZE", 1))
-    local_rank = int(os.environ.get("LOCAL_RANK", 0))
-    is_master = local_rank == 0
-    is_distributed = world_size > 1
+    world_size = device_helpers.get_world_size()
+    local_world_size = device_helpers.get_local_world_size()
+    local_rank = device_helpers.get_local_rank()
+    is_local_master = device_helpers.is_local_master()
+    is_global_master = device_helpers.is_global_master()
+    is_distributed = device_helpers.is_distributed()
+    logging.info(
+        f"world_size: {world_size}, local_world_size: {device_helpers.get_local_world_size()}"
+        f" local_rank: {local_rank}, group_rank: {device_helpers.get_group_rank()}"
+        f" is_local_master: {is_local_master}, is_global_master: {is_global_master}"
+        f" is_distributed: {is_distributed}"
+    )
 
     # DDP blows up logging, so this is an attempt to suppress it to only logs from the master process
-    logging.basicConfig(level=logging.INFO if is_master else logging.ERROR)
-    # os.environ["TORCH_LOGS"] = "ERROR" if is_master else "WARNING"
-    transformers.logging.set_verbosity(logging.WARNING if is_master else logging.ERROR)
-    hf_datasets.logging.set_verbosity(logging.WARNING if is_master else logging.ERROR)
+    logging.basicConfig(level=logging.INFO if is_local_master else logging.ERROR)
+    # os.environ["TORCH_LOGS"] = "ERROR" if is_local_master else "WARNING"
+    transformers.logging.set_verbosity(
+        logging.WARNING if is_local_master else logging.ERROR
+    )
+    hf_datasets.logging.set_verbosity(
+        logging.WARNING if is_local_master else logging.ERROR
+    )
 
     if is_distributed:
-        torch.distributed.init_process_group(backend="nccl")
+        # It seems gloo breaks on multi-node
+        torch.distributed.init_process_group(
+            backend="cpu:gloo,cuda:nccl" if local_world_size == world_size else "nccl"
+        )
 
-    with ddp_utils.run_on_master_first(is_master):
+    with ddp_utils.run_on_master_first():
         # For larger models, we assume that the weights are already downloaded via prefetch_weights.py
         # Otherwise the barrier call can timeout.
         # This call is only here as a backstop in case prefetch_weights.py was not run, for example in a local/test run.
-        prefetch_weights.download_weights(
-            [config.text_model, config.audio_model], config.model_load_dir
+        weights_to_download = (
+            [config.audio_model, config.text_model]
+            if config.audio_model
+            else [config.text_model]
         )
+        prefetch_weights.download_weights(weights_to_download, config.model_load_dir)
 
     logging.info("Instantiating model and processor...")
 
     model_load_context = (
         accelerate.init_empty_weights()
-        if config.use_fsdp and not is_master
+        if config.use_fsdp and not is_local_master
         else contextlib.nullcontext()
     )
     # If we're using FSDP, we can just initialize the model on the main process
-    # and use sync_model_states to distribute the weights to the other processes.
+    # and use sync_module_states to distribute the weights to the other processes.
     # Otherwise we'd be loading the model on every process, which uses too much CPU memory.
     with model_load_context:
         model_pack = model_types.create_model_pack(config)
         model = model_pack.model
 
+        # Print _no_split_modules
+        if config.use_fsdp:
+            logging.info(
+                f"[Rank {local_rank}] _no_split_modules: {model._no_split_modules}"
+            )
+
     logging.info("Model and processor instantiated.")
 
     # Starting W&B. HF Trainer can also do this, but this way we can include the config.
     # Initializing sooner also means more of the stdout logs are captured by W&B.
-    if "wandb" in config.report_logs_to and is_master:
+    if "wandb" in config.report_logs_to and is_global_master:
         wandb.init(
             project=os.getenv("WANDB_PROJECT", "ultravox"),
             config=dataclasses.asdict(config),
@@ -145,20 +174,18 @@ def train(config: config_base.TrainConfig):
             save_code=True,
         )
 
-    if config.model_load_dir:
-        logging.info(f"Loading model state dict from {config.model_load_dir}")
-        load_path = file_utils.download_dir_if_needed(config.model_load_dir)
-        if os.path.isdir(load_path):
-            load_path = os.path.join(load_path, "model*.safetensors")
-        paths = glob.glob(load_path)
-        assert len(paths) > 0, f"No model files found at {load_path}"
-        for path in paths:
-            state_dict = safetensors.torch.load_file(path)
-            mismatch = model.load_state_dict(state_dict, strict=False)
-            if mismatch.unexpected_keys:
-                raise ValueError(
-                    f"Unexpected keys in state dict: {mismatch.unexpected_keys}"
-                )
+    if config.ignore_data_skip and config.resume_from_load_dir:
+        new_shuffle_seed = random.randint(1000, 1999)
+        logging.info(
+            "Since data skipping is ignored when resuming from a checkpoint,"
+            f" randomly setting the train dataset seed to {new_shuffle_seed}."
+        )
+        config.train_dataset_args.shuffle_seed = new_shuffle_seed
+        if wandb.run:
+            wandb.run.config.update(
+                {"train_dataset_args": dataclasses.asdict(config.train_dataset_args)},
+                allow_val_change=True,
+            )
 
     if config.ignore_data_skip and config.resume_from_load_dir:
         new_shuffle_seed = random.randint(1000, 1999)
@@ -192,16 +219,16 @@ def train(config: config_base.TrainConfig):
         model_pack=model_pack,
         data_opts=config.get_train_sets(),
         data_args=config.train_dataset_args,
-        verbose=is_master,
+        verbose=is_local_master,
     )
-    if is_master:
+    if is_global_master:
         for val_opt in config.get_val_sets():
             val_dataset = prepare_dataset(
                 train_args=config,
                 model_pack=model_pack,
                 data_opts=[val_opt],
                 data_args=config.val_dataset_args,
-                verbose=is_master,
+                verbose=is_local_master,
             )
             val_datasets[val_opt.name] = val_dataset
         logging.info(
@@ -214,19 +241,21 @@ def train(config: config_base.TrainConfig):
         train_dataset = datasets.EmptyDataset(len(train_dataset))
         for val_opts in config.get_val_sets():
             val_datasets[val_opts.name] = datasets.EmptyDataset(
-                config.val_dataset_args.max_samples or 1
+                config.val_dataset_args.max_samples
+                if config.val_dataset_args.max_samples > 0
+                else 1
             )
 
     logging.info(f"Config Params: {config}")
-    trainer = transformers.Seq2SeqTrainer(
-        model,
+    trainer = ultra_trainer.UltraTrainer(
+        model=model,
         train_dataset=train_dataset,
         eval_dataset=val_datasets,
         data_collator=model_pack.data_collator,
         processing_class=model_pack.processor,
         args=transformers.Seq2SeqTrainingArguments(
-            dataloader_num_workers=config.num_workers if is_master else 0,
-            output_dir=config.output_dir,
+            dataloader_num_workers=config.num_workers if is_global_master else 0,
+            output_dir=str(config.output_dir),
             run_name=config.exp_name,
             optim=config.optimizer,
             num_train_epochs=config.num_epochs,
@@ -236,26 +265,37 @@ def train(config: config_base.TrainConfig):
             save_strategy="steps" if config.save_steps else "no",
             save_steps=config.save_steps,
             logging_first_step=True,
-            logging_dir=config.logs_dir,
+            logging_dir=str(config.logs_dir),
             logging_steps=config.logging_steps,
             # TODO (Farzad): reconsider for multi-node
             # In DDP world_size is set to num_gpus and we want process-0 to split the batches
-            per_device_train_batch_size=config.batch_size * world_size,
-            accelerator_config={"split_batches": True},
+            # If use use dynamic_batch, the batch size here has to be 1
+            per_device_train_batch_size=(
+                config.batch_size * world_size if not config.use_dynamic_batch else 1
+            ),
+            per_device_eval_batch_size=(
+                config.val_batch_size * world_size
+                if not config.use_dynamic_batch
+                else 1
+            ),
+            dataloader_drop_last=config.dataloader_drop_last,
+            accelerator_config={
+                "split_batches": True,
+            },
             gradient_accumulation_steps=config.grad_accum_steps,
             eval_accumulation_steps=config.val_accum_steps,
             # tf32=dtype == torch.float32 and device.type == "cuda",  # TODO: check for Ampere GPU not just CUDA
-            ddp_find_unused_parameters=False,
+            ddp_find_unused_parameters=config.find_unused_parameters,
             learning_rate=config.lr,
             lr_scheduler_type=config.lr_scheduler,
             lr_scheduler_kwargs=config.lr_scheduler_kwargs,
             warmup_steps=0 if config.lr_warmup_steps < 1 else config.lr_warmup_steps,
             warmup_ratio=config.lr_warmup_steps if config.lr_warmup_steps < 1 else 0,
             weight_decay=config.weight_decay,
-            # fp16=dtype == torch.float16,
-            # bf16=dtype == torch.bfloat16,
+            fp16=config.fp16_training,
+            bf16=config.bf16_training,
             use_cpu=config.device == "cpu",
-            seed=config.seed + local_rank,
+            seed=config.seed,
             report_to=config.report_logs_to,
             # torch_compile=True,
             fsdp="full_shard auto_wrap" if config.use_fsdp else "",
@@ -282,7 +322,11 @@ def train(config: config_base.TrainConfig):
                 trainer.evaluate()
 
         try:
-            resume_from_checkpoint = load_path if config.resume_from_load_dir else None
+            resume_from_checkpoint = (
+                file_utils.download_dir_if_needed(config.model_load_dir)
+                if config.model_load_dir and config.resume_from_load_dir
+                else None
+            )
             trainer.train(resume_from_checkpoint=resume_from_checkpoint)
         except Exception as e:
             logging.error(f"[rank: {local_rank}] Training failed with error: {e}")
@@ -299,7 +343,7 @@ def train(config: config_base.TrainConfig):
     if config.do_eval:
         if config.model_type == "lsm":
             logging.warning("Evaluation is not supported for LSM models, skipping")
-        if config.use_fsdp:
+        elif config.use_fsdp:
             logging.warning("Evaluation is not supported in FSDP mode, skipping")
         else:
             logging.info("Starting evaluation...")
@@ -315,22 +359,22 @@ def train(config: config_base.TrainConfig):
                 model=model,
                 processor=model_pack.processor,
                 tokenizer=model_pack.get_text_tokenizer(),
-                device=(
-                    f"{config.device}:{local_rank}" if world_size > 1 else config.device
-                ),
                 dtype=device_helpers.get_dtype(config.data_type),
             )
 
+            fsdp.register_fsdp_forward_method(model, "generate")
+
             metrics, output_files = eval.eval_datasets(
-                inference,
-                config.get_eval_sets(),
-                config.eval_dataset_args,
-                config.eval_batch_size,
-                config.eval_max_tokens,
-                config.eval_temperature,
-                config.output_dir,
+                inference=inference,
+                dataset_options=config.get_eval_sets(),
+                dataset_args=config.eval_dataset_args,
+                augmentation_configs=config.get_eval_augmentations(),
+                batch_size=config.eval_batch_size,
+                max_tokens=config.eval_max_tokens,
+                temperature=config.eval_temperature,
+                output_dir=config.output_dir,
             )
-            if is_master:
+            if is_local_master:
                 eval.print_results(metrics, output_files)
 
             t_end = datetime.datetime.now()
@@ -338,10 +382,11 @@ def train(config: config_base.TrainConfig):
             logging.info(f"elapsed: {t_end - t_start}")
 
     # finish wandb run if it exists
-    if wandb.run and is_master:
+    if wandb.run and is_local_master:
         wandb.run.finish(exit_code=1 if caught_exception else 0)
     # destroy process group if distributed training
-    if world_size > 1:
+    if is_distributed:
+        torch.cuda.synchronize()
         torch.distributed.destroy_process_group()
 
     if caught_exception:

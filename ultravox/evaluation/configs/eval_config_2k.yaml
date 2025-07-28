@@ -4,13 +4,9 @@ report_logs_to: ["wandb"]
 output_dir: "./output"
 
 eval_sets:
-  - name: covost2-en-ar
-  - name: covost2-en-ca
   - name: covost2-en-de
   - name: covost2-en-zh
   - name: covost2-es-en
-  - name: covost2-ru-en
-  - name: covost2-tr-en
   - name: covost2-zh-en
   - name: librispeech-clean-transcription
   - name: librispeech-other-transcription
@@ -18,9 +14,12 @@ eval_sets:
   - name: commonvoice-es-transcription
   - name: commonvoice-ru-transcription
   - name: bigbenchaudio
+  - name: audiobench-cn-college-listen-mcq
+  - name: audiobench-dream-tts-mcq
+  - name: audiobench-slue-p2-sqa5
+  - name: audiobench-public-sg-speech-qa
 
 eval_dataset_args:
   max_samples: 2000
-  max_audio_duration_secs: -1
 
 eval_batch_size: 60

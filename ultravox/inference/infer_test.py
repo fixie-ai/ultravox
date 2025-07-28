@@ -1,3 +1,4 @@
+import os
 from typing import Optional
 from unittest import mock
 
@@ -17,7 +18,7 @@ from ultravox.model import ultravox_processing
 @pytest.fixture(scope="module")
 def tokenizer():
     tokenizer = transformers.AutoTokenizer.from_pretrained(
-        "./assets/hf/Meta-Llama-3-8B-Instruct", local_files_only=True
+        os.path.abspath("./assets/hf/Meta-Llama-3-8B-Instruct"), local_files_only=True
     )
     # Set padding_side to "left" to support batch inference.
     tokenizer.padding_side = "left"
@@ -27,7 +28,7 @@ def tokenizer():
 @pytest.fixture(scope="module")
 def audio_processor():
     return transformers.AutoProcessor.from_pretrained(
-        "./assets/hf/openai-whisper-tiny", local_files_only=True
+        os.path.abspath("./assets/hf/openai-whisper-tiny"), local_files_only=True
     )
 
 
@@ -58,7 +59,6 @@ class FakeInference(infer.LocalInference):
             mock.MagicMock(),
             processor=processor,
             tokenizer=tokenizer,
-            device="cpu",
             dtype=torch.float32,
         )
         self.model.device = "cpu"

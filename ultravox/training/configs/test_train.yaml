@@ -1,9 +1,6 @@
 text_model: "hf-internal-testing/tiny-random-LlamaForCausalLM"
 audio_model: "hf-internal-testing/tiny-random-WhisperForCausalLM"
 
-loss_config:
-  loss_function: "KL_Divergence"
-
 train_sets:
   - name: dummy
 

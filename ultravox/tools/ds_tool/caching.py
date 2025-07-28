@@ -3,6 +3,7 @@ import json
 import os
 from typing import List, Optional, Union, overload
 
+import numpy as np
 import openai
 from tenacity import retry
 from tenacity import stop_after_attempt
@@ -58,32 +59,62 @@ class CachingTtsWrapper:
         self._base_path = os.path.join(".cache/ds_tool/tts", implementation)
 
     @overload
-    def tts(self, text: str, voice: Optional[str] = None) -> bytes: ...
+    def tts(self, text: str, voice: Optional[str] = None, **kwargs) -> bytes: ...
 
     @overload
-    def tts(self, text: List[str], voice: Optional[str] = None) -> List[bytes]: ...
+    def tts(
+        self, text: List[str], voice: Optional[str] = None, **kwargs
+    ) -> List[bytes]: ...
 
     def tts(
-        self, text: Union[str, List[str]], voice: Optional[str] = None
+        self, text: Union[str, List[str]], voice: Optional[str] = None, **kwargs
     ) -> Union[bytes, List[bytes]]:
-        text_hash = hashlib.sha256(str(text).encode()).hexdigest()
-        voice = self._client.resolve_voice(voice)
+        voice = self._client.resolve_voice(voice, **kwargs)
 
         if isinstance(text, list):
-            return [self.tts(t, voice) for t in text]
+            return [self.tts(t, voice, **kwargs) for t in text]
 
         path = os.path.join(self._base_path, voice)
         os.makedirs(path, exist_ok=True)
 
+        text_hash = hashlib.sha256(str(text).encode()).hexdigest()
         cache_path = os.path.join(path, f"{text_hash}.wav")
 
         if os.path.exists(cache_path):
             with open(cache_path, "rb") as f:
                 return f.read()
 
-        wav = self._client.tts(text, voice)
+        wav = self._client.tts(text=text, voice=voice, **kwargs)
 
         with open(cache_path, "wb") as f:
             f.write(wav)
 
         return wav
+
+
+class CachingEmbeddingWrapper:
+    def __init__(self, client: openai.Client, unique_id: str):
+        super().__init__()
+        self._client = client
+        self._base_path = os.path.join(".cache/ds_tool/textgen", unique_id)
+        os.makedirs(self._base_path, exist_ok=True)
+
+    @retry(wait=wait_fixed(3), stop=stop_after_attempt(3))
+    def embed(self, **kwargs) -> List[float]:
+        text_hash = hashlib.sha256(json.dumps(kwargs).encode()).hexdigest()
+
+        # try to read from cache
+        cache_path = os.path.join(self._base_path, f"{text_hash}.npy")
+        if os.path.exists(cache_path):
+            return np.load(cache_path)
+
+        # if not found, create new embedding
+        embedding = self._client.embeddings.create(**kwargs).data[0].embedding
+
+        # write to cache
+        try:
+            np.save(cache_path, embedding)
+        except IOError as e:
+            print(f"Warning: Unable to cache embedding: {e}")
+
+        return embedding

@@ -9,6 +9,7 @@ GS_XL_CONFIG = types.DatasetConfig(
     ],
     transcript_template="{{text_proc.format_asr_text(text)}}",
     assistant_template="{{text_proc.format_asr_text(text)}}",
+    user_template_args={"transcript_language": "English"},
 )
 
 GS_XL_TRANS_CONFIG = types.DatasetConfig(

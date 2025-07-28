@@ -21,6 +21,16 @@ samples_en = [
     ),
 ]
 
+samples_en_cap_hypothesis_len = [
+    eval_types.Sample(
+        index=0,
+        question="",
+        transcript="",
+        expected_answer="The quick",
+        generated_answer="The quick brown fox jumps over a lazy dog",
+    ),
+]
+
 samples_zh = [
     eval_types.Sample(
         index=0,
@@ -58,6 +68,21 @@ samples_ja = [
 
 def test_wer_en():
     result = string_metrics.wer(samples_en, {})
+    assert result.score == pytest.approx(9.090909090909092, rel=1e-2)
+
+
+def test_wer_en_cap_hypothesis_len():
+    result = string_metrics.wer(
+        samples_en_cap_hypothesis_len, {"cap_hypothesis_len": 2.0}
+    )
+    assert result.score == pytest.approx(100, rel=1e-2)
+
+    result = string_metrics.wer(
+        samples_en_cap_hypothesis_len, {"cap_hypothesis_len": 5.0}
+    )
+    assert result.score == pytest.approx(350, rel=1e-2)
+
+    result = string_metrics.wer(samples_en, {"cap_hypothesis_len": 2.0})
     assert result.score == pytest.approx(9.090909090909092, rel=1e-2)
 
 

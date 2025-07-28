@@ -1,0 +1,280 @@
+# trining setup for v0.5.1 llama3-70b model
+text_model: "meta-llama/Llama-3.3-70B-Instruct"
+audio_model: "openai/whisper-large-v3-turbo"
+
+audio_model_lora_config:
+  r: 8
+
+train_sets:
+  - name: librispeech-clean-continuation
+  - name: librispeech-other-continuation
+  - name: peoplespeech-clean-continuation
+  - name: gigaspeech-xl-continuation
+  - name: wenetspeech-continuation
+  - name: multilingual_librispeech-nl-continuation
+  - name: multilingual_librispeech-pt-continuation
+    weight: 3
+  - name: commonvoice-en-continuation
+  - name: commonvoice-ar-continuation
+    weight: 3
+  - name: commonvoice-de-continuation
+  - name: commonvoice-es-continuation
+  - name: commonvoice-fr-continuation
+  - name: commonvoice-it-continuation
+  - name: commonvoice-ja-continuation
+    weight: 6
+  - name: commonvoice-pt-continuation
+    weight: 3
+  - name: commonvoice-ru-continuation
+    weight: 3
+  - name: commonvoice-hi-continuation
+    weight: 10
+  - name: commonvoice-tr-continuation
+    weight: 2
+  - name: commonvoice-sv-continuation
+    weight: 9
+  - name: commonvoice-uk-continuation
+    weight: 3
+  - name: commonvoice-sw-continuation
+    weight: 2
+  - name: commonvoice-fa-continuation
+    weight: 3
+  - name: commonvoice-th-continuation
+    weight: 2
+  - name: commonvoice-be-continuation
+  - name: commonvoice-ta-continuation
+    weight: 2
+  - name: commonvoice-cs-continuation
+    weight: 4
+  - name: commonvoice-lv-continuation
+    weight: 6
+  - name: commonvoice-ka-continuation
+    weight: 2
+  - name: commonvoice-ur-continuation
+    weight: 10
+  - name: commonvoice-pl-continuation
+    weight: 3
+  - name: commonvoice-hu-continuation
+    weight: 2
+  - name: commonvoice-nl-continuation
+    weight: 2
+  - name: commonvoice-gl-continuation
+    weight: 3
+  - name: commonvoice-cy-continuation
+    weight: 8
+  - name: commonvoice-ro-continuation
+    weight: 10
+  - name: commonvoice-et-continuation
+    weight: 10
+  - name: commonvoice-br-continuation
+    weight: 10
+  - name: commonvoice-lt-continuation
+    weight: 10
+  - name: commonvoice-el-continuation
+    weight: 10
+  - name: commonvoice-sk-continuation
+    weight: 10
+  - name: commonvoice-bg-continuation
+    weight: 10
+  - name: commonvoice-mk-continuation
+    weight: 10
+  - name: commonvoice-fi-continuation
+    weight: 10
+  - name: commonvoice-mr-continuation
+    weight: 10
+  - name: commonvoice-mn-continuation
+    weight: 10
+  - name: commonvoice-vi-continuation
+    weight: 10
+  - name: commonvoice-da-continuation
+    weight: 10
+  - name: commonvoice-sl-continuation
+    weight: 10 
+  - name: commonvoice-sr-continuation
+    weight: 10
+  - name: commonvoice-ml-continuation
+    weight: 10
+  - name: commonvoice-oc-continuation
+    weight: 10
+  - name: commonvoice-bn-continuation
+    weight: 3
+  - name: librispeech-clean-transcription
+  - name: librispeech-other-transcription
+  - name: peoplespeech-clean-transcription
+  - name: gigaspeech-xl-transcription
+  - name: wenetspeech-transcription
+  - name: multilingual_librispeech-nl-transcription
+  - name: multilingual_librispeech-pt-transcription
+    weight: 3
+  - name: commonvoice-en-transcription
+  - name: commonvoice-ar-transcription
+    weight: 3
+  - name: commonvoice-de-transcription
+  - name: commonvoice-es-transcription
+  - name: commonvoice-fr-transcription
+  - name: commonvoice-it-transcription
+  - name: commonvoice-ja-transcription
+    weight: 6
+  - name: commonvoice-pt-transcription
+    weight: 3
+  - name: commonvoice-ru-transcription
+    weight: 3
+  - name: commonvoice-hi-transcription
+    weight: 10
+  - name: commonvoice-tr-transcription
+    weight: 2 
+  - name: commonvoice-sv-transcription
+    weight: 9
+  - name: commonvoice-uk-transcription
+    weight: 3
+  - name: commonvoice-sw-transcription
+    weight: 2
+  - name: commonvoice-fa-transcription
+    weight: 3
+  - name: commonvoice-th-transcription
+    weight: 2
+  - name: commonvoice-be-transcription
+  - name: commonvoice-ta-transcription
+    weight: 2
+  - name: commonvoice-cs-transcription
+    weight: 4
+  - name: commonvoice-lv-transcription
+    weight: 6
+  - name: commonvoice-ka-transcription
+    weight: 2
+  - name: commonvoice-ur-transcription
+    weight: 10
+  - name: commonvoice-pl-transcription
+    weight: 3
+  - name: commonvoice-hu-transcription
+    weight: 2
+  - name: commonvoice-nl-transcription
+    weight: 2
+  - name: commonvoice-gl-transcription
+    weight: 3
+  - name: commonvoice-cy-transcription
+    weight: 8
+  - name: commonvoice-ro-transcription
+    weight: 10
+  - name: commonvoice-et-transcription
+    weight: 10
+  - name: commonvoice-br-transcription
+    weight: 10
+  - name: commonvoice-lt-transcription
+    weight: 10
+  - name: commonvoice-el-transcription
+    weight: 10
+  - name: commonvoice-sk-transcription
+    weight: 10
+  - name: commonvoice-bg-transcription
+    weight: 10
+  - name: commonvoice-mk-transcription
+    weight: 10
+  - name: commonvoice-fi-transcription
+    weight: 10
+  - name: commonvoice-mr-transcription
+    weight: 10
+  - name: commonvoice-mn-transcription
+    weight: 10
+  - name: commonvoice-vi-transcription
+    weight: 10
+  - name: commonvoice-da-transcription
+    weight: 10
+  - name: commonvoice-sl-transcription
+    weight: 10
+  - name: commonvoice-sr-transcription
+    weight: 10
+  - name: commonvoice-ml-transcription
+    weight: 10
+  - name: commonvoice-oc-transcription
+    weight: 10
+  - name: commonvoice-bn-transcription
+    weight: 3
+  - name: covost2-ar-en
+  - name: covost2-ca-en
+  - name: covost2-cy-en
+  - name: covost2-de-en
+  - name: covost2-en-ar
+  - name: covost2-en-ca
+  - name: covost2-en-cy
+  - name: covost2-en-de
+  - name: covost2-en-et
+  - name: covost2-en-fa
+  - name: covost2-en-id
+  - name: covost2-en-ja
+  - name: covost2-en-lv
+  - name: covost2-en-mn
+  - name: covost2-en-sl
+  - name: covost2-en-sv
+  - name: covost2-en-ta
+  - name: covost2-en-tr
+  - name: covost2-en-zh
+  - name: covost2-es-en
+  - name: covost2-et-en
+  - name: covost2-fa-en
+  - name: covost2-fr-en
+  - name: covost2-id-en
+  - name: covost2-it-en
+  - name: covost2-ja-en
+  - name: covost2-lv-en
+  - name: covost2-mn-en
+  - name: covost2-nl-en
+  - name: covost2-pt-en
+  - name: covost2-ru-en
+  - name: covost2-sl-en
+  - name: covost2-sv-en
+  - name: covost2-ta-en
+  - name: covost2-tr-en
+  - name: covost2-zh-en
+    weight: 3
+  - name: indicvoices-hi-transcription # hindi specific
+    weight: 40
+  - name: shrutilipi-hi-transcription # hindi specific
+    weight: 20
+  - name: kathbath-hi-transcription # hindi specific
+    weight: 60
+  - name: seamless-hi-transcription # hindi specific
+    weight: 20
+  - name: indicvoices-hi-continuation # hindi specific
+    weight: 40
+  - name: shrutilipi-hi-continuation # hindi specific
+    weight: 20
+  - name: kathbath-hi-continuation # hindi specific
+    weight: 60
+  - name: seamless-hi-continuation # hindi specific
+    weight: 20
+
+val_sets:
+  - name: covost2-en-de
+  - name: covost2-zh-en
+  - name: peoplespeech-clean-transcription
+  - name: kathbath-hi-transcription # hindi specific
+  - name: indicvoices-hi-transcription # hindi specific
+
+eval_sets:
+  - name: covost2-en-de
+  - name: covost2-en-zh
+  - name: covost2-es-en
+  - name: covost2-zh-en
+  - name: librispeech-clean-transcription
+  - name: librispeech-other-transcription
+  - name: commonvoice-en-transcription
+  - name: commonvoice-es-transcription
+  - name: commonvoice-ru-transcription
+  - name: fleurs-hi_in-transcription # hindi specific
+  - name: commonvoice-hi-transcription # hindi specific
+
+
+
+lr: 5e-4
+lr_warmup_steps: 1000
+batch_size: 16
+grad_accum_steps: 2
+
+max_steps: -1
+num_epochs: 2
+val_steps: 2000
+save_steps: 2000
+logging_steps: 200
+bf16_training: True
+use_fsdp: True

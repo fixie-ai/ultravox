@@ -97,44 +97,21 @@ After creating a virtual environment, install required packages using `just` and
 just install
 ```
 
+If you plan to use augmentations (optional), you may also want to install system packages necessary for augmentations. You can do that with `just install-augs-system`. Read more about augmentations [here](ultravox/data/aug/AUGMENTATIONS.md).
+
 We're using Poetry to manage the Python virtual environment. You can observe your environment with `poetry env info`.
-
-### Mosaic Environment Setup (Fixie Internal)
-
-If you want to use [Mosaic](https://docs.mosaicml.com/projects/mcli/en/latest/quick_start/getting_started.html) for training, you need to setup a few things to run on the Mosaic Platform.
-
-1. Install & login to the Mosaic CLI
-
-```bash
-pip install --upgrade mosaicml-cli
-
-mcli init
-
-mcli set api-key <new-value>
-```
-
-2. set API keys for tools we use:
-
-```bash
-# Huggging Face token for accessing walled data and models
-mcli create secret env HF_TOKEN=hf_<your_token>
-mcli create secret env HF_WRITE_TOKEN=hf_<your_token_with_write_access>
-
-# WandB token for logging experiments
-mcli create secret env WANDB_PROJECT=ultravox
-mcli create secret env WANDB_API_KEY=<your_wandb_key>
-```
 
 ## Training
 
 Currently, we keep both the LLM and the audio encoder frozen and only train the adapter/projector. Training Ultraox v0.4 took 2-3 hours on 8xH100 GPUs for 14K training steps.
 
 ### Use-Cases for Training Ultravox
+
 Why would you want to (re-) train Ultravox? Here are a few scenarios:
 
 1. You want to use a different LLM or audio encoder backbone.
 
-    a. In this case you need to re-train the adapter. You can use `release_config.yaml`, which contains our config for our latest release, and you should be able to simply change the base LLM or encoder by specifying `--text-model <hf-model-id-for-llm>` and/or `--audio-model <hf-model-id-for-encoder>`.
+   a. In this case you need to re-train the adapter. You can use `example_config.yaml`, which contains our config for our latest release, and you should be able to simply change the base LLM or encoder by specifying `--text-model <hf-model-id-for-llm>` and/or `--audio-model <hf-model-id-for-encoder>`.
 
 2. You want to improve the knowledge of the model
 
@@ -142,81 +119,48 @@ Why would you want to (re-) train Ultravox? Here are a few scenarios:
 
 3. You want to use your own audio data, for example to add support for a new language.
 
-    a. First step, prepare your dataset: at bare minimum, the samples should have an `audio` and a text `continuation` field.
-  
-    b. Take a look at [`ds_tool.py`](ultravox/tools/ds_tool/ds_tool.py) and [`continuation.jinja`](ultravox/tools/ds_tool/continuation.jinja) as well as [our variant of Common Voice](https://huggingface.co/datasets/fixie-ai/common_voice_17_0/viewer/fr) that was created using `ds_tool` to add the `continuation` field.
-    
-    c. Add your dataset to the dataset mix in `release_config.yaml` and train.
+   a. First step, prepare your dataset: at bare minimum, the samples should have an `audio` and a text `continuation` field.
+
+   b. Take a look at [`ds_tool.py`](ultravox/tools/ds_tool/ds_tool.py) and [`continuation.jinja`](ultravox/tools/ds_tool/continuation.jinja) as well as [our variant of Common Voice](https://huggingface.co/datasets/fixie-ai/common_voice_17_0/viewer/fr) that was created using `ds_tool` to add the `continuation` field.
+
+   c. Add your dataset to the dataset mix in `example_config.yaml` and train.
 
 There's no one-size fits all. If you need help you can find us on our Discord server [here](https://discord.gg/Qw6KHxv8YB).
 
-
 ### How to Train
 
-We do most of our training on the [MosaicML platform](https://docs.mosaicml.com) and therefore most of our tooling and docs are Mosaic-related. However, you can do the same training on your own GPU without much difficulty. Here we assume you have the environment set up (run `just install`). You can also take a look at [`setup.sh`](setup.sh)
+We do most of our training on the [MosaicML platform](https://docs.mosaicml.com) and therefore most of our tooling and docs are Mosaic-related. However, the MosaicML platform is being shut down at the end of July 2025, but we still left the configs in here for the commands. You can do the same training on your own GPU without much difficulty. Here we assume you have the environment set up (run `just install`). You can also take a look at [`setup.sh`](setup.sh)
 
 To kick off a training run you can do:
+
 ```bash
-poetry run python -m ultravox.training.train --config_path ultravox/training/configs/release_config.yaml
+poetry run python -m ultravox.training.train --config_path ultravox/training/configs/example_config.yaml
 ```
 
 For DDP training make sure to add `torchrun`. We also recommend prefetching weights in advance:
+
 ```bash
-TRAIN_ARGS="--config_path ultravox/training/configs/release_config.yaml"
+TRAIN_ARGS="--config_path ultravox/training/configs/example_config.yaml"
 poetry run python -m ultravox.training.helpers.prefetch_weights $TRAIN_ARGS
 poetry run torchrun --nproc_per_node=8 -m ultravox.training.train $TRAIN_ARGS
 ```
 
 For a debug run, you can use smaller models, datasets, or batch size. Here's a config that uses TinyLlama as the LLM backbone:
+
 ```bash
 poetry run python -m ultravox.training.train --config_path ultravox/training/configs/asr_tinyllama_100s.yaml --batch_size 1 --report_logs_to tensorboard
 ```
 
-
 We use [SimpleParsing](https://github.com/lebrice/simpleparsing/) for configs. Configs are composable (i.e. you can specify zero or many configs) and `meta_config.yaml` is always used as the default.
 See [`configs_base.py`](ultravox/training/config_base.py) to find the parameters you modify, such as the `--text-model`, `--device`, `--exp-name`, etc.
 
+#### Multi-node training
 
-### MosaicML Training (Fixie Internal)
+- For multi-node training, all you need to do is update `compute.gpus` line on `mcli_train.yaml` to get more GPUs for training
+  - All factors of 8 are supported
+- For more than 4 nodes, you might need to increase `val_dataset_args.max_samples`
 
-Before running any training jobs, set up [SSH authentication with MosaicML](https://docs.mosaicml.com/projects/mcli/en/latest/resources/secrets/ssh.html#page-secrets-ssh):
-
-1. Generate an SSH key:
-   ```bash
-   ssh-keygen -f ~/.ssh/mclid_id_rsa
-   ```
-
-2. Add the public key to your GitHub account
-
-3. Upload the private key to MosaicML (this allows MosaicML to clone the repository and run jobs):
-   ```bash
-   mcli create secret git-ssh ~/.ssh/mclid_id_rsa
-   ```
-
-Then you can run the following command to kick off a training job:
-
-```bash
-mcli run -f mcloud_train.yaml --follow
-```
-
-Other useful commands:
-
-```bash
-mcli get clusters
-
-mcli util r7z2
-mcli get runs
-mcli get runs --cluster r7z2
-
-mcli run -f mcloud_eval.yaml --follow
-```
-
-For interactive runs you can use:
-```bash
-just mcloud --image mosaicml/composer:latest --max-duration 1
-```
-
-IMPORTANT: Make sure to monitor your jobs and stop the machine when you're done with any job, specially interactive ones!
+**NOTE:** W&B doesn't currently support multiple nodes. You'll only get info from the main node. It's possible to support it with grouped runs, so let me know if you think this is important for you.
 
 ### Running evaluations
 

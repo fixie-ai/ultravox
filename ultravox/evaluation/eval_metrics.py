@@ -18,7 +18,7 @@ METRIC_REGISTRY: Dict[str, Callable[[eval_types.Sample], eval_types.Result]] = {
     "audiobench_binary": gpt_eval_audiobench.evaluate_answer_audiobench_binary,
     "audiobench_scalar": gpt_eval_audiobench.evaluate_answer_audiobench,
     "exact_match_last_word": string_metrics.match_last_word,
-    "conversation": gpt_eval_conv.evaluate_conversation_response,
+    "partial_match": string_metrics.partial_match,
 }
 
 CORPUS_METRIC_REGISTRY: Dict[

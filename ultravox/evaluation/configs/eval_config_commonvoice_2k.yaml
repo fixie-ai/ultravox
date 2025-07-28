@@ -1,0 +1,56 @@
+model: "fixie-ai/ultravox-v0_4_1-llama-3_1-8b"
+
+report_logs_to: ["wandb"]
+output_dir: "./output"
+
+eval_sets:
+  - name: commonvoice-ar-transcription
+  - name: commonvoice-be-transcription
+  - name: commonvoice-bg-transcription
+  - name: commonvoice-bn-transcription
+  - name: commonvoice-br-transcription
+  - name: commonvoice-cs-transcription
+  - name: commonvoice-cy-transcription
+  - name: commonvoice-da-transcription
+  - name: commonvoice-de-transcription
+  - name: commonvoice-el-transcription
+  - name: commonvoice-en-transcription
+  - name: commonvoice-es-transcription
+  - name: commonvoice-et-transcription
+  - name: commonvoice-fa-transcription
+  - name: commonvoice-fi-transcription
+  - name: commonvoice-fr-transcription
+  - name: commonvoice-gl-transcription
+  - name: commonvoice-hi-transcription
+  - name: commonvoice-hu-transcription
+  - name: commonvoice-it-transcription
+  - name: commonvoice-ja-transcription
+  - name: commonvoice-ka-transcription
+  - name: commonvoice-lt-transcription
+  - name: commonvoice-lv-transcription
+  - name: commonvoice-mk-transcription
+  - name: commonvoice-ml-transcription
+  - name: commonvoice-mn-transcription
+  - name: commonvoice-mr-transcription
+  - name: commonvoice-nl-transcription
+  - name: commonvoice-oc-transcription
+  - name: commonvoice-pl-transcription
+  - name: commonvoice-pt-transcription
+  - name: commonvoice-ro-transcription
+  - name: commonvoice-ru-transcription
+  - name: commonvoice-sk-transcription
+  - name: commonvoice-sl-transcription
+  - name: commonvoice-sr-transcription
+  - name: commonvoice-sv-transcription
+  - name: commonvoice-sw-transcription
+  - name: commonvoice-ta-transcription
+  - name: commonvoice-th-transcription
+  - name: commonvoice-tr-transcription
+  - name: commonvoice-uk-transcription
+  - name: commonvoice-ur-transcription
+  - name: commonvoice-vi-transcription
+
+eval_dataset_args:
+  max_samples: 2000
+  
+eval_batch_size: 60

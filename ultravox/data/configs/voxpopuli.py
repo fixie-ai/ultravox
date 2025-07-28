@@ -10,6 +10,7 @@ VP_EN_CONFIG = types.DatasetConfig(
     ],
     assistant_template="{{raw_text}}",
     transcript_template="{{raw_text}}",
+    user_template_args={"transcript_language": "English"},
 )
 
 configs = [

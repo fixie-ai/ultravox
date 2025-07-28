@@ -1,4 +1,5 @@
 import copy
+import re
 import threading
 from concurrent import futures
 from typing import Dict, List, Optional, Tuple, Union
@@ -22,11 +23,13 @@ class LocalInference(base.VoiceInference):
         model: transformers.PreTrainedModel,
         processor: ultravox_processing.UltravoxProcessor,
         tokenizer: transformers.PreTrainedTokenizer,
-        device: str,
         dtype: torch.dtype,
         conversation_mode: bool = False,
+        chat_template: Optional[str] = None,
+        enable_thinking: bool = False,
+        thinking_regex: Optional[str] = None,
     ):
-        self.model = model.to(device).to(dtype).eval()
+        self.model = model.to(dtype).eval()
         self.tokenizer = tokenizer
         self.processor = processor
         self.dtype = dtype
@@ -40,7 +43,9 @@ class LocalInference(base.VoiceInference):
             tokenizer=self.tokenizer,
             include_alt_fields=False,
         )
-
+        self.chat_template = chat_template
+        self.enable_thinking = enable_thinking
+        self.thinking_regex = thinking_regex
         assert self.tokenizer.padding_side == "left"
 
     def update_conversation(
@@ -77,6 +82,38 @@ class LocalInference(base.VoiceInference):
         messages.append({"role": "assistant", "content": response_content})
         return messages
 
+    def _postprocess_response(self, text: str) -> Tuple[str, Optional[str]]:
+        """Post-process the model's response text.
+
+        This method handles post-processing of the model's response by separating the response text
+        from the thinking content and returns them as a tuple.
+
+        Args:
+            text: The model's response text to process.
+
+        Returns:
+            Tuple of (response_text, thinking_content). If thinking is disabled, thinking_content will be None.
+
+        Raises:
+            ValueError: If thinking is enabled but thinking_regex is not set, or if thinking content
+            is not found in the response when thinking is enabled.
+        """
+        if not self.enable_thinking:
+            return text, None
+
+        if not self.thinking_regex:
+            raise ValueError("thinking_regex is not set while enable_thinking is True")
+
+        match = re.search(self.thinking_regex, text, re.DOTALL)
+        if not match:
+            raise ValueError(
+                f"{self.thinking_regex} not matched in the response while thinking is enabled: {text}"
+            )
+
+        thinking_content = match.group(1).strip()
+        response_text = re.sub(self.thinking_regex, "", text, flags=re.DOTALL).strip()
+        return response_text, thinking_content
+
     def infer(
         self,
         sample: datasets.VoiceSample,
@@ -91,14 +128,20 @@ class LocalInference(base.VoiceInference):
         )
         output_tokens = output.sequences[0][input_len:]
         output_text = self.tokenizer.decode(output_tokens, skip_special_tokens=True)
+
+        response_text, thinking_content = self._postprocess_response(output_text)
         output_len = len(output_tokens)
+
         if self.conversation_mode:
             audio_token_len = inputs.get("audio_token_len", [0])[0]
             past_messages = self._build_past_messages(
-                extended_sample.messages, audio_token_len, output_text
+                extended_sample.messages, audio_token_len, response_text
             )
             self.update_conversation(past_messages, output.past_key_values)
-        return base.VoiceOutput(output_text, input_len, output_len)
+
+        return base.VoiceOutput(
+            response_text, input_len, output_len, thinking_content=thinking_content
+        )
 
     # Note: infer_batch doesn't support conversation mode or caching yet.
     def infer_batch(
@@ -128,9 +171,18 @@ class LocalInference(base.VoiceInference):
         for output in output_batch:
             output_tokens = output[input_len:]
             output_text = self.tokenizer.decode(output_tokens, skip_special_tokens=True)
+
+            response_text, thinking_content = self._postprocess_response(output_text)
             output_len = len(output_tokens)
-            output_text = base.VoiceOutput(output_text, input_len, output_len)
-            output_texts.append(output_text)
+            output_texts.append(
+                base.VoiceOutput(
+                    response_text,
+                    input_len,
+                    output_len,
+                    thinking_content=thinking_content,
+                )
+            )
+
         return output_texts
 
     def infer_stream(
@@ -140,15 +192,37 @@ class LocalInference(base.VoiceInference):
         temperature: Optional[float] = None,
     ) -> base.InferenceGenerator:
         extended_sample = self._get_sample_with_past(sample)
-        inputs = self._dataproc(extended_sample)
+
+        # First pass: Process input without generation prompt to build KV cache
+        inputs = self._dataproc(extended_sample, add_generation_prompt=False)
+
+        # Build KV cache for input
+        output = self._generate(
+            inputs,
+            max_new_tokens=1,  # Don't generate any new tokens
+            temperature=temperature,
+            past_key_values=self.past_key_values,
+        )
+        # Make a deep copy of past_key_values to preserve it
+        preserved_past_key_values = copy.deepcopy(output.past_key_values)
+        past_key_values = output.past_key_values
+        del output
+
+        # Second pass: Process with generation prompt but don't expand cache
+        inputs = self._dataproc(extended_sample, add_generation_prompt=True)
         input_tokens = inputs["input_ids"].shape[1]
+
         streamer = transformers.TextIteratorStreamer(
             self.tokenizer, skip_prompt=True, skip_special_tokens=True
         )
 
         def thunk(f: futures.Future):
             result = self._generate(
-                inputs, max_tokens, temperature, streamer, self.past_key_values
+                inputs,
+                max_new_tokens=max_tokens,
+                temperature=temperature,
+                streamer=streamer,
+                past_key_values=past_key_values,  # Use separate copy for generation
             )
             f.set_result(result)
 
@@ -157,6 +231,7 @@ class LocalInference(base.VoiceInference):
         )
         thread = threading.Thread(target=thunk, args=(future,))
         thread.start()
+
         output_text = ""
         output_token_len = 0
         for chunk in streamer:
@@ -164,19 +239,32 @@ class LocalInference(base.VoiceInference):
                 output_text += chunk
                 output_token_len += 1
                 yield base.InferenceChunk(chunk)
+
         thread.join()
-        output = future.result()
+        future.result()  # Wait for generation to complete
+
+        response_text, _ = self._postprocess_response(output_text)
+
         if self.conversation_mode:
             audio_token_len = inputs.get("audio_token_len", [0])[0]
             past_messages = self._build_past_messages(
-                extended_sample.messages, audio_token_len, output_text
+                extended_sample.messages, audio_token_len, response_text
             )
-            self.update_conversation(past_messages, output.past_key_values)
+            self.update_conversation(
+                past_messages, preserved_past_key_values
+            )  # Use preserved past_key_values from first step
+
         yield base.InferenceStats(input_tokens, output_token_len)
 
-    def _dataproc(self, sample: datasets.VoiceSample):
+    def _dataproc(
+        self, sample: datasets.VoiceSample, add_generation_prompt: bool = True
+    ):
         text_input = self.tokenizer.apply_chat_template(
-            sample.messages, add_generation_prompt=True, tokenize=False
+            sample.messages,
+            add_generation_prompt=add_generation_prompt,
+            tokenize=False,
+            chat_template=self.chat_template,
+            enable_thinking=self.enable_thinking,
         )
         if sample.audio is not None:
             audio = sample.audio
@@ -220,8 +308,16 @@ class LocalInference(base.VoiceInference):
         past_key_values: Optional[Union[Tuple, transformers.cache_utils.Cache]] = None,
         return_dict_in_generate: Optional[bool] = True,
     ):
-        temperature = temperature or None
-        do_sample = temperature is not None
+        sampling_args = {
+            "temperature": temperature,
+            "max_new_tokens": max_new_tokens or MAX_NEW_TOKENS,
+        }
+        if temperature is not None and temperature > 0:
+            sampling_args["do_sample"] = True
+        else:
+            sampling_args["do_sample"] = False
+            sampling_args["top_p"] = None
+            sampling_args["top_k"] = None
 
         terminators = [self.tokenizer.eos_token_id]
         if "<|eot_id|>" in self.tokenizer.added_tokens_encoder:
@@ -229,9 +325,7 @@ class LocalInference(base.VoiceInference):
 
         return self.model.generate(
             **inputs,
-            do_sample=do_sample,
-            max_new_tokens=max_new_tokens or MAX_NEW_TOKENS,
-            temperature=temperature,
+            **sampling_args,
             pad_token_id=self.tokenizer.eos_token_id,
             eos_token_id=terminators,
             streamer=streamer,

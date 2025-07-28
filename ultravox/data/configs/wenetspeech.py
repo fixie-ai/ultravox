@@ -6,6 +6,7 @@ WS_BASE_CONFIG = types.DatasetConfig(
     subset="L_fixed",
     splits=[types.DatasetSplitConfig(name="train", num_samples=14_621_415)],
     transcript_template="{{text}}",
+    user_template_args={"transcript_language": "Chinese"},
 )
 
 WS_TRANS_CONFIG = types.DatasetConfig(

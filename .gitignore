@@ -192,3 +192,5 @@ output/
 
 saved_tokenizer/
 .run_configs/
+
+*.wav

@@ -16,6 +16,8 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    container:
+      image: us-central1-docker.pkg.dev/fixie-frame/ultravox-training/ultravox-training:v2
 
     # permissions:
     #   # Gives the action the necessary permissions for publishing new
@@ -27,29 +29,37 @@ jobs:
     #   contents: write
 
     steps:
+      - name: Install git-lfs
+        run: |
+          apt-get update && apt-get install -y git-lfs
+          
       - uses: actions/checkout@v4
         with:
           lfs: true
 
       - uses: extractions/setup-just@v1
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v2
-        with:
-          python-version: 3.11
+      # - name: Set up Python 3.11
+      #   uses: actions/setup-python@v2
+      #   with:
+      #     python-version: 3.11
 
       - name: Install dependencies
         run: |
+          . $VENV_PATH/bin/activate
           just install
+          just install-augs-system
 
       - name: Run checks
         run: |
+          . $VENV_PATH/bin/activate
           just check
 
       - name: Run tests and coverage
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
+          . $VENV_PATH/bin/activate
           just test-verbose
 
       # - name: Coverage comment

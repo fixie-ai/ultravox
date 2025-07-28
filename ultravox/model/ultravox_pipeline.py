@@ -8,6 +8,8 @@ import transformers
 # Even "from . import X" pattern doesn't work (undocumented and unclear why)
 from .ultravox_model import UltravoxModel
 from .ultravox_processing import UltravoxProcessor
+from .ultravox_tokenizer import from_pretrained_text_tokenizer
+from .ultravox_tokenizer import get_audio_token_id
 
 
 class UltravoxPipeline(transformers.Pipeline):
@@ -16,17 +18,20 @@ class UltravoxPipeline(transformers.Pipeline):
         model: UltravoxModel,
         tokenizer: Optional[transformers.PreTrainedTokenizerBase] = None,
         audio_processor: Optional[transformers.ProcessorMixin] = None,
+        chat_template: Optional[str] = None,
         **kwargs
     ):
         if tokenizer is None:
             try:
-                tokenizer = transformers.AutoTokenizer.from_pretrained(
-                    model.config._name_or_path
-                )
-            except:
-                tokenizer = transformers.AutoTokenizer.from_pretrained(
+                tokenizer = from_pretrained_text_tokenizer(model.config._name_or_path)
+            except:  # noqa: E722
+                tokenizer = from_pretrained_text_tokenizer(
                     model.config.text_model_id or model.config.text_config._name_or_path
                 )
+        if chat_template:
+            tokenizer.chat_template = chat_template
+
+        model.config.audio_token_index = get_audio_token_id(tokenizer)
 
         if audio_processor is None:
             audio_processor = transformers.AutoProcessor.from_pretrained(

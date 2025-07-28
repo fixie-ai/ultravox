@@ -2,6 +2,7 @@ import dataclasses
 import datetime
 import json
 import logging
+import math
 import os
 from pathlib import Path
 from typing import Any, Dict, Generator, List, Optional, Tuple, Union
@@ -32,8 +33,20 @@ class EvalConfig:
         default_factory=data.EvalDatasetArgs
     )
 
+    augmentations: List[Dict[str, Any]] = simple_parsing.list_field()
+
     def get_eval_sets(self) -> List[data.DatasetOptions]:
         return [data.DatasetOptions(**ds) for ds in self.eval_sets]
+
+    def get_eval_augmentations(self) -> List[data.AugmentationConfig]:
+        aug_configs = []
+        for aug in self.augmentations:
+            aug_dict = aug.copy()
+            name = aug_dict.pop("name")
+            if name is None:
+                name = "null"
+            aug_configs.append(data.AugRegistry.get_config(name, aug_dict))
+        return aug_configs
 
     eval_batch_size: int = 4
     eval_max_tokens: int = 512
@@ -41,6 +54,13 @@ class EvalConfig:
 
     device: str = "cuda"
     data_type: str = "bfloat16"
+    use_fsdp: bool = False
+    use_tp: bool = False
+
+    enable_thinking: bool = False
+    thinking_regex: Optional[str] = r"<think>(.*)</think>\n\n"
+
+    chat_template: Optional[str] = None
 
     exp_name: Optional[str] = None
     output_dir: Optional[Path] = None
@@ -56,15 +76,27 @@ class EvalConfig:
             if self.data_type == "bfloat16":
                 self.data_type = "float32"
 
+        if device_helpers.is_distributed() and ":" not in self.device:
+            self.device = f"{self.device}:{device_helpers.get_local_rank()}"
+
         if self.exp_name is None:
             self.exp_name = datetime.datetime.now().strftime("exp--%Y-%m-%d--%H-%M-%S")
         if self.output_dir is None:
             self.output_dir = Path("runs") / self.exp_name
 
+        if self.enable_thinking:
+            if self.thinking_regex is None:
+                raise ValueError(
+                    "thinking_regex must be provided if enable_thinking is True"
+                )
+        else:
+            self.thinking_regex = None
+
 
 def infer_dataset_shard(
     inference: infer.LocalInference,
     dataset_shard_iterator: Generator[List[Tuple[int, data.VoiceSample]], None, None],
+    augmentation: Optional[data.Augmentation] = None,
     max_tokens: Optional[int] = None,
     temperature: float = 0.0,
     progress_bar: Optional[tqdm] = None,
@@ -72,7 +104,13 @@ def infer_dataset_shard(
     results: List[eval_types.Sample] = []
     for batch_input in dataset_shard_iterator:
         batch_indices = [idx for idx, _ in batch_input]
-        batch_samples = [sample for _, sample in batch_input]
+        if augmentation is not None:
+            batch_samples = [
+                augmentation.apply_sample(sample) for _, sample in batch_input
+            ]
+        else:
+            batch_samples = [sample for _, sample in batch_input]
+
         batch_references = []
         for sample in batch_samples:
             assistant_message = sample.messages.pop()
@@ -89,15 +127,15 @@ def infer_dataset_shard(
         for index, sample, output, reference in zip(
             batch_indices, batch_samples, batch_output, batch_references
         ):
-            results.append(
-                eval_types.Sample(
-                    index=index,
-                    question=sample.messages[-1]["content"],
-                    transcript=sample.audio_transcript or "",
-                    expected_answer=reference,
-                    generated_answer=output.text,
-                )
+            result = eval_types.Sample(
+                index=index,
+                question=sample.messages[-1]["content"],
+                transcript=sample.audio_transcript or "",
+                expected_answer=reference,
+                generated_answer=output.text,
+                thinking_content=output.thinking_content,
             )
+            results.append(result)
 
         if progress_bar:
             progress_bar.update(1)
@@ -107,26 +145,45 @@ def infer_dataset_shard(
 def infer_dataset(
     inference: infer.LocalInference,
     dataset: data.SizedIterableDataset,
+    augmentation: Optional[data.Augmentation] = None,
     batch_size: int = 1,
     max_tokens: Optional[int] = None,
     temperature: float = 0.0,
+    use_tp: bool = False,
 ) -> List[eval_types.Sample]:
 
-    world_size = device_helpers.get_world_size()
     local_rank = device_helpers.get_local_rank()
+
+    if use_tp:
+        # When using TP, the input to all processes must be the same
+        # No data parallelism is needed nor is allowed
+        data_world_size = 1
+        data_rank = 0
+    else:
+        # Otherwise, each rank will get a different shard of the dataset
+        data_world_size = device_helpers.get_world_size()
+        data_rank = local_rank
 
     progress_bar = None
     if local_rank == 0:
-        total_batches = len(dataset) // (batch_size * world_size)
+        total_batches = math.ceil(len(dataset) / (batch_size * data_world_size))
         progress_bar = tqdm(total=total_batches)
 
     dataset_shard_iterator = ddp_utils.sharded_batch_iterator(
-        dataset, batch_size, world_size, local_rank
+        dataset, batch_size, data_world_size, data_rank
     )
     results: List[eval_types.Sample] = infer_dataset_shard(
-        inference, dataset_shard_iterator, max_tokens, temperature, progress_bar
+        inference,
+        dataset_shard_iterator,
+        augmentation,
+        max_tokens,
+        temperature,
+        progress_bar,
     )
-    results = ddp_utils.all_gather_list(results)
+
+    if not use_tp:
+        # When using TP, all processes already have the results
+        results = ddp_utils.all_gather_list(results)
 
     if local_rank == 0:
         if progress_bar:
@@ -141,71 +198,104 @@ def eval_datasets(
     inference: infer.LocalInference,
     dataset_options: List[data.DatasetOptions],
     dataset_args: data.EvalDatasetArgs,
+    augmentation_configs: List[data.AugmentationConfig],
     batch_size: int,
     max_tokens: Optional[int],
     temperature: float,
     output_dir: Optional[Path],
+    use_tp: bool = False,
 ):
     metrics = []
     output_files = []
-    local_rank = device_helpers.get_local_rank()
+    aug_configs: List[Optional[data.AugmentationConfig]] = (
+        [None] if len(augmentation_configs) == 0 else [*augmentation_configs]
+    )
+
     for dataset_opt in dataset_options:
-        dataset: Union[data.GenericDataset, data.Range] = data.create_dataset(
-            dataset_opt.name, dataset_args, verbose=local_rank == 0
-        )
-        if dataset_args.max_samples:
-            dataset = data.Range(dataset, dataset_args.max_samples)
-        results = infer_dataset(
-            inference,
-            dataset,
-            batch_size=batch_size,
-            max_tokens=max_tokens,
-            temperature=temperature,
-        )
+        for aug_config in aug_configs:
+            dataset: Union[data.GenericDataset, data.Range] = data.create_dataset(
+                dataset_opt.name, dataset_args, verbose=device_helpers.is_local_master()
+            )
+            if dataset_args.max_samples != -1:
+                dataset = data.Range(dataset, dataset_args.max_samples)
 
-        # compute metrics, if specified, and save results only on the first process
-        if local_rank == 0:
-            # ensure same order
-            dataset_config = dataset.get_config()
-            if dataset_config.eval_config:
-                eval_result: eval_types.Result = eval_metrics.evaluate_answers(
-                    results, dataset_config.eval_config
-                )
-                logging.info(
-                    f"Eval: {dataset.name}, {dataset_config.eval_config.metric}: {eval_result.score:.2f}"
-                )
-                metrics.append(
-                    (
-                        f"{dataset.name}.{dataset_config.eval_config.metric}",
-                        eval_result.score,
-                    )
-                )
-                if wandb.run:
-                    wandb.run.log(
-                        {
-                            "eval_results": wandb.Table(
-                                columns=["metric", "score"], data=metrics
-                            )
-                        }
+            if aug_config is None:
+                aug = None
+            else:
+                aug = data.AugRegistry.create_augmentation(aug_config)
+
+            results = infer_dataset(
+                inference,
+                dataset,
+                augmentation=aug,
+                batch_size=batch_size,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                use_tp=use_tp,
+            )
+
+            # compute metrics, if specified, and save results only on the first process
+            if device_helpers.is_global_master():
+                # ensure same order
+                dataset_config = dataset.get_config()
+                aug_name = "null"
+                if dataset_config.eval_config:
+                    eval_result: eval_types.Result = eval_metrics.evaluate_answers(
+                        results, dataset_config.eval_config
                     )
 
-            if output_dir:
-                output_file = os.path.join(output_dir, f"{dataset.name}.json")
-                with open(output_file, "w") as f:
-                    results_json = [result.to_dict() for result in results]
-                    json.dump(results_json, f, ensure_ascii=False, indent=2)
-                print(f"Results saved to {output_file}")
-                output_files.append(output_file)
-                if wandb.run:
-                    wandb.run.save(output_file)
+                    if aug_config is not None:
+                        aug_name = aug_config.name
+
+                    if aug_config is not None:
+                        logging.info(
+                            f"Eval: {dataset.name}, {aug_name}, {dataset_config.eval_config.metric}: {eval_result.score:.2f}"
+                        )
+                    else:
+                        logging.info(
+                            f"Eval: {dataset.name}, {dataset_config.eval_config.metric}: {eval_result.score:.2f}"
+                        )
+
+                    metrics.append(
+                        (
+                            f"{dataset.name}.{dataset_config.eval_config.metric}",
+                            f"{aug_name}",
+                            eval_result.score,
+                        )
+                    )
+
+                    if wandb.run:
+                        wandb.run.log(
+                            {
+                                "eval_results": wandb.Table(
+                                    columns=["metric", "augmentation", "score"],
+                                    data=metrics,
+                                )
+                            }
+                        )
+
+                if output_dir:
+                    output_name = (
+                        f"{dataset.name}.{aug_name}.json"
+                        if aug_name
+                        else f"{dataset.name}.json"
+                    )
+                    output_file = os.path.join(output_dir, output_name)
+                    with open(output_file, "w") as f:
+                        results_json = [result.to_dict() for result in results]
+                        json.dump(results_json, f, ensure_ascii=False, indent=2)
+                    print(f"Results saved to {output_file}")
+                    output_files.append(output_file)
+                    if wandb.run:
+                        wandb.run.save(output_file)
 
     return metrics, output_files
 
 
-def print_results(metrics: List[Tuple[str, float]], output_files: List[str]):
-    print(f"Evaluation Scores:\n")
-    for metric_name, score in metrics:
-        print(f"  {metric_name}: {score}")
+def print_results(metrics: List[Tuple[str, str, float]], output_files: List[str]):
+    print("Evaluation Scores:\n")
+    for metric_name, augmentation_name, score in metrics:
+        print(f"  {metric_name}, {augmentation_name}: {score}")
     print("Output Files:\n")
     for output_file in output_files:
         print(f"  {output_file}")
@@ -218,14 +308,11 @@ def main(override_sys_args: Optional[List[str]] = None):
         EvalConfig, add_config_path_arg=True, args=override_sys_args
     )
 
-    world_size = device_helpers.get_world_size()
-    local_rank = device_helpers.get_local_rank()
+    if device_helpers.is_distributed() and not dist.is_initialized():
+        dist.init_process_group(backend="cpu:gloo,cuda:nccl")
+        torch.cuda.set_device(device_helpers.get_local_rank())
 
-    if world_size > 1:
-        # use gloo instead of nccl as the gathering opration is on cpu; need to double check if nccl is supported previously.
-        dist.init_process_group(backend="gloo")
-
-    if local_rank == 0:
+    if device_helpers.is_global_master():
         if config.output_dir:
             config.output_dir.mkdir(parents=True, exist_ok=True)
         if "wandb" in config.report_logs_to:
@@ -237,32 +324,36 @@ def main(override_sys_args: Optional[List[str]] = None):
                 save_code=True,
             )
 
-    with ddp_utils.run_on_master_first(local_rank == 0):
-        inference = ultravox_infer.UltravoxInference(
-            config.model,
-            device=(
-                f"{config.device}:{local_rank}" if world_size > 1 else config.device
-            ),
-            data_type=config.data_type,
-        )
-
-    metrics, output_files = eval_datasets(
-        inference,
-        config.get_eval_sets(),
-        config.eval_dataset_args,
-        config.eval_batch_size,
-        config.eval_max_tokens,
-        config.eval_temperature,
-        config.output_dir,
+    inference = ultravox_infer.UltravoxInference(
+        config.model,
+        device=config.device,
+        use_fsdp=config.use_fsdp,
+        use_tp=config.use_tp,
+        data_type=config.data_type,
+        chat_template=config.chat_template,
+        enable_thinking=config.enable_thinking,
+        thinking_regex=config.thinking_regex,
     )
 
-    if local_rank == 0:
+    metrics, output_files = eval_datasets(
+        inference=inference,
+        dataset_options=config.get_eval_sets(),
+        dataset_args=config.eval_dataset_args,
+        augmentation_configs=config.get_eval_augmentations(),
+        batch_size=config.eval_batch_size,
+        max_tokens=config.eval_max_tokens,
+        temperature=config.eval_temperature,
+        output_dir=config.output_dir,
+        use_tp=config.use_tp,
+    )
+
+    if device_helpers.is_global_master():
         print_results(metrics, output_files)
 
         if wandb.run:
             wandb.run.finish()
 
-    if world_size > 1:
+    if device_helpers.is_distributed():
         dist.destroy_process_group()
 
 

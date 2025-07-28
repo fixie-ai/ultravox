@@ -45,5 +45,29 @@ def get_world_size() -> int:
     return int(os.environ.get("WORLD_SIZE", 1))
 
 
+def get_local_world_size() -> int:
+    return int(os.environ.get("LOCAL_WORLD_SIZE", 1))
+
+
 def get_local_rank() -> int:
     return int(os.environ.get("LOCAL_RANK", 0))
+
+
+def get_global_rank() -> int:
+    return int(os.environ.get("RANK", 0))
+
+
+def get_group_rank() -> int:
+    return int(os.environ.get("GROUP_RANK", 0))
+
+
+def is_local_master() -> bool:
+    return get_local_rank() == 0
+
+
+def is_global_master() -> bool:
+    return get_global_rank() == 0
+
+
+def is_distributed() -> bool:
+    return get_world_size() > 1

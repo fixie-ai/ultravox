@@ -12,6 +12,7 @@ ML_NL_CONFIG = types.DatasetConfig(
     base="multilingual_librispeech",
     subset="dutch",
     splits=[types.DatasetSplitConfig(name="train", num_samples=37_533)],
+    user_template_args={"transcript_language": "Dutch"},
 )
 
 ML_PT_CONFIG = types.DatasetConfig(
@@ -19,6 +20,7 @@ ML_PT_CONFIG = types.DatasetConfig(
     base="multilingual_librispeech",
     subset="portuguese",
     splits=[types.DatasetSplitConfig(name="train", num_samples=37_533)],
+    user_template_args={"transcript_language": "Portuguese"},
 )
 
 ML_NL_TRANS_CONFIG = types.DatasetConfig(

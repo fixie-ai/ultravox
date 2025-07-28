@@ -12,6 +12,7 @@ PS_BASE_CONFIG = types.DatasetConfig(
     ],
     assistant_template="{{text_proc.format_asr_text(text)}}",
     transcript_template="{{text_proc.format_asr_text(text)}}",
+    user_template_args={"transcript_language": "English"},
 )
 
 PS_TRANS_CONFIG = types.DatasetConfig(

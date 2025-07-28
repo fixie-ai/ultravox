@@ -40,7 +40,7 @@ class Client(abc.ABC):
         self._sample_rate = sample_rate
 
     @abc.abstractmethod
-    def tts(self, text: str, voice: Optional[str] = None) -> bytes:
+    def tts(self, text: str, voice: Optional[str] = None, **kwargs) -> bytes:
         raise NotImplementedError
 
     def _post(self, url: str, headers: Dict[str, str], json: Dict[str, Any]):
@@ -56,7 +56,7 @@ class Client(abc.ABC):
         sf.write(wav_bytes, pcm_array, self._sample_rate, format="wav")
         return wav_bytes.getvalue()
 
-    def resolve_voice(self, voice: Optional[str]) -> str:
+    def resolve_voice(self, voice: Optional[str], **kwargs) -> str:
         voice = voice or self.DEFAULT_VOICE
         if voice == RANDOM_VOICE_KEY:
             # Every process has same random seed, so we mix in the PID here for more variation.
@@ -95,7 +95,7 @@ class AzureTts(Client):
         "en-US-RogerNeural",
     ]
 
-    def tts(self, text: str, voice: Optional[str] = None):
+    def tts(self, text: str, voice: Optional[str] = None, **kwargs) -> bytes:
         voice = self.resolve_voice(voice)
         region = "westus"
         api_key = os.environ.get("AZURE_TTS_API_KEY") or os.environ.get(
@@ -146,7 +146,7 @@ class ElevenTts(Client):
         "Zlb1dXrM653N07WRdFW3",
     ]
 
-    def tts(self, text: str, voice: Optional[str] = None):
+    def tts(self, text: str, voice: Optional[str] = None, **kwargs) -> bytes:
         voice = self.resolve_voice(voice)
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice}/stream?output_format=pcm_16000"
         headers = {"xi-api-key": os.environ["ELEVEN_API_KEY"]}
