@@ -1,4 +1,4 @@
-model: "fixie-ai/ultravox-v0_5-llama-3_1-8b"
+model: "fixie-ai/ultravox-v0_6-llama-3_1-8b"
 
 report_logs_to: ["wandb"]
 output_dir: "./output"

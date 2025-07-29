@@ -1,11 +1,12 @@
 import os
 import sys
+from typing import Dict, List
 
 # Temporary fix for an issue where importing NLTK breaks PyTorch multiprocessing on MacOS.
 # For more details, see: https://github.com/nltk/nltk/issues/2949
 sys.modules["tkinter"] = None  # type: ignore
-import nltk  # needed for truecase
-import truecase
+import nltk  # needed for truecase # noqa: E402
+import truecase  # noqa: E402
 
 
 class FormatASRError(ValueError):
@@ -47,6 +48,31 @@ def format_asr_text(text: str) -> str:
     if len(text_stripped) == 0:
         raise FormatASRError("Empty text after processing")
     return text_stripped
+
+
+def format_message_history(
+    messages: Dict[str, List[str]],
+    roles: Dict[str, str],
+) -> List[Dict[str, str]]:
+    """
+    Format the message history from the dataset into a list of messages for ASR.
+    Args:
+        messages: A dictionary with keys "role" and "content".
+        roles: A dictionary of roles.
+    Returns:
+        A list of messages.
+    """
+    messages_list = [
+        dict(zip(messages.keys(), values)) for values in zip(*messages.values())
+    ]
+    formatted_messages = []
+    for message in messages_list:
+        # drop any messages that are not defined in the roles dict
+        if message["role"] in roles:
+            formatted_messages.append(
+                {"role": roles[message["role"]], "content": message["content"]}
+            )
+    return formatted_messages
 
 
 CONVERSATIONAL_FILLER = [

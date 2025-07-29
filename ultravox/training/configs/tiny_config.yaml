@@ -15,9 +15,6 @@ eval_sets:
 train_dataset_args:
   max_samples: 2000
 
-val_dataset_args:
-  max_samples: 10
-
 eval_dataset_args:
   max_samples: 10
 
@@ -26,5 +23,3 @@ lr: 2e-3
 lr_warmup_steps: 0
 max_steps: -1
 num_epochs: 1
-
-

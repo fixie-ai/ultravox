@@ -1,4 +1,5 @@
 from typing import Optional
+from unittest.mock import patch
 
 import datasets as hf_datasets
 import numpy as np
@@ -76,12 +77,12 @@ class FakeGenericDataset(datasets.GenericDataset):
 
     def __init__(
         self,
-        n: int,
+        args: types.VoiceDatasetArgs,
         config: types.DatasetConfig,
-        args: Optional[types.VoiceDatasetArgs] = None,
+        n: int = 5,
     ):
         self._n = n
-        super().__init__(args or types.VoiceDatasetArgs(), config)
+        super().__init__(args, config)
 
     def _load_hf_dataset(
         self,
@@ -249,7 +250,7 @@ def test_generic_dataset():
             )
         ],
     )
-    ds = FakeGenericDataset(5, config)
+    ds = FakeGenericDataset(types.VoiceDatasetArgs(), config, n=5)
     assert len(ds) == 5
     sample = next(iter(ds))
     assert isinstance(sample, data_sample.VoiceSample)
@@ -275,7 +276,7 @@ def test_generic_dataset_custom_templates():
         assistant_template="xyzzy",
         transcript_template="{{text}}",
     )
-    ds = FakeGenericDataset(5, config)
+    ds = FakeGenericDataset(types.VoiceDatasetArgs(), config, n=5)
     assert len(ds) == 5
     sample = next(iter(ds))
     assert isinstance(sample, data_sample.VoiceSample)
@@ -302,7 +303,7 @@ def test_generic_dataset_text_only():
         ],
         user_template="Transcribe\n<|audio|>",
     )
-    ds = FakeGenericDataset(5, config, types.VoiceDatasetArgs(include_audio=False))
+    ds = FakeGenericDataset(types.VoiceDatasetArgs(include_audio=False), config, n=5)
     assert len(ds) == 5
     sample = next(iter(ds))
     assert isinstance(sample, data_sample.VoiceSample)
@@ -392,12 +393,219 @@ def test_generic_dataset_multiple_splits():
             types.DatasetSplitConfig(name="validation", num_samples=10),
         ],
     )
-    ds = FakeGenericDataset(100, config)
+    ds = FakeGenericDataset(
+        types.VoiceDatasetArgs(split=types.DatasetSplit.TRAIN), config, n=100
+    )
     assert len(ds) == 90
     ds = FakeGenericDataset(
-        100, config, types.VoiceDatasetArgs(split=types.DatasetSplit.VALIDATION)
+        types.VoiceDatasetArgs(split=types.DatasetSplit.VALIDATION), config, n=100
     )
     assert len(ds) == 10
+
+
+def test_language_aware_user_prompts():
+    """Test that create_dataset uses language-aware prompts based on the language_aware_user_prompts flag."""
+
+    # Create configs for each template in the mapping
+    test_configs = []
+    config_names = []
+
+    # Add all templates from LANGUAGE_AWARE_USER_PROMPT_MAPPING
+    for template in types.LANGUAGE_AWARE_USER_PROMPT_MAPPING.keys():
+        config_name = f"test_language_aware_{len(config_names)}"
+        config_names.append(config_name)
+        test_configs.append(
+            types.DatasetConfig(
+                name=config_name,
+                path="fake_path",
+                splits=[
+                    types.DatasetSplitConfig(name="train", num_samples=5),
+                    types.DatasetSplitConfig(name="validation", num_samples=5),
+                    types.DatasetSplitConfig(
+                        name="test", num_samples=5, split=types.DatasetSplit.TEST
+                    ),
+                ],
+                user_template=template,
+            )
+        )
+
+    # Add a custom template not in the mapping
+    custom_template = "This is a custom template that is not in the mapping: <|audio|>"
+    test_configs.append(
+        types.DatasetConfig(
+            name="test_custom_prompt",
+            path="fake_path",
+            splits=[
+                types.DatasetSplitConfig(name="train", num_samples=5),
+                types.DatasetSplitConfig(name="validation", num_samples=5),
+                types.DatasetSplitConfig(
+                    name="test", num_samples=5, split=types.DatasetSplit.TEST
+                ),
+            ],
+            user_template=custom_template,
+        )
+    )
+    config_names.append("test_custom_prompt")
+
+    # Add a config with None template
+    test_configs.append(
+        types.DatasetConfig(
+            name="test_none_template",
+            path="fake_path",
+            splits=[
+                types.DatasetSplitConfig(name="train", num_samples=5),
+                types.DatasetSplitConfig(name="validation", num_samples=5),
+                types.DatasetSplitConfig(
+                    name="test", num_samples=5, split=types.DatasetSplit.TEST
+                ),
+            ],
+            user_template=None,  # Will be set to default (AUDIO_PLACEHOLDER)
+        )
+    )
+    config_names.append("test_none_template")
+
+    try:
+        # Register all configs
+        registry.register_datasets(test_configs)
+
+        # Test with language_aware_user_prompts=True (default)
+        train_args = types.VoiceDatasetArgs(split=types.DatasetSplit.TRAIN)
+        val_args = types.VoiceDatasetArgs(split=types.DatasetSplit.VALIDATION)
+        test_args = types.VoiceDatasetArgs(split=types.DatasetSplit.TEST)
+
+        with patch("ultravox.data.datasets.GenericDataset", FakeGenericDataset):
+            # Test all mapped templates
+            for i, (template, expected_template) in enumerate(
+                types.LANGUAGE_AWARE_USER_PROMPT_MAPPING.items()
+            ):
+                config_name = config_names[i]
+
+                # Training mode - should use language-aware template
+                train_dataset = registry.create_dataset(config_name, train_args)
+                assert train_dataset.get_config().user_template == expected_template
+
+                # Validation mode - should use language-aware template
+                val_dataset = registry.create_dataset(config_name, val_args)
+                assert val_dataset.get_config().user_template == expected_template
+
+                # Test mode - should use original template (never language-aware)
+                test_dataset = registry.create_dataset(config_name, test_args)
+                assert test_dataset.get_config().user_template == template
+
+            # Test custom template - should remain unchanged in all splits
+            train_dataset_custom = registry.create_dataset(
+                "test_custom_prompt", train_args
+            )
+            assert train_dataset_custom.get_config().user_template == custom_template
+
+            val_dataset_custom = registry.create_dataset("test_custom_prompt", val_args)
+            assert val_dataset_custom.get_config().user_template == custom_template
+
+            test_dataset_custom = registry.create_dataset(
+                "test_custom_prompt", test_args
+            )
+            assert test_dataset_custom.get_config().user_template == custom_template
+
+            # Test None template - should use default in all splits
+            default_template = types.AUDIO_PLACEHOLDER
+
+            train_dataset_none = registry.create_dataset(
+                "test_none_template", train_args
+            )
+            assert train_dataset_none.get_config().user_template == default_template
+
+            val_dataset_none = registry.create_dataset("test_none_template", val_args)
+            assert val_dataset_none.get_config().user_template == default_template
+
+            test_dataset_none = registry.create_dataset("test_none_template", test_args)
+            assert test_dataset_none.get_config().user_template == default_template
+
+        # Test with language_aware_user_prompts=False
+        train_args_no_lang = types.VoiceDatasetArgs(
+            split=types.DatasetSplit.TRAIN, language_aware_user_prompts=False
+        )
+        val_args_no_lang = types.VoiceDatasetArgs(
+            split=types.DatasetSplit.VALIDATION, language_aware_user_prompts=False
+        )
+        test_args_no_lang = types.VoiceDatasetArgs(
+            split=types.DatasetSplit.TEST, language_aware_user_prompts=False
+        )
+
+        with patch("ultravox.data.datasets.GenericDataset", FakeGenericDataset):
+            # Test all templates - should remain unchanged in all splits
+            for i, template in enumerate(
+                types.LANGUAGE_AWARE_USER_PROMPT_MAPPING.keys()
+            ):
+                config_name = config_names[i]
+
+                # Training mode - should use original template
+                train_dataset_no_lang = registry.create_dataset(
+                    config_name, train_args_no_lang
+                )
+                assert train_dataset_no_lang.get_config().user_template == template
+
+                # Validation mode - should use original template
+                val_dataset_no_lang = registry.create_dataset(
+                    config_name, val_args_no_lang
+                )
+                assert val_dataset_no_lang.get_config().user_template == template
+
+                # Test mode - should use original template
+                test_dataset_no_lang = registry.create_dataset(
+                    config_name, test_args_no_lang
+                )
+                assert test_dataset_no_lang.get_config().user_template == template
+
+            # Test custom template - should remain unchanged in all splits
+            train_dataset_custom_no_lang = registry.create_dataset(
+                "test_custom_prompt", train_args_no_lang
+            )
+            assert (
+                train_dataset_custom_no_lang.get_config().user_template
+                == custom_template
+            )
+
+            val_dataset_custom_no_lang = registry.create_dataset(
+                "test_custom_prompt", val_args_no_lang
+            )
+            assert (
+                val_dataset_custom_no_lang.get_config().user_template == custom_template
+            )
+
+            test_dataset_custom_no_lang = registry.create_dataset(
+                "test_custom_prompt", test_args_no_lang
+            )
+            assert (
+                test_dataset_custom_no_lang.get_config().user_template
+                == custom_template
+            )
+
+            # Test None template - should use default in all splits
+            train_dataset_none_no_lang = registry.create_dataset(
+                "test_none_template", train_args_no_lang
+            )
+            assert (
+                train_dataset_none_no_lang.get_config().user_template
+                == default_template
+            )
+
+            val_dataset_none_no_lang = registry.create_dataset(
+                "test_none_template", val_args_no_lang
+            )
+            assert (
+                val_dataset_none_no_lang.get_config().user_template == default_template
+            )
+
+            test_dataset_none_no_lang = registry.create_dataset(
+                "test_none_template", test_args_no_lang
+            )
+            assert (
+                test_dataset_none_no_lang.get_config().user_template == default_template
+            )
+
+    finally:
+        # Clean up
+        registry.unregister_datasets(config_names)
 
 
 def test_get_messages():
@@ -407,18 +615,25 @@ def test_get_messages():
         {"role": "assistant", "content": "Hi!"},
     ]
 
-    messages = datasets._get_messages(
-        "Yo!", "Hi!", assistant_last=False, sys_prompt="Be nice!"
-    )
+    messages = datasets._get_messages("Yo!", "Hi!", sys_prompt="Be nice!")
     assert messages == [
         {"role": "system", "content": "Be nice!"},
-        {"role": "assistant", "content": "Yo!"},
-        {"role": "user", "content": "Hi!"},
+        {"role": "user", "content": "Yo!"},
+        {"role": "assistant", "content": "Hi!"},
     ]
 
-    messages = datasets._get_messages("A", "B", "C")
+    message_history = [
+        {"role": "user", "content": "A"},
+        {"role": "assistant", "content": "B"},
+        {"role": "user", "content": "C"},
+        {"role": "assistant", "content": "D"},
+    ]
+    messages = datasets._get_messages("E", "F", message_history=message_history)
     assert messages == [
-        {"role": "assistant", "content": "A"},
-        {"role": "user", "content": "B"},
-        {"role": "assistant", "content": "C"},
+        {"role": "user", "content": "A"},
+        {"role": "assistant", "content": "B"},
+        {"role": "user", "content": "C"},
+        {"role": "assistant", "content": "D"},
+        {"role": "user", "content": "E"},
+        {"role": "assistant", "content": "F"},
     ]

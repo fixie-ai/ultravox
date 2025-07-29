@@ -1,7 +1,7 @@
 from ultravox.evaluation import eval_types
 from ultravox.evaluation import gpt_eval
 
-INSTRUCT_SYSTEM_PROMPT = f"""
+INSTRUCT_SYSTEM_PROMPT = """
 You are an expert evaluator of AI systems.
 Given a question with a specified instruction, you will be rating the correctness of an AI model's ability to follow that instruction.
 Based on the supplied answer, and exemplary (correct) answer, you will rate the model's answer as either correct or incorrect.

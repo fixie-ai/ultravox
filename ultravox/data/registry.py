@@ -4,15 +4,22 @@ from typing import Dict, List, Optional
 
 from ultravox.data import datasets
 from ultravox.data import types
+from ultravox.data.configs import ami
 from ultravox.data.configs import audiobench
 from ultravox.data.configs import bigbenchaudio
 from ultravox.data.configs import boolq
 from ultravox.data.configs import commonvoice
 from ultravox.data.configs import covost2
+from ultravox.data.configs import fleurs
 from ultravox.data.configs import gigaspeech
+from ultravox.data.configs import indicvoices
+from ultravox.data.configs import kathbath
 from ultravox.data.configs import librispeech
 from ultravox.data.configs import multilingual_librispeech
+from ultravox.data.configs import musan
 from ultravox.data.configs import peoplespeech
+from ultravox.data.configs import seamlessalign
+from ultravox.data.configs import shrutilipi
 from ultravox.data.configs import voxpopuli
 from ultravox.data.configs import wenetspeech
 
@@ -44,7 +51,9 @@ def _merge_configs(configs: List[types.DatasetConfig]) -> types.DatasetConfig:
 
 
 def create_dataset(
-    name: str, args: types.VoiceDatasetArgs, verbose: bool = False
+    name: str,
+    args: types.VoiceDatasetArgs,
+    verbose: bool = False,
 ) -> datasets.GenericDataset:
     if name == "dummy":
         return datasets.LibriSpeechDummyDataset(args)
@@ -63,14 +72,25 @@ def create_dataset(
         raise ValueError(f"Dataset {name} has no path")
     if not merged_config.splits:
         raise ValueError(f"Dataset {name} has no splits")
+
+    if (
+        (
+            args.split == types.DatasetSplit.TRAIN
+            or args.split == types.DatasetSplit.VALIDATION
+        )
+        and args.language_aware_user_prompts
+        and merged_config.user_template is not None
+    ):
+        merged_config.user_template = types.LANGUAGE_AWARE_USER_PROMPT_MAPPING.get(
+            merged_config.user_template, merged_config.user_template
+        )
+
     if verbose:
         logging.info(f"Creating dataset {name} with config:\n{merged_config}")
     dataset = datasets.GenericDataset(args, merged_config)
     return dataset
 
 
-register_datasets(audiobench.configs)
-register_datasets(bigbenchaudio.configs)
 register_datasets(boolq.configs)
 register_datasets(commonvoice.configs)
 register_datasets(covost2.configs)
@@ -80,3 +100,12 @@ register_datasets(multilingual_librispeech.configs)
 register_datasets(peoplespeech.configs)
 register_datasets(voxpopuli.configs)
 register_datasets(wenetspeech.configs)
+register_datasets(bigbenchaudio.configs)
+register_datasets(audiobench.configs)
+register_datasets(fleurs.configs)
+register_datasets(musan.configs)
+register_datasets(ami.configs)
+register_datasets(seamlessalign.configs)
+register_datasets(shrutilipi.configs)
+register_datasets(kathbath.configs)
+register_datasets(indicvoices.configs)

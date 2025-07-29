@@ -13,5 +13,7 @@ def get_inference(args) -> ultravox_infer.UltravoxInference:
             device=args.device,
             data_type=args.data_type,
             conversation_mode=True,
+            enable_thinking=args.enable_thinking,
+            thinking_regex=args.thinking_regex,
         )
     return inference

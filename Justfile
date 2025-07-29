@@ -7,20 +7,33 @@ export MFA_ENV_NAME:="aligner"
 
 default: format check test
 
+os := `uname`
+
 install:
     pip install poetry==1.7.1
     poetry install
+
+install-augs-system:
+    if [ "{{os}}" = "Darwin" ]; then \
+        brew install ffmpeg opencore-amr vo-amrwbenc; \
+    elif [ "{{os}}" = "Linux" ]; then \
+        apt update -y && \
+        apt-get update -y && \
+        apt-get install ffmpeg libavcodec-extra -y; \
+    fi
 
 format:
     poetry run autoflake {{PROJECT_DIR}} --remove-all-unused-imports --quiet --in-place -r 
     poetry run isort {{PROJECT_DIR}} --force-single-line-imports 
     poetry run black {{PROJECT_DIR}} 
+    poetry run ruff check {{PROJECT_DIR}} --fix
 
 check:
     poetry run black {{PROJECT_DIR}} --check 
     poetry run isort {{PROJECT_DIR}} --check --force-single-line-imports
     poetry run autoflake {{PROJECT_DIR}} --check --quiet --remove-all-unused-imports -r 
-    poetry run mypy {{PROJECT_DIR}} 
+    poetry run mypy {{PROJECT_DIR}}
+    poetry run ruff check {{PROJECT_DIR}} 
 
 test *ARGS=".":
     cd ${PROJECT_DIR} && poetry run coverage run --source=${PROJECT_DIR} -m pytest --ignore third_party {{ARGS}}

@@ -1,11 +1,14 @@
+import logging
 from typing import Optional
 
 import transformers
 
 from ultravox.inference import infer
+from ultravox.model import file_utils
 from ultravox.model import ultravox_model
 from ultravox.model import ultravox_processing
-from ultravox.model import wandb_utils
+from ultravox.training import ddp_utils
+from ultravox.training.helpers import prefetch_weights
 from ultravox.utils import device_helpers
 
 
@@ -16,8 +19,13 @@ class UltravoxInference(infer.LocalInference):
         audio_processor_id: Optional[str] = None,
         tokenizer_id: Optional[str] = None,
         device: Optional[str] = None,
+        use_fsdp: bool = False,
+        use_tp: bool = False,
         data_type: Optional[str] = None,
         conversation_mode: bool = False,
+        chat_template: Optional[str] = None,
+        enable_thinking: bool = False,
+        thinking_regex: Optional[str] = None,
     ):
         """
         Args:
@@ -31,16 +39,30 @@ class UltravoxInference(infer.LocalInference):
             device: where to put the model and data
             data_type: data type to use for the model
             conversation_mode: if true, keep track of past messages in a conversation
+            chat_template: template for formatting chat messages
+            enable_thinking: if true, enable thinking tokens
+            thinking_regex: regex pattern for extracting thinking content from responses
         """
+        assert not use_tp or not use_fsdp, "tp and fsdp cannot be used together"
+
         device = device or device_helpers.default_device()
         dtype = device_helpers.get_dtype(data_type)
-        if wandb_utils.is_wandb_url(model_path):
-            model_path = wandb_utils.download_model_from_wandb(model_path)
-        model = ultravox_model.UltravoxModel.from_pretrained(
-            model_path, torch_dtype=dtype
+
+        with ddp_utils.run_on_master_first():
+            model_path = file_utils.download_dir_if_needed(model_path)
+            prefetch_weights.download_sub_models(model_path)
+
+        tp_plan = "auto" if use_tp else None
+        logging.info(
+            f"Loading model from {model_path} with dtype {dtype}, tp_plan {tp_plan}, use_fsdp {use_fsdp} on {device}"
         )
-        model.to(dtype=dtype, device=device)
+        model = ultravox_model.UltravoxModel.from_pretrained(
+            model_path, torch_dtype=dtype, tp_plan=tp_plan
+        )
         model.merge_and_unload()
+
+        ddp_utils.model_to_device(model, device, use_fsdp=use_fsdp, use_tp=use_tp)
+        model.to(dtype=dtype)
 
         tokenizer_id = tokenizer_id or model_path
         tokenizer = transformers.AutoTokenizer.from_pretrained(tokenizer_id)
@@ -68,7 +90,9 @@ class UltravoxInference(infer.LocalInference):
             model=model,
             processor=processor,
             tokenizer=tokenizer,
-            device=device,
             dtype=dtype,
             conversation_mode=conversation_mode,
+            chat_template=chat_template,
+            enable_thinking=enable_thinking,
+            thinking_regex=thinking_regex,
         )

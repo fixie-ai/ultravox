@@ -40,12 +40,12 @@ class DataCollatorForSeq2SeqWithAudio(transformers.DataCollatorForSeq2Seq):
             batch["alt_attention_mask"] = alt_batch["attention_mask"]
             batch["alt_labels"] = alt_batch["labels"]
 
-        batch["audio_token_start_idx"] = torch.stack(audio_token_start_idx)
-        batch["audio_lens"] = torch.stack(audio_lens)
-        batch["audio_token_len"] = torch.stack(audio_token_len)
-
-        # Pad the last dimension of all audio_values to the same length, with 0s on the right.
-        if audio_values:
+        # Only process audio fields if we have non-empty audio values
+        if audio_values and len(audio_values) > 0 and len(audio_values[0]) > 0:
+            batch["audio_token_start_idx"] = torch.stack(audio_token_start_idx)
+            batch["audio_lens"] = torch.stack(audio_lens)
+            batch["audio_token_len"] = torch.stack(audio_token_len)
+            # Pad the last dimension of all audio_values to the same length, with 0s on the right.
             max_len = max([x.shape[-1] for x in audio_values])
             batch["audio_values"] = torch.stack(
                 [F.pad(x, (0, max_len - x.shape[-1])) for x in audio_values]
@@ -108,13 +108,22 @@ class UltravoxProcessor(transformers.ProcessorMixin):
         self.encoder_ds_factor = encoder_ds_factor
         self.stack_factor = stack_factor
         self.audio_placeholder = audio_placeholder
-        self.audio_token_replacement = tokenizer.eos_token
         self.audio_context_size = audio_context_size
         assert (
-            self.audio_token_replacement is not None
+            tokenizer.eos_token is not None
         ), "The tokenizer has no EOS token. Cannot recover."
+        self.vocab = tokenizer.get_vocab()
+        # VLLM currently relies on updating audio_token_replacement, hence to be safe
+        # we should not update it. This dependency should be removed in the future.
+        self.audio_token_replacement = tokenizer.eos_token
         if tokenizer.pad_token_id is None:
             tokenizer.pad_token_id = tokenizer.eos_token_id
+
+        # Use a dummy audio processor to satisfy the base class for text-only training
+        if audio_processor is None:
+            audio_processor = transformers.AutoProcessor.from_pretrained(
+                "openai/whisper-tiny"
+            )
 
         super().__init__(audio_processor=audio_processor, tokenizer=tokenizer)
 
@@ -142,7 +151,10 @@ class UltravoxProcessor(transformers.ProcessorMixin):
         )
 
     def _chunk_and_pad_audio(
-        self, audio_values: torch.Tensor, audio_lens: torch.Tensor
+        self,
+        audio_values: torch.Tensor,
+        audio_lens: torch.Tensor,
+        include_audio_num_chunks: bool = False,
     ) -> Dict[str, Any]:
         """
         Processes the audio batch by chunking any items in the batch according to the audio_context_size,
@@ -163,12 +175,14 @@ class UltravoxProcessor(transformers.ProcessorMixin):
         chunked_audio_values: List[torch.Tensor] = []
         chunked_audio_lens: List[int] = []
         is_continuation_list: List[bool] = []
+        num_chunks: List[int] = []
         context_size = self.audio_context_size or audio_values.shape[-1]
 
-        for audio, audio_len in zip(audio_values, audio_lens):
-            for offset in range(0, audio_len, context_size):
+        for i in range(audio_values.shape[0]):  # iterate over the batch
+            num_chunks.append(int(np.ceil(audio_lens[i] / context_size)))
+            for offset in range(0, audio_lens[i], context_size):
                 is_continuation = offset > 0
-                chunk = audio[..., offset : offset + context_size]
+                chunk = audio_values[i, :, offset : offset + context_size]
                 if is_continuation and chunk.shape[-1] < context_size:
                     # N.B. We only need to pad continuation chunks. If none of the samples require chunking, the
                     # batch might not (need to) be padded all the way to the audio_context_size, in which case
@@ -176,16 +190,29 @@ class UltravoxProcessor(transformers.ProcessorMixin):
                     # chunks we know that the batch needs to be padded to audio_context_size because that's what
                     # we're slicing to.
                     chunk = F.pad(chunk, (0, context_size - chunk.shape[-1]))
-                chunked_audio_values.append(torch.as_tensor(chunk))
-                chunked_audio_lens.append(min(audio_len - offset, context_size))
+                chunked_audio_values.append(chunk)
+                chunked_audio_lens.append(
+                    min(int(audio_lens[i].item()) - offset, context_size)
+                )
                 is_continuation_list.append(is_continuation)
 
-        return {
-            "audio_values": torch.stack(chunked_audio_values),
-            "audio_lens": torch.tensor(chunked_audio_lens),
-            "audio_is_continuation": torch.tensor(is_continuation_list),
-            "audio_batch_size": torch.tensor([len(chunked_audio_values)]),
+        data = {
+            "audio_values": torch.stack(chunked_audio_values, dim=0),
+            "audio_lens": torch.tensor(
+                chunked_audio_lens, dtype=torch.int64, device=audio_values.device
+            ),
+            "audio_is_continuation": torch.tensor(
+                is_continuation_list, dtype=torch.bool, device=audio_values.device
+            ),
+            "audio_batch_size": torch.tensor(
+                [len(chunked_audio_values)], device=audio_values.device
+            ),
         }
+        if include_audio_num_chunks:
+            data["audio_num_chunks"] = torch.tensor(
+                num_chunks, dtype=torch.int64, device=audio_values.device
+            )
+        return data
 
     def __call__(
         self,
@@ -200,6 +227,7 @@ class UltravoxProcessor(transformers.ProcessorMixin):
         return_tensors: Optional[
             Union[str, transformers.TensorType]
         ] = transformers.TensorType.PYTORCH,
+        include_audio_num_chunks: bool = False,
         **kwargs,
     ) -> transformers.BatchFeature:
         """
@@ -280,6 +308,7 @@ class UltravoxProcessor(transformers.ProcessorMixin):
                         x.input_features if "input_features" in x else x.input_values
                     ),
                     audio_lens=torch.as_tensor(x.attention_mask).sum(-1),
+                    include_audio_num_chunks=include_audio_num_chunks,
                 )
             )
 
@@ -302,12 +331,11 @@ class UltravoxProcessor(transformers.ProcessorMixin):
             )
 
             audio_token_start_idx = []
-            replacement_token_id = self.tokenizer.get_vocab()[
-                self.audio_token_replacement
-            ]
             placeholder_index = -1
             split_input_ids = tokenized_parts["input_ids"]
             input_ids: List[int] = []
+
+            audio_replacement_token_id = self.vocab[self.audio_token_replacement]
 
             for i, token_len in enumerate(data.get("audio_token_len", [])):
                 if not audio_is_continuation[i]:
@@ -321,7 +349,7 @@ class UltravoxProcessor(transformers.ProcessorMixin):
 
                 audio_token_start_idx.append(len(input_ids))
 
-                input_ids.extend([replacement_token_id] * token_len)
+                input_ids.extend([audio_replacement_token_id] * token_len)
 
             # Include any tokens after the last audio.
             placeholder_index += 1

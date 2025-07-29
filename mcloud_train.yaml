@@ -2,24 +2,23 @@
 name: ultravox-train
 image: mosaicml/composer:latest
 compute:
-  gpus: 8
-  cluster: r15z1p1
+  gpus: 8  # any factor of 8 is fine
+  cluster: r18z1p1
 integrations:
   - integration_type: git_repo
     git_repo: fixie-ai/ultravox
-    git_branch: $UV_BRANCH
-    pip_install: poetry==1.7.1
+    git_branch: main
 scheduling:
   max_duration: 6  # 6 hours max for jobs to avoid hanging jobs
-command: >-
+command: |
   cd ultravox &&
-  poetry install --no-dev &&
-  poetry run python -m ultravox.training.helpers.prefetch_weights $TRAIN_ARGS &&
-  poetry run torchrun --nproc_per_node=8 -m ultravox.training.train $TRAIN_ARGS
+  source $VENV_PATH/bin/activate &&
+  $POETRY_HOME/bin/poetry install --only main &&
+  python -m ultravox.training.helpers.prefetch_weights $TRAIN_ARGS &&
+  torchrun --nnodes=${NUM_NODES:-1} --nproc_per_node=${LOCAL_WORLD_SIZE:-1} --node_rank=${NODE_RANK:-0} --master_addr=${MASTER_ADDR:-localhost} --master_port=${MASTER_PORT:-29500} \
+    -m ultravox.training.train $TRAIN_ARGS
 env_variables:
-  MLFLOW_TRACKING_URI: databricks
-  UV_BRANCH: main
-  TRAIN_ARGS: --config_path ultravox/training/configs/release_config.yaml
+  TRAIN_ARGS: --config_path ultravox/training/configs/example_config.yaml
   HF_HUB_DOWNLOAD_TIMEOUT: "300"  # Set timeout to 300 seconds (5 minutes)
   HF_HUB_ENABLE_HF_TRANSFER: 1
   # RAM Efficient Loading: only the first process loads the pretrained model checkoint while all other processes have empty

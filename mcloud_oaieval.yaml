@@ -3,20 +3,26 @@ name: ultravox-oaieval
 image: mosaicml/composer:latest
 compute:
   gpus: 8
-  cluster: r15z1p1
+  cluster: r18z1p1
 integrations:
   - integration_type: git_repo
     git_repo: fixie-ai/ultravox
-    git_branch: $UV_BRANCH
-    pip_install: poetry==1.7.1
+    git_branch: main
 scheduling:
-  max_duration: 2  # 2 hours max for jobs to avoid hanging jobs
-command: >-
+  max_duration: 4
+command: |
   cd ultravox &&
-  poetry install --no-dev &&
-  poetry run pip install vllm &&
-  HF_TOKEN=$HF_WRITE_TOKEN poetry run python -m ultravox.inference.run_vllm_inference $EVAL_ARGS
+  source $VENV_PATH/bin/activate &&
+  poetry install --only main &&
+  pip install vllm==0.10.0 &&
+  pip install vllm --index-url https://wheels.vllm.ai/${VLLM_COMMIT} --no-deps --force-reinstall &&
+  if [ ! -z "${MODEL_SOUP}" ]; then python3 -m ultravox.tools.model_averaging $MODEL_SOUP; fi &&
+  python3 -m ultravox.inference.run_vllm_inference $EVAL_ARGS
+
 env_variables:
-  MLFLOW_TRACKING_URI: databricks
-  UV_BRANCH: main
-  EVAL_ARGS: --evalset audio-core --model fixie-ai/ultravox-v0_5-llama-3_1-8b
+  EVAL_ARGS: --evalset audio-core --model fixie-ai/ultravox-v0_6-llama-3_3-70b --push_to_hub False
+  VLLM_COMMIT: 62965de5fe8be8e3622952a9b5cda86973cf9c51
+  HF_HUB_ENABLE_HF_TRANSFER: 1
+  # You can use MODEL_SOUP to average multiple models together.
+  # Just make sure to set the right model_paths and update EVAL_ARGS to use updated_model
+  # MODEL_SOUP: --model_paths <model_1> <model_2> <model_3> ... --output_path updated_model

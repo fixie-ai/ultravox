@@ -44,6 +44,19 @@ def wer(samples: List[eval_types.Sample], args: Dict[str, Any]) -> eval_types.We
         # Convert to space-separated characters for CER
         references = [" ".join(list(ref)) for ref in references]
         hypotheses = [" ".join(list(hyp)) for hyp in hypotheses]
+
+    # Cap the length of the hypothesis to some multiple of the reference length
+    cap_hypothesis_len = args.get("cap_hypothesis_len", None)
+    if cap_hypothesis_len is not None:
+        hypotheses = [
+            hyp[: int(len(ref) * cap_hypothesis_len)]
+            for hyp, ref in zip(hypotheses, references)
+        ]
+
+    # Handle empty strings
+    references = [e if e.strip() else "<silence>" for e in references]
+    hypotheses = [s if s.strip() else "<silence>" for s in hypotheses]
+
     # Compute WER using space-separated words
     wer_metric = evaluate.load("wer")
     wer_score = wer_metric.compute(predictions=hypotheses, references=references)
@@ -51,8 +64,21 @@ def wer(samples: List[eval_types.Sample], args: Dict[str, Any]) -> eval_types.We
 
 
 def match_last_word(sample: eval_types.Sample) -> eval_types.ExactMatchResult:
-    last_words = re.findall(r"\b\w+\b(?=\W*$)", sample.generated_answer.lower())
-    expected_tf = re.findall(r"\b\w+\b(?=\W*$)", sample.expected_answer.lower())[-1]
+    # Handle the case where generated_answer might be a boolean
+    generated_answer_str = (
+        str(sample.generated_answer).lower()
+        if isinstance(sample.generated_answer, bool)
+        else sample.generated_answer.lower()
+    )
+    last_words = re.findall(r"\b\w+\b(?=\W*$)", generated_answer_str)
+
+    # Handle the case where expected_answer might be a boolean
+    expected_answer_str = (
+        str(sample.expected_answer).lower()
+        if isinstance(sample.expected_answer, bool)
+        else sample.expected_answer.lower()
+    )
+    expected_tf = re.findall(r"\b\w+\b(?=\W*$)", expected_answer_str)[-1]
 
     if not last_words:
         return eval_types.ExactMatchResult(score=0, reason="No last word found")
@@ -67,6 +93,20 @@ def match_last_word(sample: eval_types.Sample) -> eval_types.ExactMatchResult:
 
     return eval_types.ExactMatchResult(
         score=last_word == expected_tf, reason="exact_match check"
+    )
+
+
+def partial_match(sample: eval_types.Sample) -> eval_types.ExactMatchResult:
+    """Compute partial match score where expected answer should be part of generated answer.
+
+    Returns a score of 1 if the expected answer is contained within the generated answer
+    (case-insensitive), and 0 otherwise.
+    """
+    generated = sample.generated_answer.lower().strip()
+    expected = sample.expected_answer.lower().strip()
+
+    return eval_types.ExactMatchResult(
+        score=int(expected in generated), reason="partial_match check"
     )
 
 

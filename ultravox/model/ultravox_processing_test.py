@@ -44,10 +44,7 @@ def test_processor_text_only(processor):
 
 
 def test_processor_single_audio(processor, short_audio, sampling_rate):
-    placeholder_token_id = processor.tokenizer.get_vocab()[
-        processor.audio_token_replacement
-    ]
-
+    placeholder_token_id = processor.vocab[processor.audio_token_replacement]
     result = processor(
         "Test with <|audio|>",
         audio=short_audio,
@@ -74,9 +71,7 @@ def test_processor_single_audio(processor, short_audio, sampling_rate):
 
 
 def test_processor_overflowing_audio(processor, overflowing_audio, sampling_rate):
-    placeholder_token_id = processor.tokenizer.get_vocab()[
-        processor.audio_token_replacement
-    ]
+    placeholder_token_id = processor.vocab[processor.audio_token_replacement]
 
     result = processor(
         "Test with <|audio|>",
@@ -94,14 +89,12 @@ def test_processor_overflowing_audio(processor, overflowing_audio, sampling_rate
 
 
 def test_processor_multiple_audios(processor, short_audio, long_audio, sampling_rate):
-    placeholder_token_id = processor.tokenizer.get_vocab()[
-        processor.audio_token_replacement
-    ]
-
+    placeholder_token_id = processor.vocab[processor.audio_token_replacement]
     result = processor(
         "Test with <|audio|> and <|audio|>",
         audios=[short_audio, long_audio],
         sampling_rate=sampling_rate,
+        include_audio_num_chunks=True,
     )
     assert result.audio_lens.tolist() == [100, 1000]
     assert result.audio_token_len.tolist() == [7, 63]
@@ -114,19 +107,18 @@ def test_processor_multiple_audios(processor, short_audio, long_audio, sampling_
     ]
     assert result.attention_mask.tolist() == [[1] * len(result.input_ids[0])]
     assert result.audio_batch_size.tolist() == [2]
+    assert result.audio_num_chunks.tolist() == [1, 1]
 
 
 def test_processor_multiple_audios_with_overflowing_audio(
     processor, short_audio, long_audio, overflowing_audio, sampling_rate
 ):
-    placeholder_token_id = processor.tokenizer.get_vocab()[
-        processor.audio_token_replacement
-    ]
-
+    placeholder_token_id = processor.vocab[processor.audio_token_replacement]
     result = processor(
         "Test with <|audio|> and <|audio|> and <|audio|>",
         audios=[short_audio, overflowing_audio, long_audio],
         sampling_rate=sampling_rate,
+        include_audio_num_chunks=True,
     )
     assert result.audio_lens.tolist() == [100, 3000, 500, 1000]
     assert result.audio_token_len.tolist() == [7, 188, 32, 63]
@@ -142,6 +134,7 @@ def test_processor_multiple_audios_with_overflowing_audio(
     ]
     assert result.attention_mask.tolist() == [[1] * len(result.input_ids[0])]
     assert result.audio_batch_size.tolist() == [4]
+    assert result.audio_num_chunks.tolist() == [1, 2, 1]
 
 
 def test_processor_fails_with_too_many_audio_tokens(
@@ -191,3 +184,46 @@ def test_audio_shapes(processor, sampling_rate, sample_count):
     )
 
     assert result["audio_lens"][0] == result["audio_values"][0].shape[-1]
+
+
+def test_collator_with_audio(processor, short_audio, long_audio, sampling_rate):
+    sample1 = processor(
+        "Test with <|audio|>",
+        audio=short_audio,
+        sampling_rate=sampling_rate,
+    )
+    sample2 = processor(
+        "Test with <|audio|>",
+        audio=long_audio,
+        sampling_rate=sampling_rate,
+    )
+    samples = [sample1, sample2]
+    for sample in samples:
+        sample["input_ids"].squeeze_(0)
+        sample["attention_mask"].squeeze_(0)
+
+    collator = ultravox_processing.DataCollatorForSeq2SeqWithAudio(processor.tokenizer)
+    collated = collator(samples)
+    assert collated["audio_lens"].tolist() == [100, 1000]
+    assert collated["audio_token_len"].tolist() == [7, 63]
+    assert collated["audio_token_start_idx"].tolist() == [3, 3]
+    assert collated["input_ids"].tolist() == [[2323, 449, 220] + [128009] * 63] * 2
+    assert collated["attention_mask"].tolist() == [[1] * 10 + [0] * 56, [1] * 66]
+
+
+def test_collator_with_text_only(processor):
+    sample1 = processor("How are you?")
+    sample2 = processor("Another greeting")
+    samples = [sample1, sample2]
+    for sample in samples:
+        sample["input_ids"].squeeze_(0)
+        sample["attention_mask"].squeeze_(0)
+
+    collator = ultravox_processing.DataCollatorForSeq2SeqWithAudio(processor.tokenizer)
+    collated = collator(samples)
+
+    assert collated["input_ids"].tolist() == [
+        [4438, 527, 499, 30],
+        [14364, 43213, 128009, 128009],
+    ]
+    assert collated["attention_mask"].tolist() == [[1, 1, 1, 1], [1, 1, 0, 0]]

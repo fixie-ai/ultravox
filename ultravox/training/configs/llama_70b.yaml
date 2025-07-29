@@ -1,5 +1,5 @@
 # Training configuration for Ultravox with Meta-Llama-3.1-70B-Instruct and Whisper-Medium
-# This configuration is used alongside release_config.yaml
+# This configuration is used alongside example_config.yaml
 
 # TODO: make sure to increase max_duration in mcloud.yaml to 18 hours instead of 6
 

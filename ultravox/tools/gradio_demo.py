@@ -7,7 +7,6 @@ import simple_parsing
 from ultravox import data as datasets
 from ultravox.inference import base as infer_base
 from ultravox.tools import gradio_helper
-from ultravox.tools.gradio_voice import make_demo
 
 DEMO_INSTRUCTION: str = """Enter your prompt here (audio will be inserted at the end or at <|audio|>).
 
@@ -22,13 +21,26 @@ class DemoConfig:
     #    fixie-ai/ultravox
     #    runs/llama2_asr_gigaspeech/checkpoint-1000/
     #    wandb://fixie/ultravox/model-llama2_asr_gigaspeech:v0
-    model_path: str = "fixie-ai/ultravox-v0_3"
+    model_path: str = "fixie-ai/ultravox-v0_5-llama-3_1-8b"
     device: Optional[str] = None
     data_type: Optional[str] = None
     default_prompt: str = ""
     max_new_tokens: int = 200
     temperature: float = 0
-    voice_mode: bool = False
+    chat_template: Optional[str] = None
+    enable_thinking: bool = False
+    thinking_regex: Optional[str] = r"<think>\n(.*?)\n</think>\n\n"
+
+    def __post_init__(self):
+        if self.chat_template and self.chat_template.startswith("file://"):
+            file_path = self.chat_template[7:].strip()  # Remove "file://" prefix
+            try:
+                with open(file_path, "r") as f:
+                    self.chat_template = f.read()
+            except Exception as e:
+                raise ValueError(
+                    f"Failed to load chat template from file {file_path}: {e}"
+                )
 
 
 args = simple_parsing.parse(config_class=DemoConfig)
@@ -77,13 +89,19 @@ def process_turn(
     history[-1][1] = ""
     for chunk in output:
         if isinstance(chunk, infer_base.InferenceChunk):
-            history[-1][1] += chunk.text
+            # gradio doesn't support html, so we replace the thinking tokens with a placeholder
+            history[-1][1] += chunk.text.replace(
+                "<think>", "__start_of_thinking__"
+            ).replace("</think>", "__end_of_thinking__")
             yield history
 
 
 def process_text(history, prompt, max_new_tokens, temperature):
     yield from process_turn(
-        history, prompt, max_new_tokens=max_new_tokens, temperature=temperature
+        history,
+        prompt,
+        max_new_tokens=max_new_tokens,
+        temperature=temperature,
     )
 
 
@@ -125,7 +143,7 @@ with gr.Blocks() as demo:
         with gr.Column(scale=1):
             max_new_tokens = gr.Slider(
                 minimum=50,
-                maximum=2000,
+                maximum=10000,
                 value=args.max_new_tokens,
                 step=10,
                 interactive=True,
@@ -153,10 +171,6 @@ with gr.Blocks() as demo:
     )
     reset.click(gradio_reset, [], [chatbot, prompt, audio], queue=False)
     demo.load(gradio_reset, [], [chatbot, prompt, audio], queue=False)
-
-
-if args.voice_mode:
-    demo = make_demo(args, inference)
 
 if __name__ == "__main__":
     demo.launch(share=True)

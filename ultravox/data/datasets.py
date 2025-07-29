@@ -25,27 +25,53 @@ logging.getLogger("streaming.base.dataset").setLevel(logging.ERROR)
 
 
 def _get_messages(
-    *turns: str, sys_prompt: Optional[str] = None, assistant_last: bool = True
+    user_message: str,
+    assistant_message: str,
+    message_history: Optional[List[Dict[str, str]]] = None,
+    sys_prompt: Optional[str] = None,
 ) -> List[Dict[str, str]]:
     """
-    Convert a list of strings into a list of messages, alternating between user and assistant.
+    Convert a user message, assistant message, and optional message history into a list of messages.
     If `sys_prompt` is set, it is prepended as a system message.
-    If `assistant_last` is True, the assistant's message is the last one.
     """
     messages = []
 
-    if sys_prompt:
+    if sys_prompt is not None:
         messages.append({"role": "system", "content": sys_prompt})
 
-    roles = ["user", "assistant"]
+    if message_history is not None:
+        # For now, we only support chat history with user and assistant messages.
+        assert all("role" in msg and "content" in msg for msg in message_history)
+        assert all(msg["role"] in ["user", "assistant"] for msg in message_history)
+        messages.extend(message_history)
 
-    # Make sure the last turn is the assistant's iff assistant_last is True.
-    if (len(turns) + assistant_last) % 2 == 0:
-        roles = roles[::-1]
-
-    messages += [{"role": roles[i % 2], "content": c} for i, c in enumerate(turns)]
+    messages.append({"role": "user", "content": user_message})
+    messages.append({"role": "assistant", "content": assistant_message})
 
     return messages
+
+
+def _get_worker_info(length: int):
+    """
+    Calculate number of samples for this worker, accounting for max workers limit.
+    Returns 0 if worker_id exceeds max allowed workers.
+    """
+    worker_id = 0
+    num_workers = 1
+    worker_info = data.get_worker_info()
+    if worker_info is not None:
+        worker_id = worker_info.id
+        num_workers = worker_info.num_workers
+
+    # Calculate samples for this worker
+    worker_samples = length // num_workers
+    extra_samples = length % num_workers
+
+    # Workers with id < extra_samples get one extra sample
+    if worker_id < extra_samples:
+        worker_samples += 1
+
+    return num_workers, worker_id, worker_samples
 
 
 class SizedIterableDataset(abc.ABC, data.IterableDataset):
@@ -156,6 +182,15 @@ class VoiceDataset(SizedIterableDataset):
         )
 
     def __iter__(self):
+        num_workers, _, _ = _get_worker_info(self._length)
+        if num_workers > 1:
+            assert hasattr(
+                self._dataset, "n_shards"
+            ), f"{self._name} does not have n_shards attribute, which is required when num_workers ({num_workers}) > 1"
+            assert (
+                self._dataset.n_shards >= num_workers
+            ), f"{self._name} has {self._dataset.n_shards} shards, which is less than the number of workers ({num_workers})."
+
         actual_length = 0
         skipped_samples = 0
         bad_samples = 0
@@ -164,26 +199,44 @@ class VoiceDataset(SizedIterableDataset):
             actual_length += 1
             sample = self._get_sample(row)
             if sample is None:
-                print(f"Sample is None in dataset {self._config.alias} for row {row}")
+                print(f"Sample is None in dataset {self.name} for row {row}")
                 bad_samples += 1
-                continue  # Skip this sample and proceed to the next
+                continue
+
+            input_characters = sum(len(msg["content"]) for msg in sample.messages)
+            if (
+                self._args.max_input_characters is not None
+                and input_characters > self._args.max_input_characters
+            ):
+                print(
+                    f"Sample has input characters longer than {self._args.max_input_characters} in dataset {self.name} for row {row}"
+                )
+                bad_samples += 1
+                continue
+
+            elif len(sample.messages[-1]["content"]) == 0:
+                print(
+                    f"Sample has empty assistant message in dataset {self.name} for row {row}"
+                )
+                bad_samples += 1
+                continue
 
             if self._args.include_audio:
                 if sample.audio is None:
                     print(f"Audio is None for sample {sample}")
                     bad_samples += 1
-                    continue  # Skip this sample
+                    continue
                 if sample.audio.shape[-1] == 0:
                     print(f"Audio length is 0 for sample {sample}")
                     bad_samples += 1
-                    continue  # Skip this sample
+                    continue
                 if (
                     self._args.max_audio_duration_secs > 0
                     and sample.audio.shape[-1] / data_sample.SAMPLE_RATE
                     > self._args.max_audio_duration_secs
                 ):
                     skipped_samples += 1
-                    continue  # Skip this sample
+                    continue
 
             yield sample
 
@@ -224,19 +277,22 @@ class VoiceDataset(SizedIterableDataset):
     def _make_sample(
         self,
         messages: List[Dict[str, str]],
-        audio: np.ndarray,
+        audio: Optional[np.ndarray] = None,
         audio_transcript: Optional[str] = None,
+        label: Optional[str] = None,
     ) -> data_sample.VoiceSample:
         if not self._args.include_audio:
-            return data_sample.VoiceSample(messages)
+            return data_sample.VoiceSample(messages, label=label)
         return data_sample.VoiceSample(
-            messages, audio, audio_transcript=audio_transcript
+            messages, audio, audio_transcript=audio_transcript, label=label
         )
 
 
 class GenericDataset(VoiceDataset):
     def __init__(
-        self, args: types.VoiceDatasetArgs, config: types.DatasetConfig
+        self,
+        args: types.VoiceDatasetArgs,
+        config: types.DatasetConfig,
     ) -> None:
         assert config.splits is not None
         assert config.path is not None
@@ -270,35 +326,91 @@ class GenericDataset(VoiceDataset):
 
         dataset_name = f"{config.name}.{self._args.split.value}"
 
+        if self._config.messages_direct_column is None:
+            assert self._config.transcript_template is not None
+            assert self._config.user_template is not None
+            assert self._config.user_template_args is not None
+            assert (
+                self._config.message_history_roles is not None
+                if self._config.message_history_column is not None
+                else True
+            ), "message_history_roles must be provided if message_history_column is provided"
+            assert self._config.assistant_template is not None
+
         super()._init_dataset(dataset, dataset_name, total_samples)
 
     def __str__(self):
         return f"GenericDataset({self._config})"
 
     def _get_sample(self, row) -> Optional[data_sample.VoiceSample]:
-        assert self._config.user_template is not None
-        assert self._config.user_template_args is not None
-        assert self._config.assistant_template is not None
-        assert self._config.transcript_template is not None
+
+        # If the messages_direct_column is provided, we use it directly to create the messages and transcript.
+        if self._config.messages_direct_column is not None:
+            messages = row[self._config.messages_direct_column]
+            if len(messages) == 0:
+                raise ValueError("messages_direct_column is empty")
+
+            label = (
+                row[self._config.label_column]
+                if self._config.label_column is not None
+                else None
+            )
+
+            if not self._args.include_audio:
+                return self._make_sample(messages, label=label)
+
+            transcript = jinja2.Template(
+                self._config.transcript_template,  # type: ignore[arg-type]
+                undefined=jinja2.StrictUndefined,
+            ).render(**row, text_proc=text_proc)
+            audio = self._get_audio(row, self._config.audio_field)
+            return self._make_sample(messages, audio, audio_transcript=transcript)
+
+        # Convert the dataset's message_history_column into a list of messages
+        message_history = (
+            text_proc.format_message_history(
+                row[self._config.message_history_column],
+                self._config.message_history_roles,
+            )
+            if self._config.message_history_column is not None
+            and self._config.message_history_roles is not None
+            and not self._args.ignore_message_history
+            else None
+        )
+
         try:
             user_content = jinja2.Template(
-                self._config.user_template, undefined=jinja2.StrictUndefined
+                self._config.user_template,  # type: ignore[arg-type]
+                undefined=jinja2.StrictUndefined,
             ).render(
                 **row,
                 text_proc=text_proc,
-                **self._config.user_template_args,
+                **self._config.user_template_args,  # type: ignore[arg-type]
             )
             assistant_content = jinja2.Template(
-                self._config.assistant_template, undefined=jinja2.StrictUndefined
+                self._config.assistant_template,  # type: ignore[arg-type]
+                undefined=jinja2.StrictUndefined,
             ).render(**row, text_proc=text_proc)
             transcript = jinja2.Template(
-                self._config.transcript_template, undefined=jinja2.StrictUndefined
+                self._config.transcript_template,  # type: ignore[arg-type]
+                undefined=jinja2.StrictUndefined,
             ).render(**row, text_proc=text_proc)
+            system_prompt = (
+                jinja2.Template(
+                    self._config.system_prompt_template,  # type: ignore[arg-type]
+                    undefined=jinja2.StrictUndefined,
+                ).render(**row, text_proc=text_proc)
+                if self._config.system_prompt_template is not None
+                and not self._args.ignore_system_prompt
+                else None
+            )
+
         except jinja2.TemplateError as e:
             print(f"Error rendering template: {e}")
             print(f"user_template: {self._config.user_template}")
             print(f"assistant_template: {self._config.assistant_template}")
             print(f"transcript_template: {self._config.transcript_template}")
+            print(f"system_prompt_template: {self._config.system_prompt_template}")
             print(f"sample keys: {list(row.keys())}")
             raise ValueError(
                 "Template rendering failed. Make sure all keys in the template exist in the sample."
@@ -307,8 +419,18 @@ class GenericDataset(VoiceDataset):
             user_content = user_content.replace(
                 types.AUDIO_PLACEHOLDER, f'"{transcript}"'
             )
-        messages = _get_messages(user_content, assistant_content)
-        audio = self._get_audio(row, self._config.audio_field)
+
+        messages = _get_messages(
+            user_content,
+            assistant_content,
+            message_history=message_history,
+            sys_prompt=system_prompt,
+        )
+        audio: Optional[np.ndarray] = (  # type: ignore[no-redef]
+            self._get_audio(row, self._config.audio_field)
+            if self._args.include_audio
+            else None
+        )
         return self._make_sample(messages, audio, audio_transcript=transcript)
 
     def get_config(self):
@@ -400,8 +522,9 @@ class InterleaveDataset(SizedIterableDataset):
     def __iter__(self):
         ds_iters = [iter(ds) for ds in self._datasets]
         ds_pos = [0] * len(ds_iters)
+        num_workers, worker_id, worker_samples = _get_worker_info(self._total_samples)
         # Find the iterator that is least far along and vend from it.
-        for i in range(self._total_samples):
+        for i in range(worker_samples):
             min_fraction = 1.0
             for j in range(len(ds_iters)):
                 iter_fraction = ds_pos[j] / self._weighted_samples[j]
@@ -416,7 +539,7 @@ class InterleaveDataset(SizedIterableDataset):
                     yield next(ds_iters[iter_index])
                 except StopIteration:
                     warnings.warn(
-                        f"Dataset {iter_index} is empty. num_workers is likely too high. Stopping iteration."
+                        f"Dataset {iter_index} is empty for worker {worker_id}/{num_workers}. num_workers is likely too high. Stopping iteration."
                     )
                     break
             ds_pos[iter_index] += 1
@@ -443,7 +566,9 @@ class Dataproc(SizedIterableDataset):
         pass
 
     def __iter__(self):
-        return (self._process(sample) for sample in self._dataset)
+        # Replace generator expression with a regular function that yields items
+        for sample in self._dataset:
+            yield self._process(sample)
 
     def __len__(self):
         return len(self._dataset)
@@ -460,7 +585,9 @@ class Range(SizedIterableDataset):
     """Limits the number of samples from another dataset."""
 
     def __init__(
-        self, dataset: SizedIterableDataset, num_samples: Optional[int] = None
+        self,
+        dataset: SizedIterableDataset,
+        num_samples: Optional[int] = None,
     ) -> None:
         self._dataset = dataset
         self._length = num_samples or len(dataset)
@@ -472,10 +599,25 @@ class Range(SizedIterableDataset):
         self._name = f"{dataset.name}.{self._length}"
 
     def __iter__(self):
-        for i, sample in enumerate(self._dataset):
-            if i >= self._length:
-                break
-            yield sample
+        num_workers, worker_id, worker_samples = _get_worker_info(self._length)
+        if worker_samples == 0:
+            return iter([])
+        yielded_samples = 0
+        try:
+            for sample in self._dataset:
+                yielded_samples += 1
+                yield sample
+                if yielded_samples == worker_samples:
+                    break
+        except Exception as e:
+            logging.error(
+                f"Worker {worker_id}/{num_workers} failed after yielding {yielded_samples}/{worker_samples} samples, out of {self._length} total samples with error: {e}"
+            )
+            raise e
+        if yielded_samples < worker_samples:
+            logging.warn(
+                f"Worker {worker_id}/{num_workers} only yielded {yielded_samples} (expected {worker_samples}) samples, out of {self._length} total samples"
+            )
 
     def __str__(self):
         return f"Range({self._dataset}%{len(self)})"

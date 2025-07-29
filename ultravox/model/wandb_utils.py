@@ -40,7 +40,7 @@ def download_model_from_wandb(model_url: str) -> str:
         model_path = artifact.download()
 
     if model_path is None:
-        raise ValueError(f"No files to be downloaded.")
+        raise ValueError("No files to be downloaded.")
     return model_path
 
 

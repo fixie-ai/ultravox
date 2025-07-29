@@ -5,6 +5,7 @@ LS_BASE_CONFIG = types.DatasetConfig(
     path="fixie-ai/librispeech_asr",
     transcript_template="{{text_proc.format_asr_text(text)}}",
     assistant_template="{{text_proc.format_asr_text(text)}}",
+    user_template_args={"transcript_language": "English"},
 )
 
 LS_CLEAN_CONFIG = types.DatasetConfig(
@@ -17,6 +18,9 @@ LS_CLEAN_CONFIG = types.DatasetConfig(
         ),
         types.DatasetSplitConfig(
             name="train.360", num_samples=104_014, split=types.DatasetSplit.TRAIN
+        ),
+        types.DatasetSplitConfig(
+            name="validation", num_samples=2703, split=types.DatasetSplit.VALIDATION
         ),
         types.DatasetSplitConfig(name="test", num_samples=2620),
     ],

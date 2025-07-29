@@ -23,6 +23,17 @@ class LoraConfigSimplified:
     unfreeze_layers: Optional[List[str]] = None
 
 
+class LossMaskType(str, Enum):
+    """Type of loss mask to use."""
+
+    LAST_ASSISTANT = "last_assistant"
+    """This applies the loss mask up until the last assistant token"""
+    ALL = "all"  # This does not work with KL loss
+    """No loss mask, all inputs are used for loss"""
+    AFTER_AUDIO = "after_audio"
+    """Applies the loss mask up until the audio token"""
+
+
 class LossFunction(str, Enum):
     CrossEntropy = "ce"
     KL_Divergence = "kl"
@@ -32,6 +43,10 @@ class LossFunction(str, Enum):
 class LossConfig:
     loss_function: LossFunction = LossFunction.CrossEntropy
     kl_temperature: float = 2.0
+    # Number of tokens to ignore from the beginning of the sequence. Only used in LSM
+    initial_tokens_to_ignore: int = 0
+    # Weight for the EOT token KL loss
+    eot_loss_weight: float = 1.0
 
     @property
     def requires_alt_fields(self):
@@ -98,19 +113,21 @@ class UltravoxConfig(transformers.PretrainedConfig):
 
     def __init__(
         self,
-        audio_config: Optional[Dict[str, Any]] = None,
-        text_config: Optional[Dict[str, Any]] = None,
-        audio_model_id: Optional[str] = None,
-        text_model_id: Optional[str] = None,
+        audio_config: dict[str, Any] | transformers.PretrainedConfig | None = None,
+        text_config: dict[str, Any] | transformers.PretrainedConfig | None = None,
+        audio_model_id: str | None = None,
+        text_model_id: str | None = None,
+        llm_only_training: bool = False,
         ignore_index: int = -100,
+        audio_token_index: int | None = None,
         hidden_size: int = 4096,
         stack_factor: int = 8,
         norm_init: float = 0.4,
         projector_act: str = "swiglu",
         projector_ln_mid: bool = False,  # defaults to False for compatibility with v0.4.1 and below
-        text_model_lora_config: Optional[LoraConfigSimplified] = None,
-        audio_model_lora_config: Optional[LoraConfigSimplified] = None,
-        audio_latency_block_size: Optional[int] = None,
+        text_model_lora_config: LoraConfigSimplified | None = None,
+        audio_model_lora_config: LoraConfigSimplified | None = None,
+        audio_latency_block_size: int | None = None,
         **kwargs,
     ):
         self.ignore_index = ignore_index
@@ -118,31 +135,35 @@ class UltravoxConfig(transformers.PretrainedConfig):
         self.audio_model_id = audio_model_id
         self.text_model_id = text_model_id
 
+        self.audio_token_index = audio_token_index
+
         self.hidden_size = hidden_size
         self.stack_factor = stack_factor
         self.norm_init = norm_init
         self.projector_act = projector_act
         self.projector_ln_mid = projector_ln_mid
         if text_model_id is not None:
-            self.text_config: transformers.LlamaConfig = (
-                transformers.AutoConfig.from_pretrained(text_model_id)
-            )
+            text_config = transformers.AutoConfig.from_pretrained(text_model_id)
         else:
             text_config = text_config or {}
-            self.text_config = transformers.CONFIG_MAPPING[
-                text_config.get("model_type", "llama")
-            ](**text_config)
+            if isinstance(text_config, dict):
+                text_config = transformers.CONFIG_MAPPING[
+                    text_config.get("model_type", "llama")
+                ](**text_config)
 
         if audio_model_id is not None:
-            self.audio_config: transformers.PretrainedConfig = (
-                transformers.AutoConfig.from_pretrained(audio_model_id)
-            )
+            audio_config = transformers.AutoConfig.from_pretrained(audio_model_id)
         else:
             audio_config = audio_config or {}
-            self.audio_config = transformers.CONFIG_MAPPING[
-                audio_config.get("model_type", "whisper")
-            ](**audio_config)
+            if isinstance(audio_config, dict):
+                audio_config = transformers.CONFIG_MAPPING[
+                    audio_config.get("model_type", "whisper")
+                ](**audio_config)
 
+        self.text_config = text_config
+        self.audio_config = audio_config
+
+        self.llm_only_training = llm_only_training
         self.text_model_lora_config = (
             text_model_lora_config
             if isinstance(text_model_lora_config, dict)
@@ -155,9 +176,13 @@ class UltravoxConfig(transformers.PretrainedConfig):
         )
         self.audio_latency_block_size = audio_latency_block_size
 
-        self.vocab_size = self.text_config.vocab_size
+        if hasattr(text_config, "text_config"):
+            text_config.vocab_size = text_config.text_config.vocab_size
+            text_config.hidden_size = text_config.text_config.hidden_size
 
-        self.initializer_range = self.text_config.initializer_range
+        self.vocab_size = text_config.vocab_size
+
+        self.initializer_range = text_config.initializer_range
 
         super().__init__(**kwargs)
 

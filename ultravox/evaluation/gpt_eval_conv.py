@@ -1,7 +1,7 @@
 from ultravox.evaluation import eval_types
 from ultravox.evaluation import gpt_eval
 
-CONVO_SYSTEM_PROMPT = f"""
+CONVO_SYSTEM_PROMPT = """
 You are an expert evaluator of conversational AI systems.
 Given a conversation between two parties, the role of the AI system was to follow the flow of the conversation and respond appropriately.
 You are given the conversation, the AI model's response, and an exemplary (correct) response.

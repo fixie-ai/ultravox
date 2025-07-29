@@ -5,13 +5,14 @@ import os
 import re
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import simple_parsing
 import torch
 
 from ultravox import data as datasets
 from ultravox.model import ultravox_config
+from ultravox.utils import device_helpers
 
 
 @dataclasses.dataclass
@@ -28,13 +29,27 @@ class TrainConfig:
     # ---------------------------------------------------------------------------
     # Text and audio models
     text_model: str
-    audio_model: str
-    model_type: str = "ultravox"
+    audio_model: str | None
+    # Model type: "ultravox"
+    model_type: str = simple_parsing.choice("ultravox")
     # Path to load model checkpoint (local/HF/W&B)
     model_load_dir: Optional[str] = None
+    # Chat template string or path to file containing chat template (starts with "file:")
+    chat_template: Optional[str] = None
+    # Loss mask type
+    loss_mask_type: ultravox_config.LossMaskType = (
+        ultravox_config.LossMaskType.LAST_ASSISTANT
+    )
+    # List of parameter name patterns to selectively load from the checkpoint
+    # If None, all parameters will be loaded. If specified, only parameters
+    # whose names match one of the patterns in the list will be loaded.
+    # Patterns are Unix shell-style wildcards (e.g. "text_tower.*", "*.weight")
+    model_load_parameters: Optional[List[str]] = None
     # If True, the optimizer and scheduler states are also loaded from model_load_dir
     # and training is resumed. o/w only the model weights are loaded if present.
     resume_from_load_dir: bool = False
+    # If True, we don't initalize the audio projector.
+    llm_only_training: bool = False
     # When resuming from a checkpoint, we can skip the same number of samples as in the previous run.
     # If False, this makes sure that we get the same data loading as if we had not interrupted the training.
     # If True, this allows the training to begin faster (as that skipping step can take a long time). In this case,
@@ -96,28 +111,39 @@ class TrainConfig:
 
     # Dataloader workers
     num_workers: int = 8 if torch.cuda.is_available() else 1
-    # Training sample control
-    train_on_inputs: bool = False
     # assistant response is truncated to avoid OOM errors
     max_response_tokens: Optional[int] = 50
+    dataloader_drop_last: bool = False
 
     # Device and dtype
     device: str = "cuda"
+    # The data_type is for model weights only. Does not influence optimizer weights or enable mixed_precision training
     data_type: str = "bfloat16"
+    # This is for training. Will be passed to the TrainingArguments of the Huggingface Trainer
+    bf16_training: bool = False
+    fp16_training: bool = False
     # Seed for reproducibility
     seed: int = 42
 
     # Use Fully Sharded Data Parallelism
     use_fsdp: bool = False
 
+    # Distributed Data Parallel
+    find_unused_parameters: bool = False
+
     # ---------------------------------------------------------------------------
     # Training parameters
     # ---------------------------------------------------------------------------
     # Batch/step settings
     batch_size: int = 4
+    val_batch_size: int = 8
     grad_accum_steps: int = 1
     num_epochs: int = 1
     max_steps: int = 0  # overrides num_epochs if > 0
+
+    use_dynamic_batch: bool = False
+    dynamic_batch_seq_length: int = 40000
+    dynamic_batch_input_name: str = "audio"
 
     # Optimizer and scheduler
     optimizer: str = "adamw_torch"
@@ -148,6 +174,10 @@ class TrainConfig:
 
     verbose: bool = False
 
+    # Augmentations
+    train_augmentations: List[Dict[str, Any]] = simple_parsing.list_field()
+    eval_augmentations: List[Dict[str, Any]] = simple_parsing.list_field()
+
     # ---------------------------------------------------------------------------
     # Evaluation parameters
     # ---------------------------------------------------------------------------
@@ -170,8 +200,47 @@ class TrainConfig:
     def get_eval_sets(self) -> List[datasets.DatasetOptions]:
         return [datasets.DatasetOptions(**ds) for ds in self.eval_sets]
 
+    def get_train_augmentation(self) -> Union[datasets.Augmentation, None]:
+        # Only a single augmentation will be returned (can have multiple child augmentations)
+        if self.train_augmentations is None or len(self.train_augmentations) == 0:
+            return None
+
+        augmentations = []
+        logging.info(str(self.train_augmentations))
+        for aug in self.train_augmentations:
+            aug_dict = aug.copy()
+            name = aug_dict.pop("name")
+            if name is None:
+                name = "null"
+            augmentations.append(
+                datasets.AugRegistry.create_augmentation(
+                    datasets.AugRegistry.get_config(name, aug_dict)
+                )
+            )
+
+        if len(augmentations) > 1:
+            augmentation = datasets.AugRegistry.create_parent_augmentation(
+                augmentations
+            )
+        else:
+            augmentation = augmentations[0]
+
+        return augmentation
+
+    def get_eval_augmentations(self) -> List[datasets.AugmentationConfig]:
+        augmentations = []
+        for aug in self.eval_augmentations:
+            aug_dict = aug.copy()
+            name = aug_dict.pop("name")
+            if name is None:
+                name = "null"
+            augmentations.append(datasets.AugRegistry.get_config(name, aug_dict))
+        return augmentations
+
     def __post_init__(self):
         assert self.data_type in ["bfloat16", "float16", "float32"]
+
+        assert not (self.bf16_training and self.fp16_training)
 
         if self.device == "cuda" and not torch.cuda.is_available():
             self.device = "mps" if torch.backends.mps.is_available() else "cpu"
@@ -186,6 +255,7 @@ class TrainConfig:
 
         if self.exp_name is None:
             self.exp_name = datetime.datetime.now().strftime("exp--%Y-%m-%d--%H-%M-%S")
+
         if self.output_dir is None:
             self.output_dir = Path("runs") / self.exp_name
 
@@ -200,10 +270,12 @@ class TrainConfig:
         if self.logs_dir is None:
             self.logs_dir = self.output_dir / "logs"
 
+        world_size = device_helpers.get_world_size()
+
         if (
             self.audio_model_lora_config is not None
             and self.audio_model_lora_config.r > 0
-            and os.environ.get("WORLD_SIZE", None) is not None
+            and world_size > 1
             and self.disable_layerdrop is False
         ):
             logging.warning(
@@ -216,6 +288,35 @@ class TrainConfig:
                 "FSDP is enabled: Evaluation is not supported with FSDP. Disabling evaluation."
             )
             self.do_eval = False
+
+        if self.val_steps:
+            if (
+                self.val_dataset_args.max_samples == -1
+                or self.val_dataset_args.max_samples
+                % (world_size * self.val_batch_size)
+                != 0
+            ):
+                raise ValueError(
+                    f"val_dataset_args.max_samples must be divisible by the product of world_size and batch_size. "
+                    f"Got max_samples={self.val_dataset_args.max_samples}, world_size={world_size}, "
+                    f"batch_size={self.val_batch_size}"
+                )
+
+        if self.num_workers > 8:
+            logging.warning(
+                f"num_workers {self.num_workers} is greater than the n_shards of some datasets and can cause issues with the __iter__ method of Range and Interleave datasets. Forcing num_workers to 8 as a temporary fix."
+            )
+            self.num_workers = 8
+
+        if self.chat_template and self.chat_template.startswith("file://"):
+            file_path = self.chat_template[7:].strip()  # Remove "file://" prefix
+            try:
+                with open(file_path, "r") as f:
+                    self.chat_template = f.read()
+            except Exception as e:
+                raise ValueError(
+                    f"Failed to load chat template from file {file_path}: {e}"
+                )
 
 
 def fix_hyphens(arg: str):
