@@ -57,10 +57,18 @@ class LocalInference(base.VoiceInference):
         self.past_key_values = past_key_values
 
     def _get_sample_with_past(
-        self, sample: datasets.VoiceSample
+        self, sample: Optional[datasets.VoiceSample] = None
     ) -> datasets.VoiceSample:
-        sample = copy.copy(sample)
-        sample.add_past_messages(self.past_messages)
+        # Workaround for if we want to generate an assistant response without a user query
+        if sample is None:
+            if len(self.past_messages) == 0:
+                raise ValueError("No past messages available to generate a response.")
+            sample = datasets.VoiceSample(
+                self.past_messages,
+            )
+        else:
+            sample = copy.copy(sample)
+            sample.add_past_messages(self.past_messages)
         return sample
 
     def _build_past_messages(
@@ -116,7 +124,7 @@ class LocalInference(base.VoiceInference):
 
     def infer(
         self,
-        sample: datasets.VoiceSample,
+        sample: Optional[datasets.VoiceSample] = None,
         max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
     ) -> base.VoiceOutput:
@@ -187,7 +195,7 @@ class LocalInference(base.VoiceInference):
 
     def infer_stream(
         self,
-        sample: datasets.VoiceSample,
+        sample: Optional[datasets.VoiceSample] = None,
         max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
     ) -> base.InferenceGenerator:
