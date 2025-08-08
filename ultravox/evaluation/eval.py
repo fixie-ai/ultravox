@@ -134,6 +134,7 @@ def infer_dataset_shard(
                 expected_answer=reference,
                 generated_answer=output.text,
                 thinking_content=output.thinking_content,
+                extra_kwargs=sample.extra_kwargs,
             )
             results.append(result)
 

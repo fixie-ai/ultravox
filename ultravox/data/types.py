@@ -143,6 +143,9 @@ class DatasetSplitConfig(helpers.Serializable):
 class EvalConfig(helpers.Serializable):
     metric: str
     args: Dict[str, Any] = dataclasses.field(default_factory=dict)
+    extra_kwargs_map: Dict[str, str] = dataclasses.field(default_factory=dict)
+    """Mapping of field names to use as extra_kwargs for the sample.
+    key is name in extra_kwargs, value is name in dataset row."""
 
 
 @dataclasses.dataclass
@@ -201,7 +204,7 @@ class DatasetConfig(helpers.Serializable):
             "audio_field": "audio",
             "use_mds": False,
             "mds_batch_size": 32,
-            "eval_config": {},
+            "eval_config": None,
             "messages_direct_column": None,
         }
         if self.base is None:
