@@ -1,5 +1,5 @@
 import dataclasses
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import dataclasses_json
 
@@ -13,6 +13,7 @@ class Sample(dataclasses_json.DataClassJsonMixin):
     expected_answer: str
     history: List[Dict[str, str]] = dataclasses.field(default_factory=list)
     thinking_content: Optional[str] = None
+    extra_kwargs: Optional[Dict[str, Any]] = None  # for datasets like Voicebench
 
 
 @dataclasses.dataclass

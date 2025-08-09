@@ -1,0 +1,20 @@
+model: "fixie-ai/ultravox-v0_5-llama-3_1-8b"
+
+report_logs_to: ["wandb"]
+output_dir: "./output"
+
+eval_sets:
+  - name: voicebench-bbh
+  - name: voicebench-ifeval
+  - name: voicebench-wildvoice
+  - name: voicebench-alpacaeval-full
+  - name: voicebench-commoneval
+  - name: voicebench-advbench
+  - name: voicebench-mmsu
+  - name: voicebench-openbookqa
+  - name: voicebench-sd-qa
+
+eval_dataset_args:
+  ignore_system_prompt: false
+
+eval_batch_size: 10

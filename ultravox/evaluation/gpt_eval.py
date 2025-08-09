@@ -1,4 +1,5 @@
 import dataclasses
+import re
 from typing import Optional
 
 import jinja2
@@ -38,8 +39,8 @@ class GPTBasedEvaluator:
         Common utility function that runs OpenAI Chat Completions and returns
         the raw response text.
         """
-        template = jinja2.Template(user_prompt)
 
+        template = jinja2.Template(user_prompt)
         response = self._get_client().chat.completions.create(
             model=self.rating_model,
             messages=[
@@ -118,6 +119,38 @@ class GPTBasedEvaluator:
             score = 0
             reason = ""
         return eval_types.InstructResult(score=score, reason=reason)
+
+    def evaluate_score_scalar_voicebench(
+        self, sys_prompt: str, user_prompt: str, sample: eval_types.Sample
+    ) -> eval_types.InstructResult:
+        """
+        A GPT-based evaluation that expects the model to return a scalar score.
+        """
+        rating_text = self._run_gpt_inference(
+            sys_prompt, user_prompt, sample, max_tokens=1024, temperature=0.5
+        )
+        assert rating_text is not None
+        try:
+            score = int(re.findall(r"\d+", rating_text)[0])
+        except:  # noqa: E722
+            score = 1
+        return eval_types.InstructResult(score=score, reason=rating_text)
+
+    def evaluate_yes_no(
+        self, sys_prompt: str, user_prompt: str, sample: eval_types.Sample
+    ) -> eval_types.InstructResult:
+        """
+        A GPT-based evaluation that expects the model to return 'Yes' or 'No'.
+        If it returns 'Yes' (case-insensitive), the score is 1; otherwise 0.
+        This is useful for MCQ (Multiple Choice Question) evaluations where
+        the model needs to determine if an answer is correct based on a reference.
+        """
+        rating_text = self._run_gpt_inference(
+            sys_prompt, user_prompt, sample, max_tokens=1024, temperature=0.5
+        )
+        assert rating_text is not None
+        score = 1 if rating_text.strip().lower().startswith("yes") else 0
+        return eval_types.InstructResult(score=score, reason=rating_text)
 
 
 gpt_evaluator = GPTBasedEvaluator()

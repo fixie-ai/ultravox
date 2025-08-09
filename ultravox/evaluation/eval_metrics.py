@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from typing import Any, Callable, Dict, List
 
 from ultravox.data import types
@@ -8,6 +9,8 @@ from ultravox.evaluation import gpt_eval_bigbench
 from ultravox.evaluation import gpt_eval_boolq
 from ultravox.evaluation import gpt_eval_conv
 from ultravox.evaluation import gpt_eval_instruct
+from ultravox.evaluation import gpt_eval_voicebench
+from ultravox.evaluation import ifeval_voicebench
 from ultravox.evaluation import string_metrics
 
 METRIC_REGISTRY: Dict[str, Callable[[eval_types.Sample], eval_types.Result]] = {
@@ -19,6 +22,12 @@ METRIC_REGISTRY: Dict[str, Callable[[eval_types.Sample], eval_types.Result]] = {
     "audiobench_scalar": gpt_eval_audiobench.evaluate_answer_audiobench,
     "exact_match_last_word": string_metrics.match_last_word,
     "partial_match": string_metrics.partial_match,
+    "voicebench_yes_no": gpt_eval_voicebench.evaluate_yes_no_voicebench,
+    "voicebench_scalar": gpt_eval_voicebench.evaluate_answer_voicebench,
+    "voicebench_mcq": gpt_eval_voicebench.evaluate_mcq_voicebench,
+    "voicebench_bbh": gpt_eval_voicebench.evaluate_bbh_voicebench,
+    "voicebench_harm": gpt_eval_voicebench.evaluate_harm_voicebench,
+    "voicebench_ifeval": ifeval_voicebench.IFEvaluator.instruction_following_evaluate,
 }
 
 CORPUS_METRIC_REGISTRY: Dict[
@@ -44,8 +53,9 @@ def evaluate_answers(
         return metric_func(samples, metric_config.args)
     elif metric_config.metric in METRIC_REGISTRY:
         metric_fn = METRIC_REGISTRY[metric_config.metric]
+        partial_metric_fn = partial(metric_fn, **metric_config.args)
         with ThreadPoolExecutor() as executor:
-            results = list(executor.map(metric_fn, samples))
+            results = list(executor.map(partial_metric_fn, samples))
 
         total_score = sum(result.score for result in results)
         return eval_types.MeanResult(score=total_score / len(samples))

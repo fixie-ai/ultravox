@@ -20,6 +20,7 @@ from ultravox.data.configs import musan
 from ultravox.data.configs import peoplespeech
 from ultravox.data.configs import seamlessalign
 from ultravox.data.configs import shrutilipi
+from ultravox.data.configs import voicebench
 from ultravox.data.configs import voxpopuli
 from ultravox.data.configs import wenetspeech
 
@@ -109,3 +110,4 @@ register_datasets(seamlessalign.configs)
 register_datasets(shrutilipi.configs)
 register_datasets(kathbath.configs)
 register_datasets(indicvoices.configs)
+register_datasets(voicebench.configs)

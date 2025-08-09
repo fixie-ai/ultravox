@@ -112,3 +112,5 @@ class VoiceSample:
     """For evaluations, the known transcript of the audio."""
     label: Optional[str] = None
     """For evaluations, the label or expected answer of the sample."""
+    extra_kwargs: Optional[Dict[str, Any]] = None
+    """For evaluations, extra columns from the sample."""

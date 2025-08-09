@@ -280,11 +280,20 @@ class VoiceDataset(SizedIterableDataset):
         audio: Optional[np.ndarray] = None,
         audio_transcript: Optional[str] = None,
         label: Optional[str] = None,
+        extra_kwargs: Optional[Dict[str, Any]] = None,
     ) -> data_sample.VoiceSample:
         if not self._args.include_audio:
-            return data_sample.VoiceSample(messages, label=label)
+            return data_sample.VoiceSample(
+                messages,
+                label=label,
+                extra_kwargs=extra_kwargs,
+            )
         return data_sample.VoiceSample(
-            messages, audio, audio_transcript=audio_transcript, label=label
+            messages,
+            audio,
+            audio_transcript=audio_transcript,
+            label=label,
+            extra_kwargs=extra_kwargs,
         )
 
 
@@ -344,6 +353,17 @@ class GenericDataset(VoiceDataset):
 
     def _get_sample(self, row) -> Optional[data_sample.VoiceSample]:
 
+        # Setting up extra_kwargs for datasets like Voicebench
+        extra_kwargs = None
+        if (
+            self._config.eval_config is not None
+            and self._config.eval_config.extra_kwargs_map is not None
+        ):
+            extra_kwargs = {
+                key: row.get(value)
+                for key, value in self._config.eval_config.extra_kwargs_map.items()
+            }
+
         # If the messages_direct_column is provided, we use it directly to create the messages and transcript.
         if self._config.messages_direct_column is not None:
             messages = row[self._config.messages_direct_column]
@@ -357,14 +377,23 @@ class GenericDataset(VoiceDataset):
             )
 
             if not self._args.include_audio:
-                return self._make_sample(messages, label=label)
+                return self._make_sample(
+                    messages,
+                    label=label,
+                    extra_kwargs=extra_kwargs,
+                )
 
             transcript = jinja2.Template(
                 self._config.transcript_template,  # type: ignore[arg-type]
                 undefined=jinja2.StrictUndefined,
             ).render(**row, text_proc=text_proc)
             audio = self._get_audio(row, self._config.audio_field)
-            return self._make_sample(messages, audio, audio_transcript=transcript)
+            return self._make_sample(
+                messages,
+                audio,
+                audio_transcript=transcript,
+                extra_kwargs=extra_kwargs,
+            )
 
         # Convert the dataset's message_history_column into a list of messages
         message_history = (
@@ -431,7 +460,12 @@ class GenericDataset(VoiceDataset):
             if self._args.include_audio
             else None
         )
-        return self._make_sample(messages, audio, audio_transcript=transcript)
+        return self._make_sample(
+            messages,
+            audio,
+            audio_transcript=transcript,
+            extra_kwargs=extra_kwargs,
+        )
 
     def get_config(self):
         return self._config
