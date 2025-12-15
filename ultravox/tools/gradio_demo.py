@@ -30,6 +30,7 @@ class DemoConfig:
     chat_template: Optional[str] = None
     enable_thinking: bool = False
     thinking_regex: Optional[str] = r"<think>\n(.*?)\n</think>\n\n"
+    load_in_nbit: Optional[int] = None
 
     def __post_init__(self):
         if self.chat_template and self.chat_template.startswith("file://"):

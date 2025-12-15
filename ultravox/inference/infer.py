@@ -28,8 +28,12 @@ class LocalInference(base.VoiceInference):
         chat_template: Optional[str] = None,
         enable_thinking: bool = False,
         thinking_regex: Optional[str] = None,
+        is_quantized: bool = False,
     ):
-        self.model = model.to(dtype).eval()
+        if is_quantized:
+            self.model = model.eval()
+        else:
+            self.model = model.to(dtype).eval()
         self.tokenizer = tokenizer
         self.processor = processor
         self.dtype = dtype

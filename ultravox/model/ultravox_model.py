@@ -379,11 +379,12 @@ class UltravoxModel(transformers.LlamaPreTrainedModel, GenerationMixin):
         ), "audio_batch_size and inputs_embeds must have the same batch size."
 
         # B x A/3200 x (D=max-audio-length-in-batch)
+        audio_tower_device = next(self.audio_tower.parameters()).device
         audio_tower_output = self.audio_tower.forward(
-            audio_values.to(self.audio_tower.dtype),
+            audio_values.to(dtype=self.audio_tower.dtype, device=audio_tower_device),
             audio_len=audio_lens,
         ).last_hidden_state
-        audio_tower_output = audio_tower_output.to(inputs_embeds.dtype)
+        audio_tower_output = audio_tower_output.to(dtype=inputs_embeds.dtype, device=inputs_embeds.device)
         audio_embeds = self.multi_modal_projector.forward(audio_tower_output)
 
         # combine audio and text embeddings
@@ -391,7 +392,7 @@ class UltravoxModel(transformers.LlamaPreTrainedModel, GenerationMixin):
             start_idx = audio_token_start_idx[i_a]
             token_len = audio_token_len[i_a]
             item_embedding = audio_embeds[i_a][:token_len]
-            inputs_embeds[i_b][start_idx : start_idx + token_len] = item_embedding
+            inputs_embeds[i_b][start_idx : start_idx + token_len] = item_embedding.to(inputs_embeds.device)
 
         return inputs_embeds
 

@@ -15,5 +15,6 @@ def get_inference(args) -> ultravox_infer.UltravoxInference:
             conversation_mode=True,
             enable_thinking=args.enable_thinking,
             thinking_regex=args.thinking_regex,
+            load_in_nbit=getattr(args, 'load_in_nbit', None),
         )
     return inference

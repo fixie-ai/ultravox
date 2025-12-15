@@ -48,6 +48,7 @@ torchdiffeq = "*"
 x-transformers = "*"
 rich = "<13.5.0"
 qa-metrics = ">=0.2.42"
+bitsandbytes = "^0.48.1"
 
 [tool.poetry.group.dev.dependencies]
 black = "~24.4.2"

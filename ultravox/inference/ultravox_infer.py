@@ -1,6 +1,8 @@
+import gc
 import logging
 from typing import Optional
 
+import torch
 import transformers
 
 from ultravox.inference import infer
@@ -26,6 +28,7 @@ class UltravoxInference(infer.LocalInference):
         chat_template: Optional[str] = None,
         enable_thinking: bool = False,
         thinking_regex: Optional[str] = None,
+        load_in_nbit: Optional[int] = None,
     ):
         """
         Args:
@@ -54,15 +57,25 @@ class UltravoxInference(infer.LocalInference):
 
         tp_plan = "auto" if use_tp else None
         logging.info(
-            f"Loading model from {model_path} with dtype {dtype}, tp_plan {tp_plan}, use_fsdp {use_fsdp} on {device}"
+            f"Loading model from {model_path} with dtype {dtype}, tp_plan {tp_plan}, use_fsdp {use_fsdp}, load_in_nbit {load_in_nbit} on {device}"
         )
-        model = ultravox_model.UltravoxModel.from_pretrained(
-            model_path, torch_dtype=dtype, tp_plan=tp_plan
-        )
-        model.merge_and_unload()
 
-        ddp_utils.model_to_device(model, device, use_fsdp=use_fsdp, use_tp=use_tp)
-        model.to(dtype=dtype)
+        if load_in_nbit:
+            from ultravox.inference import quantized_loader
+            model = quantized_loader.load_ultravox_quantized(
+                model_path,
+                load_in_nbit=load_in_nbit,
+                device_map="auto"
+            )
+            gc.collect()
+            torch.cuda.empty_cache()
+        else:
+            model = ultravox_model.UltravoxModel.from_pretrained(
+                model_path, torch_dtype=dtype, tp_plan=tp_plan
+            )
+            model.merge_and_unload()
+            ddp_utils.model_to_device(model, device, use_fsdp=use_fsdp, use_tp=use_tp)
+            model.to(dtype=dtype)
 
         tokenizer_id = tokenizer_id or model_path
         tokenizer = transformers.AutoTokenizer.from_pretrained(tokenizer_id)
@@ -95,4 +108,5 @@ class UltravoxInference(infer.LocalInference):
             chat_template=chat_template,
             enable_thinking=enable_thinking,
             thinking_regex=thinking_regex,
+            is_quantized=load_in_nbit is not None,
         )
