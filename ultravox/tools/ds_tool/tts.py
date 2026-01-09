@@ -163,10 +163,11 @@ class ElevenTts(Client):
 
 
 class CambTts(Client):
-    """Camb.ai TTS client using MARS-8 models."""
+    """Camb.ai TTS client using MARS models."""
 
     DEFAULT_VOICE = "2681"  # Attic voice (publicly available)
-    DEFAULT_MODEL = "mars-8-flash"  # Fastest model
+    DEFAULT_MODEL = "mars-flash"  # Fastest model
+    ALL_MODELS = ["mars-flash", "mars-pro", "mars-instruct"]
     CAMB_SAMPLE_RATE = 24000  # Camb.ai outputs 24kHz audio
     ALL_VOICES = ["2681"]  # Default voice; can be expanded
 
