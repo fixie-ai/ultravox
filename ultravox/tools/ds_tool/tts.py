@@ -165,11 +165,16 @@ class ElevenTts(Client):
 class CambTts(Client):
     """Camb.ai TTS client using MARS models."""
 
-    DEFAULT_VOICE = "2681"  # Attic voice (publicly available)
+    DEFAULT_VOICE = "147320"
     DEFAULT_MODEL = "mars-flash"  # Fastest model
-    ALL_MODELS = ["mars-flash", "mars-pro", "mars-instruct"]
-    CAMB_SAMPLE_RATE = 24000  # Camb.ai outputs 24kHz audio
-    ALL_VOICES = ["2681"]  # Default voice; can be expanded
+    ALL_VOICES = ["147320"]
+
+    # Model-specific sample rates (from Camb.ai API documentation)
+    MODEL_SAMPLE_RATES: Dict[str, int] = {
+        "mars-flash": 22050,
+        "mars-pro": 48000,
+        "mars-instruct": 22050,
+    }
 
     def __init__(self, sample_rate: int = 16000):
         super().__init__(sample_rate)
@@ -178,6 +183,7 @@ class CambTts(Client):
 
     def tts(self, text: str, voice: Optional[str] = None, **kwargs) -> bytes:
         voice = self.resolve_voice(voice)
+        model = kwargs.get("model", self.DEFAULT_MODEL)
         url = "https://client.camb.ai/apis/tts-stream"
         headers = {
             "x-api-key": self._api_key,
@@ -188,22 +194,24 @@ class CambTts(Client):
             "text": text,
             "voice_id": int(voice),
             "language": kwargs.get("language", "en-us"),
-            "speech_model": kwargs.get("model", self.DEFAULT_MODEL),
+            "speech_model": model,
             "output_configuration": {"format": "pcm_s16le"},
-            "voice_settings": {"speed": kwargs.get("speed", 1.0)},
         }
         response = self._session.post(url, headers=headers, json=body, timeout=60)
         response.raise_for_status()
-        return self._handle_camb_pcm_response(response)
+        return self._handle_camb_pcm_response(response, model)
 
-    def _handle_camb_pcm_response(self, response: requests.Response) -> bytes:
-        """Convert Camb.ai 24kHz PCM to target sample rate WAV."""
+    def _handle_camb_pcm_response(
+        self, response: requests.Response, model: str
+    ) -> bytes:
+        """Convert Camb.ai PCM to target sample rate WAV."""
         pcm_array = np.frombuffer(response.content, dtype=np.int16)
-        # Resample from 24kHz to target sample rate if needed
-        if self._sample_rate != self.CAMB_SAMPLE_RATE:
+        source_rate = self.MODEL_SAMPLE_RATES.get(model, 22050)
+        # Resample to target sample rate if needed
+        if self._sample_rate != source_rate:
             pcm_float = pcm_array.astype(np.float32) / 32768.0
             pcm_resampled = librosa.resample(
-                pcm_float, orig_sr=self.CAMB_SAMPLE_RATE, target_sr=self._sample_rate
+                pcm_float, orig_sr=source_rate, target_sr=self._sample_rate
             )
             pcm_array = (pcm_resampled * 32768.0).astype(np.int16)
         wav_bytes = io.BytesIO()

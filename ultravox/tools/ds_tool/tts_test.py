@@ -24,7 +24,7 @@ class TestCambTts(unittest.TestCase):
     def test_resolve_voice_default(self):
         client = tts.CambTts()
         voice = client.resolve_voice(None)
-        self.assertEqual(voice, "2681")
+        self.assertEqual(voice, "147320")
 
     @patch.dict(os.environ, {"CAMB_API_KEY": "test_key"})
     def test_resolve_voice_custom(self):
@@ -36,9 +36,9 @@ class TestCambTts(unittest.TestCase):
     def test_tts_success(self):
         client = tts.CambTts(sample_rate=16000)
 
-        # Mock PCM response (24kHz, 1 second of silence)
+        # Mock PCM response (22050Hz for mars-flash, 1 second of silence)
         mock_response = MagicMock()
-        mock_response.content = np.zeros(24000, dtype=np.int16).tobytes()
+        mock_response.content = np.zeros(22050, dtype=np.int16).tobytes()
         mock_response.raise_for_status = MagicMock()
 
         with patch.object(client._session, "post", return_value=mock_response):
@@ -50,12 +50,12 @@ class TestCambTts(unittest.TestCase):
 
     @patch.dict(os.environ, {"CAMB_API_KEY": "test_key"})
     def test_tts_resampling(self):
-        """Test that 24kHz audio is resampled to target sample rate."""
+        """Test that model-specific sample rate audio is resampled to target."""
         client = tts.CambTts(sample_rate=16000)
 
         mock_response = MagicMock()
-        # 1 second of 24kHz audio (sine wave to verify resampling)
-        t = np.linspace(0, 1, 24000)
+        # 1 second of 22050Hz audio (mars-flash default)
+        t = np.linspace(0, 1, 22050)
         audio = (np.sin(2 * np.pi * 440 * t) * 16000).astype(np.int16)
         mock_response.content = audio.tobytes()
         mock_response.raise_for_status = MagicMock()
@@ -67,16 +67,31 @@ class TestCambTts(unittest.TestCase):
             self.assertTrue(result.startswith(b"RIFF"))
 
     @patch.dict(os.environ, {"CAMB_API_KEY": "test_key"})
-    def test_tts_no_resampling_at_24khz(self):
-        """Test that 24kHz audio is NOT resampled when target is 24kHz."""
-        client = tts.CambTts(sample_rate=24000)
+    def test_tts_no_resampling_at_native_rate(self):
+        """Test that audio is NOT resampled when target matches model rate."""
+        client = tts.CambTts(sample_rate=22050)
 
         mock_response = MagicMock()
-        mock_response.content = np.zeros(24000, dtype=np.int16).tobytes()
+        mock_response.content = np.zeros(22050, dtype=np.int16).tobytes()
         mock_response.raise_for_status = MagicMock()
 
         with patch.object(client._session, "post", return_value=mock_response):
-            result = client.tts("Hello")
+            result = client.tts("Hello")  # Uses mars-flash (22050Hz)
+
+            self.assertTrue(result.startswith(b"RIFF"))
+
+    @patch.dict(os.environ, {"CAMB_API_KEY": "test_key"})
+    def test_tts_mars_pro_sample_rate(self):
+        """Test that mars-pro uses 48kHz sample rate."""
+        client = tts.CambTts(sample_rate=16000)
+
+        mock_response = MagicMock()
+        # 1 second of 48kHz audio (mars-pro)
+        mock_response.content = np.zeros(48000, dtype=np.int16).tobytes()
+        mock_response.raise_for_status = MagicMock()
+
+        with patch.object(client._session, "post", return_value=mock_response):
+            result = client.tts("Hello", model="mars-pro")
 
             self.assertTrue(result.startswith(b"RIFF"))
 
@@ -86,11 +101,11 @@ class TestCambTts(unittest.TestCase):
         client = tts.CambTts(sample_rate=16000)
 
         mock_response = MagicMock()
-        mock_response.content = np.zeros(24000, dtype=np.int16).tobytes()
+        mock_response.content = np.zeros(22050, dtype=np.int16).tobytes()
         mock_response.raise_for_status = MagicMock()
 
         with patch.object(client._session, "post", return_value=mock_response) as mock_post:
-            client.tts("Hello world", voice="2681", language="fr-fr", speed=1.5)
+            client.tts("Hello world", voice="147320", language="fr-fr")
 
             # Verify the request was made with correct parameters
             mock_post.assert_called_once()
@@ -100,9 +115,9 @@ class TestCambTts(unittest.TestCase):
             )
             payload = call_args.kwargs["json"]
             self.assertEqual(payload["text"], "Hello world")
-            self.assertEqual(payload["voice_id"], 2681)
+            self.assertEqual(payload["voice_id"], 147320)
             self.assertEqual(payload["language"], "fr-fr")
-            self.assertEqual(payload["voice_settings"]["speed"], 1.5)
+            self.assertEqual(payload["speech_model"], "mars-flash")
 
 
 class TestCreateClient(unittest.TestCase):
