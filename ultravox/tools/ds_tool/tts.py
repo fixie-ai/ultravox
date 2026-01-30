@@ -4,6 +4,7 @@ import os
 from typing import Any, Dict, List, Optional
 from xml.sax import saxutils
 
+import librosa
 import numpy as np
 import requests
 import soundfile as sf
@@ -161,9 +162,68 @@ class ElevenTts(Client):
         return self._handle_pcm_response(self._post(url, headers, body))
 
 
+class CambTts(Client):
+    """Camb.ai TTS client using MARS models."""
+
+    DEFAULT_VOICE = "147320"
+    DEFAULT_MODEL = "mars-flash"  # Fastest model
+    ALL_VOICES = ["147320"]
+
+    # Model-specific sample rates (from Camb.ai API documentation)
+    MODEL_SAMPLE_RATES: Dict[str, int] = {
+        "mars-flash": 22050,
+        "mars-pro": 48000,
+        "mars-instruct": 22050,
+    }
+
+    def __init__(self, sample_rate: int = 16000):
+        super().__init__(sample_rate)
+        self._api_key = os.environ.get("CAMB_API_KEY")
+        assert self._api_key, "Please set the CAMB_API_KEY environment variable."
+
+    def tts(self, text: str, voice: Optional[str] = None, **kwargs) -> bytes:
+        voice = self.resolve_voice(voice)
+        model = kwargs.get("model", self.DEFAULT_MODEL)
+        url = "https://client.camb.ai/apis/tts-stream"
+        headers = {
+            "x-api-key": self._api_key,
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        }
+        body = {
+            "text": text,
+            "voice_id": int(voice),
+            "language": kwargs.get("language", "en-us"),
+            "speech_model": model,
+            "output_configuration": {"format": "pcm_s16le"},
+        }
+        response = self._session.post(url, headers=headers, json=body, timeout=60)
+        response.raise_for_status()
+        return self._handle_camb_pcm_response(response, model)
+
+    def _handle_camb_pcm_response(
+        self, response: requests.Response, model: str
+    ) -> bytes:
+        """Convert Camb.ai PCM to target sample rate WAV."""
+        pcm_array = np.frombuffer(response.content, dtype=np.int16)
+        source_rate = self.MODEL_SAMPLE_RATES.get(model, 22050)
+        # Resample to target sample rate if needed
+        if self._sample_rate != source_rate:
+            pcm_float = pcm_array.astype(np.float32) / 32768.0
+            pcm_resampled = librosa.resample(
+                pcm_float, orig_sr=source_rate, target_sr=self._sample_rate
+            )
+            pcm_array = (pcm_resampled * 32768.0).astype(np.int16)
+        wav_bytes = io.BytesIO()
+        sf.write(wav_bytes, pcm_array, self._sample_rate, format="wav")
+        return wav_bytes.getvalue()
+
+
 def create_client(implementation: str, sample_rate: int):
     if implementation == "azure":
         return AzureTts(sample_rate=sample_rate)
     elif implementation == "eleven":
         return ElevenTts(sample_rate=sample_rate)
+    elif implementation == "camb":
+        return CambTts(sample_rate=sample_rate)
     raise ValueError(f"Unknown TTS implementation: {implementation}")
