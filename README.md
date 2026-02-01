@@ -104,7 +104,7 @@ We're using Poetry to manage the Python virtual environment. You can observe you
 
 ## Training
 
-Currently, we keep both the LLM and the audio encoder frozen and only train the adapter/projector. Training Ultraox v0.4 took 2-3 hours on 8xH100 GPUs for 14K training steps.
+Currently, we keep both the LLM and the audio encoder frozen and only train the adapter/projector. Training Ultravox v0.4 took 2-3 hours on 8xH100 GPUs for 14K training steps.
 
 ### Use-Cases for Training Ultravox
 
