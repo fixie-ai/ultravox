@@ -168,6 +168,8 @@ with gr.Blocks() as demo:
         process_audio,
         [chatbot, prompt, audio, max_new_tokens, temperature],
         [chatbot],
+    ).then(
+        lambda: None, [], [audio]
     )
     reset.click(gradio_reset, [], [chatbot, prompt, audio], queue=False)
     demo.load(gradio_reset, [], [chatbot, prompt, audio], queue=False)
