@@ -30,6 +30,7 @@ SHARED_PRETRAINED_KWARGS = [
 ]
 
 
+
 class UltravoxModel(transformers.LlamaPreTrainedModel, GenerationMixin):
     """
     The Ultravox model which consists of an audio encoder and a language model.
@@ -59,7 +60,9 @@ class UltravoxModel(transformers.LlamaPreTrainedModel, GenerationMixin):
         self.keep_params: Set[str] = set()
         self.vocab_size = config.vocab_size
 
-        if not config.llm_only_training:
+        # Older checkpoints may not define `llm_only_training`.
+        # Fall back to multimodal behavior for backward compatibility.
+        if not getattr(config, "llm_only_training", False):
             self.audio_tower = self._create_audio_tower(config)
             self.multi_modal_projector = self._create_multi_modal_projector(config)
             self.audio_tower_context_length = self.audio_tower.max_context_length
@@ -443,8 +446,14 @@ class UltravoxModel(transformers.LlamaPreTrainedModel, GenerationMixin):
         # We probably don't want to pass tp_plan or device_map to the audio tower
         # But potentially other kwargs can be passed in. TODO
         kwargs = {"torch_dtype": config.torch_dtype}
+        
+        """
+        Compatibility helper for Transformers 5.x.
+        `_init_weights` was removed in newer Transformers releases.
+        Fall back to `True` to preserve previous initialization behavior.
+        """
         if (
-            transformers.modeling_utils._init_weights
+            getattr(transformers.modeling_utils,"_init_weights",True)
             and config.audio_model_id is not None
         ):
             if "whisper" in config.audio_model_id.lower():
@@ -500,8 +509,13 @@ class UltravoxModel(transformers.LlamaPreTrainedModel, GenerationMixin):
     def _create_language_model(
         cls, config: UltravoxConfig
     ) -> transformers.LlamaForCausalLM:
+        """
+        Compatibility helper for Transformers 5.x.
+        `_init_weights` was removed in newer Transformers releases.
+        Fall back to `True` to preserve previous initialization behavior.
+        """
         if (
-            transformers.modeling_utils._init_weights
+            getattr(transformers.modeling_utils,"_init_weights",True)
             and config.text_model_id is not None
         ):
             language_model = transformers.AutoModelForCausalLM.from_pretrained(
