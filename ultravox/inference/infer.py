@@ -79,6 +79,12 @@ class LocalInference(base.VoiceInference):
     ) -> List[Dict[str, str]]:
         messages = copy.copy(query_messages)
         if audio_token_len > 0:
+            # Copy the last message before rewriting its content: a shallow
+            # copy shares this dict with the caller's live turn messages (they
+            # are re-used across turns via _get_sample_with_past), so mutating
+            # it in place erases "<|audio|>" from the retained turn and the next
+            # audio turn loses its audio (#324).
+            messages[-1] = copy.copy(messages[-1])
             user_content = messages[-1]["content"]
             if user_content.count("<|audio|>") != 1:
                 raise ValueError(

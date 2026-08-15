@@ -69,6 +69,32 @@ EXPECTED_TOKEN_IDS_START = [128000, 128006, 882, 128007]
 EXPECTED_TOKEN_IDS_END = [128009, 128006, 78191, 128007, 271]
 
 
+def test_build_past_messages_does_not_mutate_caller_messages():
+    """#324: _build_past_messages must not mutate the caller's turn messages.
+
+    It rewrites ``messages[-1]["content"]`` to swap the ``<|audio|>`` placeholder
+    for EOS tokens. Those dicts are shared with the caller's live turn messages
+    (they are re-used across turns via ``_get_sample_with_past``), so mutating
+    one in place erases ``<|audio|>`` from the retained turn — and the next audio
+    turn then loses its audio.
+    """
+    fake_self = mock.MagicMock()
+    fake_self.tokenizer.eos_token = "</s>"
+    original = [{"role": "user", "content": "Hello <|audio|>"}]
+
+    result = infer.LocalInference._build_past_messages(
+        fake_self, original, audio_token_len=3, response_content="hi"
+    )
+
+    # The caller's original message is untouched...
+    assert original == [{"role": "user", "content": "Hello <|audio|>"}]
+    # ...while the returned copy has the placeholder replaced and the response.
+    assert result == [
+        {"role": "user", "content": "Hello </s></s></s>"},
+        {"role": "assistant", "content": "hi"},
+    ]
+
+
 def test_long_audio_context(tokenizer, audio_processor):
     """Ensure we handle long audio context properly."""
     inference = FakeInference(tokenizer, audio_processor, audio_context_size=3000)
