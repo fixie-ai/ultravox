@@ -143,14 +143,14 @@ def test_processor_fails_with_too_many_audio_tokens(
     with pytest.raises(ValueError):
         processor("Hello, how are you? <|audio|>")
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="too many"):
         processor(
             "Hello, how are you? <|audio|><|audio|>",
             audios=[short_audio],
             sampling_rate=sampling_rate,
         )
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="too many"):
         processor(
             "Hello, how are you? <|audio|><|audio|>",
             audios=[overflowing_audio],
@@ -161,12 +161,14 @@ def test_processor_fails_with_too_many_audio_tokens(
 def test_processor_fails_with_too_few_audio_tokens(
     processor, short_audio, sampling_rate
 ):
-    with pytest.raises(ValueError):
+    # #322: audio provided but no "<|audio|>" placeholder is too FEW placeholders,
+    # not too many — the message must point the caller the right way.
+    with pytest.raises(ValueError, match="too few"):
         processor(
             "Hello, how are you?", audios=[short_audio], sampling_rate=sampling_rate
         )
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="too few"):
         processor(
             "Hello, how are you? <|audio|>",
             audios=[short_audio, short_audio],

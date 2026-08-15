@@ -342,7 +342,8 @@ class UltravoxProcessor(transformers.ProcessorMixin):
                     placeholder_index += 1
                     if placeholder_index >= len(split_input_ids):
                         raise ValueError(
-                            f"Text contains too few audio placeholders. (Expected {len(audios)} placeholders)"
+                            "Text contains too few audio placeholders. "
+                            f"(Found {len(split_input_ids) - 1}, expected {len(audios)})"
                         )
 
                     input_ids.extend(split_input_ids[placeholder_index])
@@ -354,8 +355,13 @@ class UltravoxProcessor(transformers.ProcessorMixin):
             # Include any tokens after the last audio.
             placeholder_index += 1
             if placeholder_index != len(split_input_ids) - 1:
+                # The count is off in either direction — report which way and the
+                # actual numbers so the caller knows to add or remove a "<|audio|>".
+                num_placeholders = len(split_input_ids) - 1
+                relation = "too many" if num_placeholders > len(audios) else "too few"
                 raise ValueError(
-                    f"Text contains too many audio placeholders. (Expected {len(audios)} placeholders)"
+                    f"Text contains {relation} audio placeholders. "
+                    f"(Found {num_placeholders}, expected {len(audios)})"
                 )
             input_ids.extend(split_input_ids[placeholder_index])
 
